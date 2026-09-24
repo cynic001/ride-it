@@ -1,0 +1,15 @@
+# Blender 원본 소스 — NAS에서 별도 백업, 배포에서 제외
+blender/*.blend
+blender/*.blend1
+
+# Node
+node_modules/
+npm-debug.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 에디터
+.vscode/
+.idea/

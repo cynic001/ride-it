@@ -1,0 +1,40 @@
+name: Build Check
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: JS 문법 검증 (node --check)
+        run: |
+          for f in js/*.js; do
+            echo "Checking $f"
+            node --check "$f"
+          done
+
+      - name: HTML 존재 및 script 태그 참조 확인
+        run: |
+          test -f index.html
+          grep -q "babylon.js" index.html || (echo "Babylon.js CDN 참조 누락" && exit 1)
+
+      - name: 에셋 용량 체크 (5MB 목표치 경고)
+        run: |
+          if [ -d assets ]; then
+            SIZE=$(du -sm assets | cut -f1)
+            echo "assets/ 용량: ${SIZE}MB"
+            if [ "$SIZE" -gt 5 ]; then
+              echo "::warning::assets 폴더가 목표치(5MB)를 초과했습니다 (${SIZE}MB)"
+            fi
+          fi

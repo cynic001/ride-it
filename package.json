@@ -1,0 +1,12 @@
+{
+  "name": "ride-it",
+  "version": "0.1.0",
+  "private": true,
+  "description": "떨어진다!!! (RIDE IT) - chaechae studio 롤러코스터 브라우저 게임",
+  "scripts": {
+    "dev": "npx http-server . -p 8080 -c-1",
+    "lint": "npx eslint js/ --no-eslintrc --env browser,es2021 --parser-options=ecmaVersion:2021"
+  },
+  "author": "Gon (chaechae studio)",
+  "license": "UNLICENSED"
+}
