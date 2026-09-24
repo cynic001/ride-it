@@ -1,0 +1,9 @@
+{
+  "name": "run-ride-it-driver",
+  "private": true,
+  "description": "Headless-browser driver used by the run-ride-it skill. Not part of the game's own dependency tree.",
+  "type": "module",
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}

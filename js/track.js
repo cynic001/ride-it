@@ -2,7 +2,20 @@
  * track.js
  * 스테이지의 제어점(controlPoints) → 연속 커브 생성
  * 세그먼트(밸런스/게이트) 데이터를 커브 진행률(t: 0~1)에 매핑
+ * + 레일/지지대/스테이션 glTF를 커브를 따라 인스턴싱 배치 (loadTrackMeshes)
  */
+
+const RAIL_FILES = {
+  standard: 'rail_standard.glb',
+  single: 'rail_single.glb',
+  hybrid: 'rail_hybrid.glb',
+};
+
+// 지지대 배치 간격(m) — 레일 타이 간격과 무관하게 저사양 기기(SE2) 성능을 고려해 성긴 간격 사용
+const PILLAR_SPACING_M = 8;
+
+// 커브 구간(segment.requiredLean>0) 레일 뱅킹 최대 각도 — requiredLean(0~1)에 비례해 적용
+const MAX_BANK_RAD = 28 * Math.PI / 180;
 
 class Track {
   /**
@@ -19,7 +32,8 @@ class Track {
 
     // 제어점 수에 비례해 보간 포인트 개수 결정 (촘촘할수록 부드러움, 너무 많으면 메모리 낭비)
     const nbInterpolated = Math.max(200, vecPoints.length * 40);
-    this.curve = BABYLON.Curve3.CreateCatmullRomSpline(vecPoints, nbInterpolated, false);
+    // 모든 스테이지가 폐곡선(출발=도착)이므로 closed:true로 이음매 없이 순환하는 커브 생성
+    this.curve = BABYLON.Curve3.CreateCatmullRomSpline(vecPoints, nbInterpolated, true);
     this.points = this.curve.getPoints(); // 실제 카트가 따라갈 점들의 배열
 
     // 각 세그먼트가 전체 트랙에서 차지하는 t범위를 균등 분할
@@ -30,6 +44,8 @@ class Track {
       tStart: i / segCount,
       tEnd: (i + 1) / segCount,
     }));
+
+    this._meshes = []; // 로드된 템플릿+인스턴스 전체 — dispose()에서 일괄 정리
   }
 
   /** 진행률 t(0~1)에 해당하는 월드 좌표 반환 */
@@ -57,6 +73,86 @@ class Track {
   /** 두 지점 간 높이 차 — 에너지 보존 물리 계산용 */
   getHeightAt(t) {
     return this.getPositionAt(t).y;
+  }
+
+  /** 레일/지지대/스테이션 glTF 로드 후 커브를 따라 인스턴싱 배치 */
+  async loadTrackMeshes() {
+    const railFile = RAIL_FILES[this.stageData.railType] || RAIL_FILES.standard;
+    const pillarFile = this.stageData.railType === 'hybrid' ? 'pillar_wood.glb' : 'pillar_steel.glb';
+
+    const [railTemplate, pillarTemplate, stationTemplate] = await Promise.all([
+      this._loadTemplate(railFile),
+      this._loadTemplate(pillarFile),
+      this._loadTemplate('station_platform.glb'),
+    ]);
+
+    this._instanceAlongCurve(railTemplate, this._railExtentZ(railTemplate), (inst, pos, tangent, t) => {
+      inst.position.copyFrom(pos);
+      // 커브 구간(requiredLean>0)에서는 안쪽으로 기울어지는 뱅킹 적용 — camera.js의 롤 연출과 동일한 부호 규칙
+      const seg = this.getSegmentAt(t);
+      let roll = 0;
+      if (seg.requiredLean > 0) {
+        const bank = MAX_BANK_RAD * seg.requiredLean;
+        roll = seg.curveDirection === 'left' ? -bank : bank;
+      }
+      inst.lookAt(pos.add(tangent), 0, 0, roll);
+    });
+
+    const pillarHeight = pillarTemplate.getBoundingInfo().boundingBox.maximum.y - pillarTemplate.getBoundingInfo().boundingBox.minimum.y;
+    const pillarBottomY = pillarTemplate.getBoundingInfo().boundingBox.minimum.y;
+    this._instanceAlongCurve(pillarTemplate, PILLAR_SPACING_M, (inst, pos) => {
+      if (pos.y < 0.5) return; // 지면 높이 근처는 지지대 불필요
+      const scale = pos.y / pillarHeight;
+      inst.scaling.y = scale;
+      inst.position.set(pos.x, -pillarBottomY * scale, pos.z);
+    });
+
+    const stationPos = this.getPositionAt(0);
+    const stationTangent = this.getTangentAt(0);
+    const station = stationTemplate.createInstance('station');
+    station.position.copyFrom(stationPos);
+    station.lookAt(stationPos.add(stationTangent));
+    this._meshes.push(station);
+  }
+
+  /** 레일 인스턴스 1개가 커버하는 진행방향(Z) 길이 — 타일 간격으로 사용 */
+  _railExtentZ(railTemplate) {
+    const bb = railTemplate.getBoundingInfo().boundingBox;
+    return bb.maximum.z - bb.minimum.z;
+  }
+
+  /** glTF 로드 → 실제 지오메트리 메시(루트 다음 자식)를 템플릿으로 반환, 템플릿 자체는 비활성화 */
+  async _loadTemplate(fileName) {
+    const result = await BABYLON.SceneLoader.ImportMeshAsync('', 'assets/models/', fileName, this.scene);
+    result.meshes.forEach(m => this._meshes.push(m));
+    const mesh = result.meshes[1]; // meshes[0]은 빈 __root__ 트랜스폼 노드
+    mesh.setEnabled(false); // 인스턴스만 렌더, 템플릿 자체는 숨김
+    return mesh;
+  }
+
+  /** 커브를 따라 실측 호 길이(spacing)마다 template.createInstance()를 배치 (폐곡선이므로 마지막→첫 점 이음매도 포함) */
+  _instanceAlongCurve(template, spacing, placeFn) {
+    const pts = [...this.points, this.points[0]]; // 마지막 점 → 첫 점으로 돌아오는 구간까지 순회
+    let acc = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const prev = pts[i - 1];
+      const curr = pts[i];
+      acc += BABYLON.Vector3.Distance(prev, curr);
+      if (acc >= spacing) {
+        const tangent = curr.subtract(prev).normalize();
+        const inst = template.createInstance(`${template.name}_${i}`);
+        const t = Math.min(1, i / (this.points.length - 1));
+        placeFn(inst, curr, tangent, t);
+        this._meshes.push(inst);
+        acc = 0;
+      }
+    }
+  }
+
+  /** 스테이지 재로드 시 이전 트랙의 레일/지지대/스테이션 리소스 정리 */
+  dispose() {
+    this._meshes.forEach(m => m.dispose());
+    this._meshes = [];
   }
 }
 

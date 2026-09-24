@@ -1,23 +1,26 @@
 /**
  * cart.js
- * 카트 이동 물리 (에너지 보존: v² = v0² + 2gΔh - 마찰)
+ * 카트 이동 물리 (에너지 보존: v² = v0² + 2gΔh, 마찰은 dt 독립적 초당 감쇠율로 별도 적용)
  * 고정 타임스텝(FIXED_DT)으로 매 프레임 호출되는 update()에서 계산
  */
 
 const G = 9.8;
-const FRICTION = 0.06;        // 마찰 계수 (트랙 저항)
+const FRICTION_RETAIN_PER_SECOND = 0.975; // 평지·무입력 기준 초당 2.5% 감속 (dt 무관하게 Math.pow(., dt)로 적용)
 const MIN_SPEED = 2;          // 최소 속도 (m/s) — 완전 정지 방지
 
 class Cart {
   /**
    * @param {Track} track
    * @param {number} stageMultiplier - 스테이지 배속 (1.1^(stage-1) 등)
+   * @param {number} totalLaps - 완주까지 폐곡선을 돌아야 하는 횟수 (기본 1 = 기존과 동일 동작)
    */
-  constructor(track, stageMultiplier = 1) {
+  constructor(track, stageMultiplier = 1, totalLaps = 1) {
     this.track = track;
     this.stageMultiplier = stageMultiplier;
+    this.totalLaps = totalLaps;
+    this.currentLap = 1;
 
-    this.t = 0;                // 트랙 진행률 (0~1)
+    this.t = 0;                // 트랙 진행률 (0~1, 랩당)
     this.speed = 0;            // m/s
     this.launched = false;
 
@@ -30,10 +33,10 @@ class Cart {
     this._gateResults = [];    // 게이트 판정 기록 (디버그/리더보드용)
   }
 
-  /** 스타트: 드래그 거리 기반 초기 속도 부여 */
-  launch(pullStrength) {
-    // pullStrength: 0~1 (드래그 거리를 정규화한 값), input.js에서 계산
-    this.speed = (5 + pullStrength * 10) * this.stageMultiplier; // m/s
+  /** 스타트: 드래그 거리(pullStrength) × release 순간 속도(flickMultiplier)로 초기 속도 부여 */
+  launch(pullStrength, flickMultiplier = 1) {
+    // pullStrength: 0~1 (드래그 거리를 정규화한 값), flickMultiplier: 0.3~1.6 (release 속도 정규화값) — input.js에서 계산
+    this.speed = (5 + pullStrength * 10) * flickMultiplier * this.stageMultiplier; // m/s
     this.launched = true;
     this._lastHeight = this.track.getHeightAt(0);
   }
@@ -47,15 +50,26 @@ class Cart {
 
     if (this._lastHeight !== null) {
       const dh = this._lastHeight - currentHeight; // 내려가면 양수
-      // v² = v0² + 2g*dh - friction*v0
-      const vSquared = this.speed * this.speed + 2 * G * dh - FRICTION * this.speed;
+      // v² = v0² + 2g*dh (에너지 보존 — 마찰은 아래서 별도의 dt 독립적 감쇠로 적용)
+      const vSquared = this.speed * this.speed + 2 * G * dh;
       this.speed = Math.sqrt(Math.max(vSquared, MIN_SPEED * MIN_SPEED));
     }
     this._lastHeight = currentHeight;
 
+    // 마찰: 오르막/내리막에서는 위 에너지항이 지배적이라 체감이 작고, 평지에서만 초당 감쇠율이 뚜렷이 느껴짐
+    this.speed *= Math.pow(FRICTION_RETAIN_PER_SECOND, dt);
+    this.speed = Math.max(this.speed, MIN_SPEED);
+
     // 진행률 갱신 (속도 * dt / 트랙길이)
     this.t += (this.speed * dt) / trackLength;
-    this.t = Math.min(this.t, 1);
+    if (this.t >= 1) {
+      if (this.currentLap < this.totalLaps) {
+        this.currentLap += 1;
+        this.t -= 1; // 다음 랩으로 감아넘김 — 오버플로 유지로 속도 끊김 없이 이어짐 (isFinished는 마지막 랩에서만 t>=1로 남음)
+      } else {
+        this.t = 1;
+      }
+    }
 
     this._evaluateSegment(dt);
   }
@@ -71,7 +85,7 @@ class Cart {
       if (diff <= seg.leanWindow) {
         this.combo += 1;
       } else {
-        this.speed *= 0.995; // 감속 패널티 (프레임당 소폭 — dt 독립적으로 하려면 dt 반영 필요)
+        this.speed *= Math.pow(0.995, dt * 60); // 감속 패널티 — 1/60초 기준 튜닝값, dt 무관하게 동일 초당 감쇠율 유지
         this.combo = 0;
       }
     }

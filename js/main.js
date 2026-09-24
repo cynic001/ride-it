@@ -13,6 +13,7 @@ const Game = {
   canvas: null,
   track: null,
   cart: null,
+  cartMesh: null,
   camera: null,
   input: null,
 
@@ -44,20 +45,20 @@ const Game = {
     const stageData = STAGES[stageIndex];
 
     if (this.track) {
-      // 이전 스테이지 리소스 정리 (실제 구현 시 mesh dispose 등 추가 필요)
+      this.track.dispose(); // 이전 스테이지의 레일/지지대/스테이션 인스턴스 정리
     }
 
     this.track = new Track(stageData, this.scene);
+    this.track.loadTrackMeshes();
 
     // 스테이지 배속: 기본 +10%/스테이지를 참고선으로 두되, 모티브별 baseSpeedKmh가 우선
     const stageMultiplier = stageData.baseSpeedKmh / 45; // 1단계(45km/h) 대비 배율로 정규화
 
-    this.cart = new Cart(this.track, stageMultiplier);
+    this.cart = new Cart(this.track, stageMultiplier, LapsManager.current);
     this.camera = new CoasterCamera(this.scene, this.canvas);
     this.input = new InputController(this.canvas, this.cart, this.camera);
 
-    // TODO: 트랙 메시 렌더링 (glTF 트랙 지지대/레일 배치는 별도 구현 예정)
-    this._drawDebugTrackLine();
+    this._loadCartMesh();
 
     UI.showStartPrompt(stageData.name, stageData.motif);
     this.accumulator = 0;
@@ -65,9 +66,30 @@ const Game = {
     this.engine.runRenderLoop(() => this._loop());
   },
 
-  /** 실제 3D 트랙 메시 완성 전까지 진행률 확인용 디버그 라인 */
-  _drawDebugTrackLine() {
-    BABYLON.MeshBuilder.CreateLines('trackDebug', { points: this.track.points }, this.scene);
+  /** 카트 glTF 로드 — 트랙 진행률(t)에 따라 매 고정 스텝마다 위치/방향 갱신 */
+  async _loadCartMesh() {
+    if (this.cartMesh) {
+      this.cartMesh.dispose();
+      this.cartMesh = null;
+    }
+    const result = await BABYLON.SceneLoader.ImportMeshAsync('', 'assets/models/', 'cart.glb', this.scene);
+    // meshes[0]("__root__")는 glTF 좌표계 변환용 미러링(scaling.z=-1)+180도 회전이 baked-in 되어 있어
+    // lookAt()과 결합하면 급커브에서 시각적으로 틀어짐 — track.js의 레일/지지대/스테이션과 동일하게
+    // 실제 지오메트리 메시(meshes[1])를 부모에서 분리해 깨끗한 트랜스폼으로 사용
+    this.cartMesh = result.meshes[1];
+    this.cartMesh.parent = null;
+    this.cartMesh.setEnabled(true);
+    result.meshes[0].dispose(); // 빈 __root__는 더 이상 필요 없음
+    this._updateCartMesh();
+  },
+
+  /** cart.t가 가리키는 트랙 위치/접선으로 카트 메시 위치·방향 동기화 */
+  _updateCartMesh() {
+    if (!this.cartMesh || !this.track || !this.cart) return;
+    const pos = this.track.getPositionAt(this.cart.t);
+    const tangent = this.track.getTangentAt(this.cart.t);
+    this.cartMesh.position.copyFrom(pos);
+    this.cartMesh.lookAt(pos.add(tangent));
   },
 
   _applyQualitySettings() {
@@ -99,7 +121,8 @@ const Game = {
 
     this.cart.update(dt);
     this.camera.update(this.track, this.cart, dt);
-    UI.updateHUD(this.cart);
+    this._updateCartMesh();
+    UI.updateHUD(this.cart, this.track);
 
     if (this.cart.isFinished) {
       this.camera.unlockToggle(); // 이미 풀려있겠지만 안전장치
