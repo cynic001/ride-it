@@ -124,7 +124,13 @@ const Game = {
     this._updateCartMesh();
     UI.updateHUD(this.cart, this.track);
 
+    AudioManager.updateWind(this.cart.speed);
+    const currentSeg = this.track.getSegmentAt(this.cart.t);
+    AudioManager.setAirtimeHold(currentSeg.airtimeZone && this.cart.airtimeHolding);
+
     if (this.cart.isFinished) {
+      AudioManager.updateWind(0);
+      AudioManager.setAirtimeHold(false);
       this.camera.unlockToggle(); // 이미 풀려있겠지만 안전장치
       UI.showResult(this.cart.score, this.currentStageIndex);
       this.engine.stopRenderLoop();
@@ -147,3 +153,7 @@ window.addEventListener('DOMContentLoaded', () => {
   Game.init();
   UI.showStageSelect(STAGES, stageIndex => Game.loadStage(stageIndex));
 });
+
+// iOS Safari 등 자동재생 제한 대응 — 페이지 전체에서 가장 먼저 발생하는 pointerdown(스테이지
+// 선택 탭 포함)에서 AudioContext를 생성/resume. capture+once로 특정 요소에 종속되지 않게 처리.
+window.addEventListener('pointerdown', () => AudioManager.unlock(), { capture: true, once: true });

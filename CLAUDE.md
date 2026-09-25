@@ -25,6 +25,7 @@ ride-it/
 ├── 개발기록.md          # 누적 제작 기록 — 새 결정사항은 여기 추가
 ├── js/
 │   ├── quality.js     # 그래픽 품질 프리셋(Low/Med/High) + 자동감지/적응형 다운그레이드
+│   ├── audio.js        # Web Audio API 순수 합성 사운드(AudioManager) — 라이브러리/샘플 없음
 │   ├── stages.js       # 5단계 제어점/세그먼트/게이트 데이터 (여기가 밸런스 튜닝 지점)
 │   ├── track.js          # 커브 생성 (Catmull-Rom), 세그먼트 매핑
 │   ├── cart.js             # 물리(에너지보존), 밸런스/게이트 판정

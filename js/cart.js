@@ -31,6 +31,7 @@ class Cart {
 
     this._lastHeight = null;
     this._gateResults = [];    // 게이트 판정 기록 (디버그/리더보드용)
+    this._lastBalanceTier = null; // 밸런스 판정 tier 변화 감지용(오디오 이벤트 중복 발생 방지)
   }
 
   /** 스타트: 드래그 거리(pullStrength) × release 순간 속도(flickMultiplier)로 초기 속도 부여 */
@@ -78,16 +79,26 @@ class Cart {
   _evaluateSegment(dt) {
     const seg = this.track.getSegmentAt(this.t);
 
-    // 좌우 밸런스 판정
+    // 좌우 밸런스 판정 — 통과/실패 기준(leanWindow)은 그대로, tier는 오디오 피드백 선택용으로만 추가
     if (seg.requiredLean > 0) {
       const targetLean = seg.curveDirection === 'left' ? -seg.requiredLean : seg.requiredLean;
       const diff = Math.abs(this.leanInput - targetLean);
+      let tier;
       if (diff <= seg.leanWindow) {
         this.combo += 1;
+        tier = diff <= seg.leanWindow * 0.4 ? 'perfect' : 'good';
       } else {
         this.speed *= Math.pow(0.995, dt * 60); // 감속 패널티 — 1/60초 기준 튜닝값, dt 무관하게 동일 초당 감쇠율 유지
         this.combo = 0;
+        tier = 'miss';
       }
+      // tier가 바뀔 때만 이벤트 발생 — 매 틱(60Hz) 발사하면 사운드가 겹쳐 스팸이 됨
+      if (tier !== this._lastBalanceTier) {
+        window.dispatchEvent(new CustomEvent('balance-result', { detail: tier }));
+        this._lastBalanceTier = tier;
+      }
+    } else {
+      this._lastBalanceTier = null; // 밸런스 불필요 구간을 지나면 리셋 — 다음 커브 진입 시 다시 엣지 감지되도록
     }
 
     // 에어타임(손들기) 보너스

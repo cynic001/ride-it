@@ -35,6 +35,7 @@ const UI = {
         </div>
         <button class="quality-toggle" id="qualityBtn">그래픽: ${QualityManager.current}</button>
         <button class="quality-toggle" id="lapsBtn">턴 반복: ${LapsManager.current}랩</button>
+        <button class="quality-toggle" id="audioBtn">사운드: ${AudioManager.enabled ? 'ON' : 'OFF'}</button>
       </div>
     `;
 
@@ -44,6 +45,7 @@ const UI = {
 
     document.getElementById('qualityBtn').addEventListener('click', () => this._cycleQuality());
     document.getElementById('lapsBtn').addEventListener('click', () => this._cycleLaps());
+    document.getElementById('audioBtn').addEventListener('click', () => this._cycleAudio());
   },
 
   _cycleQuality() {
@@ -60,6 +62,13 @@ const UI = {
     LapsManager.setLaps(next);
     const btn = document.getElementById('lapsBtn');
     if (btn) btn.textContent = `턴 반복: ${next}랩`;
+  },
+
+  _cycleAudio() {
+    const next = !AudioManager.enabled;
+    AudioManager.setEnabled(next);
+    const btn = document.getElementById('audioBtn');
+    if (btn) btn.textContent = `사운드: ${next ? 'ON' : 'OFF'}`;
   },
 
   showStartPrompt(name, motif) {
@@ -102,6 +111,7 @@ const UI = {
   },
 
   showResult(score, stageIndex) {
+    AudioManager.playResultFanfare();
     this.root.innerHTML = `
       <div class="screen result">
         <h2>완주!</h2>
