@@ -56,11 +56,13 @@ const Game = {
 
     this.cart = new Cart(this.track, stageMultiplier, LapsManager.current);
     this.camera = new CoasterCamera(this.scene, this.canvas);
-    this.input = new InputController(this.canvas, this.cart, this.camera);
+
+    // showStartPrompt가 스타트 바 DOM을 먼저 만들어야 InputController가 그 엘리먼트에 바인딩 가능
+    UI.showStartPrompt(stageData.name, stageData.motif);
+    this.input = new InputController(this.canvas, this.cart, this.camera, UI.startBarEl);
 
     this._loadCartMesh();
 
-    UI.showStartPrompt(stageData.name, stageData.motif);
     this.accumulator = 0;
     this.lastTime = performance.now();
     this.engine.runRenderLoop(() => this._loop());
@@ -83,13 +85,16 @@ const Game = {
     this._updateCartMesh();
   },
 
-  /** cart.t가 가리키는 트랙 위치/접선으로 카트 메시 위치·방향 동기화 */
+  /** cart.t가 가리키는 트랙 위치/접선/뱅킹으로 카트 메시 위치·방향 동기화
+   * (roll을 track.js의 레일 뱅킹과 동일한 getBankRollAt()으로 맞추지 않으면 커브 구간에서
+   * 카트만 안 기울어져 레일과 따로 노는 것처럼 보임) */
   _updateCartMesh() {
     if (!this.cartMesh || !this.track || !this.cart) return;
     const pos = this.track.getPositionAt(this.cart.t);
     const tangent = this.track.getTangentAt(this.cart.t);
+    const roll = this.track.getBankRollAt(this.cart.t);
     this.cartMesh.position.copyFrom(pos);
-    this.cartMesh.lookAt(pos.add(tangent));
+    this.cartMesh.lookAt(pos.add(tangent), 0, 0, roll);
   },
 
   _applyQualitySettings() {

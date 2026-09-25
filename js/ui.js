@@ -72,6 +72,12 @@ const UI = {
   },
 
   showStartPrompt(name, motif) {
+    // 스테이지를 재도전/재선택할 때마다 새로 호출되므로, 직전 호출에서 등록해둔 window 리스너를
+    // 먼저 정리 — 그대로 두면 "발사 전에 스테이지 선택으로 돌아가기"를 반복할 때마다 리스너가
+    // 계속 쌓이는 누수가 생김
+    if (this._pullProgressHandler) window.removeEventListener('pull-progress', this._pullProgressHandler);
+    if (this._launchedHandler) window.removeEventListener('cart-launched', this._launchedHandler);
+
     this.root.innerHTML = `
       <div class="screen hud">
         <div class="top-bar">
@@ -80,7 +86,13 @@ const UI = {
           <span class="turn-label" id="turnLabel"></span>
           <span class="combo-label" id="comboLabel">Combo 0</span>
         </div>
-        <div class="start-hint" id="startHint">화면을 당겼다 놓으면 출발!</div>
+        <div class="start-bar" id="startBar">
+          <div class="start-bar-label">당겨서 출발!</div>
+          <div class="start-bar-track">
+            <div class="start-bar-fill" id="startBarFill"></div>
+            <div class="start-bar-handle" id="startBarHandle">➜</div>
+          </div>
+        </div>
         <button class="camera-toggle" id="cameraToggleBtn" disabled>시점 전환</button>
       </div>
     `;
@@ -88,13 +100,32 @@ const UI = {
     document.getElementById('cameraToggleBtn').addEventListener('click', () => {
       if (Game.camera && !Game.camera.locked) Game.camera.toggleMode();
     });
+
+    // input.js가 실제 드래그를 받는 스타트 바 DOM — main.js가 InputController에 이 엘리먼트를 넘김
+    this.startBarEl = document.getElementById('startBar');
+    const track = this.startBarEl.querySelector('.start-bar-track');
+    const fill = document.getElementById('startBarFill');
+    const handle = document.getElementById('startBarHandle');
+
+    this._pullProgressHandler = e => {
+      const strength = Math.max(0, Math.min(1, e.detail));
+      const travel = Math.max(0, track.clientWidth - handle.clientWidth - 8); // 8 = track 내부 좌우 패딩(4px*2)
+      const offset = travel * strength;
+      handle.style.transform = `translateX(${offset}px)`;
+      fill.style.width = `${4 + offset + handle.clientWidth / 2}px`;
+    };
+    // 발사 성공 시: 힌트 텍스트만 사라지는 게 아니라 스타트 바 UI 자체를 화면에서 치우고 HUD로 전환
+    this._launchedHandler = () => {
+      this.startBarEl.classList.add('launched');
+    };
+    window.addEventListener('pull-progress', this._pullProgressHandler);
+    window.addEventListener('cart-launched', this._launchedHandler);
   },
 
   updateHUD(cart, track) {
     const speedLabel = document.getElementById('speedLabel');
     const comboLabel = document.getElementById('comboLabel');
     const turnLabel = document.getElementById('turnLabel');
-    const startHint = document.getElementById('startHint');
     const cameraBtn = document.getElementById('cameraToggleBtn');
 
     if (speedLabel) speedLabel.textContent = `${Math.round(cart.speed * 3.6)} km/h`; // m/s → km/h
@@ -106,7 +137,6 @@ const UI = {
       const lapPrefix = cart.totalLaps > 1 ? `Lap ${cart.currentLap}/${cart.totalLaps} · ` : '';
       turnLabel.textContent = `${lapPrefix}Turn ${turnNum}/${ranges.length}`;
     }
-    if (startHint) startHint.style.display = cart.launched ? 'none' : 'block';
     if (cameraBtn) cameraBtn.disabled = !cart.launched;
   },
 

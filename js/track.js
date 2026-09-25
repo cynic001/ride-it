@@ -75,6 +75,40 @@ class Track {
     return this.getPositionAt(t).y;
   }
 
+  /** 세그먼트 자체의 뱅킹(롤) 각도(rad) — 전환 보간 없이 그 세그먼트가 원하는 목표값만 */
+  _targetRollFor(seg) {
+    if (seg.requiredLean <= 0) return 0;
+    const bank = MAX_BANK_RAD * seg.requiredLean;
+    return seg.curveDirection === 'left' ? -bank : bank;
+  }
+
+  /** 진행률 t에서의 뱅킹(롤) 각도(rad) — 레일 인스턴싱과 카트 메시가 항상 같은 값을 쓰도록
+   * 단일 소스로 공유(따로 계산하면 둘이 어긋나 카트가 레일에서 떠 보이는 버그가 생김).
+   * 세그먼트 앞뒤 BANK_TRANSITION 비율 구간은 인접 세그먼트 값과 선형 보간 — 세그먼트마다
+   * requiredLean/curveDirection이 달라 경계에서 롤이 최대 40도 이상 순간적으로 꺾이던 것을
+   * (실측: stage5에서 최대 41.2도 불연속 확인) 실제 코스터의 전환 곡선처럼 완만하게 이어지도록 함 */
+  getBankRollAt(t) {
+    const segs = this.segmentRanges;
+    let i = segs.findIndex(s => t >= s.tStart && t < s.tEnd);
+    if (i === -1) i = segs.length - 1;
+    const seg = segs[i];
+    const local = (t - seg.tStart) / (seg.tEnd - seg.tStart); // 세그먼트 내 진행률(0~1)
+    const myRoll = this._targetRollFor(seg);
+
+    const BANK_TRANSITION = 0.25; // 세그먼트 앞/뒤 각 25% 구간에서 인접 세그먼트 값으로 보간
+    if (local < BANK_TRANSITION) {
+      const prevRoll = this._targetRollFor(segs[(i - 1 + segs.length) % segs.length]);
+      const w = 0.5 + (local / BANK_TRANSITION) * 0.5; // 경계(0.5:0.5) -> 세그먼트 값(1.0)으로 수렴
+      return prevRoll * (1 - w) + myRoll * w;
+    }
+    if (local > 1 - BANK_TRANSITION) {
+      const nextRoll = this._targetRollFor(segs[(i + 1) % segs.length]);
+      const w = 0.5 + ((1 - local) / BANK_TRANSITION) * 0.5;
+      return nextRoll * (1 - w) + myRoll * w;
+    }
+    return myRoll;
+  }
+
   /** 레일/지지대/스테이션 glTF 로드 후 커브를 따라 인스턴싱 배치 */
   async loadTrackMeshes() {
     const railFile = RAIL_FILES[this.stageData.railType] || RAIL_FILES.standard;
@@ -88,14 +122,7 @@ class Track {
 
     this._instanceAlongCurve(railTemplate, this._railExtentZ(railTemplate), (inst, pos, tangent, t) => {
       inst.position.copyFrom(pos);
-      // 커브 구간(requiredLean>0)에서는 안쪽으로 기울어지는 뱅킹 적용 — camera.js의 롤 연출과 동일한 부호 규칙
-      const seg = this.getSegmentAt(t);
-      let roll = 0;
-      if (seg.requiredLean > 0) {
-        const bank = MAX_BANK_RAD * seg.requiredLean;
-        roll = seg.curveDirection === 'left' ? -bank : bank;
-      }
-      inst.lookAt(pos.add(tangent), 0, 0, roll);
+      inst.lookAt(pos.add(tangent), 0, 0, this.getBankRollAt(t));
     });
 
     const pillarHeight = pillarTemplate.getBoundingInfo().boundingBox.maximum.y - pillarTemplate.getBoundingInfo().boundingBox.minimum.y;

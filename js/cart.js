@@ -7,6 +7,10 @@
 const G = 9.8;
 const FRICTION_RETAIN_PER_SECOND = 0.975; // 평지·무입력 기준 초당 2.5% 감속 (dt 무관하게 Math.pow(., dt)로 적용)
 const MIN_SPEED = 2;          // 최소 속도 (m/s) — 완전 정지 방지
+// boost 게이트 배율 — 실측 시뮬레이션(에너지보존식 기준) 결과 기존 1.25/1.1로는 하강 후 복귀
+// 오르막(특히 스테이지 후반 리프트 구간)에서 속도가 MIN_SPEED까지 떨어져 수십 초씩 정체하는
+// 현상을 확인, 리프트힐 체인모터 같은 "동력 보충" 역할을 하도록 상향 조정
+const BOOST_MULTIPLIER = { perfect: 2.2, good: 1.6 };
 
 class Cart {
   /**
@@ -131,8 +135,8 @@ class Cart {
 
   _applyGateResult(gateType, result) {
     if (gateType === 'boost') {
-      if (result === 'perfect') this.speed *= 1.25;
-      else if (result === 'good') this.speed *= 1.1;
+      if (result === 'perfect') this.speed *= BOOST_MULTIPLIER.perfect;
+      else if (result === 'good') this.speed *= BOOST_MULTIPLIER.good;
     } else if (gateType === 'brake') {
       if (result === 'perfect') this.speed *= 0.9;
       else if (result === 'miss') this.speed *= 0.6; // 이탈 위험 연출

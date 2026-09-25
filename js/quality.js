@@ -41,17 +41,31 @@ const QualityManager = {
       return this.current;
     }
 
+    const isMobile = this._isMobileDevice();
+
+    if (!isMobile) {
+      // 데스크톱(레티나 Mac 포함)은 화면 해상도/DPR이 높을수록 오히려 고사양 신호이자
+      // 모바일처럼 발열/배터리 제약도 없음 — 모바일과 완전히 별개 기준으로 판정해
+      // "고해상도=저사양" 휴리스틱이 전혀 개입하지 않도록 분리(레티나 디스플레이 오탐 방지)
+      const mem = navigator.deviceMemory || 8; // Safari는 deviceMemory 미지원 — 데스크톱 기본값은 관대하게
+      this.current = mem >= 6 ? 'high' : mem >= 4 ? 'medium' : 'low';
+      console.log('[Quality] 초기 프리셋 판정(데스크톱):', this.current, { deviceMemory: navigator.deviceMemory });
+      return this.current;
+    }
+
+    // ── 모바일: 기존 로직 그대로(화면 해상도/GPU 문자열이 저사양 신호로 유효한 영역) ──
     let score = 0;
 
     // 메모리 (Safari는 deviceMemory 미지원 — 폴백 필요)
     const mem = navigator.deviceMemory || 4;
     score += mem >= 6 ? 2 : mem >= 4 ? 1 : 0;
 
-    // 픽셀 밀도 * 화면크기 (고해상도 저사양 기기 페널티)
+    // 픽셀 밀도 * 화면크기 (고해상도 저사양 기기 페널티) — 모바일 한정
     const pixelCount = window.screen.width * window.screen.height * (window.devicePixelRatio || 1);
     score += pixelCount > 2_000_000 ? -1 : 0;
 
-    // GPU 벤더 문자열 체크 (가능한 경우)
+    // GPU 벤더 문자열 체크 (가능한 경우) — 모바일 한정(Safari가 Apple GPU를 뭉뚱그려 보고하는
+    // 경우가 있어 데스크톱까지 포함하면 Apple Silicon Mac까지 구형 아이폰으로 오탐할 수 있음)
     try {
       const gl = engine.getGlInfo ? engine.getGlInfo() : null;
       const renderer = gl && gl.renderer ? gl.renderer.toLowerCase() : '';
@@ -66,7 +80,17 @@ const QualityManager = {
     else if (score === 1) this.current = 'medium';
     else this.current = 'high';
 
+    console.log('[Quality] 초기 프리셋 판정(모바일):', this.current, { score, deviceMemory: navigator.deviceMemory });
     return this.current;
+  },
+
+  /** UA/터치포인트 기반 모바일 판정 — iPadOS는 iOS13+부터 UA가 macOS로 위장하므로 별도 처리 */
+  _isMobileDevice() {
+    const ua = navigator.userAgent;
+    if (/Mobi|Android|iPhone|iPod/i.test(ua)) return true;
+    if (/iPad/i.test(ua)) return true;
+    if (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1) return true; // 데스크톱 UA로 위장한 iPad
+    return false;
   },
 
   setPreset(name) {

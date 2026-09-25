@@ -55,7 +55,9 @@ const STAGES = [
       { type: 'curve',    curveDirection: 'right', requiredLean: 0.35, leanWindow: 0.4,
         gate: { type: 'boost', timingWindow: { start: 0.45, end: 0.55 } }, airtimeZone: false },
       { type: 'curve',    curveDirection: 'left',  requiredLean: 0.3,  leanWindow: 0.45,
-        gate: null, airtimeZone: false },
+        // 복귀 구간 마지막 오르막 진입부 — 실측 시뮬레이션(perfect 밸런스+기존 boost 전부 활용)에서도
+        // 이 구간 진입 직후 속도가 MIN_SPEED까지 떨어져 정체(약 38초)하는 것을 확인해 boost 추가
+        gate: { type: 'boost', timingWindow: { start: 0.1, end: 0.2 } }, airtimeZone: false },
       { type: 'straight', curveDirection: null,   requiredLean: 0,    leanWindow: 0,
         gate: { type: 'finish', timingWindow: { start: 0.85, end: 1.0 } }, airtimeZone: false },
     ],
@@ -94,9 +96,15 @@ const STAGES = [
       { type: 'straight', curveDirection: null,   requiredLean: 0,    leanWindow: 0,
         gate: null, airtimeZone: false },
       { type: 'drop',     curveDirection: null,   requiredLean: 0,    leanWindow: 0,
-        gate: { type: 'brake', timingWindow: { start: 0.4, end: 0.5 } }, airtimeZone: true },
+        // 원래 brake였으나, 실측 시뮬레이션 결과 급하강 직후 인버티드 루프 정점(y30, 낙하지점 대비
+        // +22m)까지 오를 에너지가 애초에 부족해 루프 진입부터 정체가 시작됨을 확인 — 루프 진입 직전
+        // 부스터(체인모터 대신 순간 가속) 역할로 교체, timingWindow도 구간 초반으로 당겨 아직 속도가
+        // 남아있는 시점에 boost가 걸리도록 함
+        gate: { type: 'boost', timingWindow: { start: 0.02, end: 0.1 } }, airtimeZone: true },
       { type: 'loop',     curveDirection: null,   requiredLean: 0,    leanWindow: 0,
-        gate: null, airtimeZone: true },
+        // 루프 정점(y30)까지는 boost 1회로도 여전히 부족(실측: 약 7m 부족)해 두 번째 boost 추가
+        // — 루프 하나에 연속 boost 2회는 실제 코스터의 체인/LSM 부스터 다중 구간과 유사한 연출
+        gate: { type: 'boost', timingWindow: { start: 0.02, end: 0.1 } }, airtimeZone: true },
       { type: 'curve',    curveDirection: 'left',  requiredLean: 0.45, leanWindow: 0.35,
         gate: null, airtimeZone: false },
       { type: 'curve',    curveDirection: 'left',  requiredLean: 0.4,  leanWindow: 0.35,
@@ -149,7 +157,9 @@ const STAGES = [
       { type: 'curve',    curveDirection: 'left',  requiredLean: 0.72, leanWindow: 0.13,
         gate: null, airtimeZone: false },
       { type: 'curve',    curveDirection: 'right', requiredLean: 0.75, leanWindow: 0.12,
-        gate: null, airtimeZone: false },
+        // 원거리 턴 이탈 후 복귀 스윙 진입부 — 실측 시뮬레이션에서 이 구간 진입 직후 정체(약 116초)
+        // 확인, boost 추가
+        gate: { type: 'boost', timingWindow: { start: 0.1, end: 0.2 } }, airtimeZone: false },
       { type: 'curve',    curveDirection: 'left',  requiredLean: 0.7,  leanWindow: 0.14,
         gate: { type: 'boost', timingWindow: { start: 0.6, end: 0.7 } }, airtimeZone: false },
       { type: 'straight', curveDirection: null,   requiredLean: 0,    leanWindow: 0,
@@ -199,7 +209,10 @@ const STAGES = [
       { type: 'curve',    curveDirection: 'left',  requiredLean: 0.55, leanWindow: 0.25,
         gate: { type: 'boost', timingWindow: { start: 0.4, end: 0.5 } }, airtimeZone: false },
       { type: 'curve',    curveDirection: 'right', requiredLean: 0.6,  leanWindow: 0.25,
-        gate: null, airtimeZone: false },
+        // 귀환 리프트 진입부 — 스테이션 높이(70m)까지 복귀 상승 중 가장 큰 순수 오르막(약 28m)이
+        // 남아있는 지점, 실측 시뮬레이션에서 정체(약 80초) 확인해 boost 추가(구간 초반, 아직 속도가
+        // 남아있을 때 걸리도록)
+        gate: { type: 'boost', timingWindow: { start: 0.1, end: 0.2 } }, airtimeZone: false },
       { type: 'straight', curveDirection: null,   requiredLean: 0,    leanWindow: 0,
         gate: { type: 'finish', timingWindow: { start: 0.88, end: 1.0 } }, airtimeZone: false },
     ],
@@ -278,7 +291,9 @@ const STAGES = [
       { type: 'curve',     curveDirection: 'left',  requiredLean: 0.75, leanWindow: 0.18,        // 에어타임10
         gate: null, airtimeZone: true },
       { type: 'straight',  curveDirection: null,   requiredLean: 0,    leanWindow: 0,            // 복귀 상승(크레스트 없음)
-        gate: null, airtimeZone: false },
+        // 스테이션 높이(56m)까지 복귀하는 마지막 순수 오르막(약 35m, 5스테이지 전체에서 가장 큼) —
+        // 실측 시뮬레이션에서 정체(약 104초) 확인해 boost 추가(구간 초반)
+        gate: { type: 'boost', timingWindow: { start: 0.1, end: 0.2 } }, airtimeZone: false },
       { type: 'straight',  curveDirection: null,   requiredLean: 0,    leanWindow: 0,            // 스테이션 복귀 + 피니쉬
         gate: { type: 'finish', timingWindow: { start: 0.9, end: 1.0 } }, airtimeZone: false },
     ],

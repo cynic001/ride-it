@@ -6,7 +6,10 @@
 <title>떨어진다!!! RIDE IT - chaechae studio</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, 'Pretendard', sans-serif; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, 'Pretendard', sans-serif;
+    overscroll-behavior: none; /* 스타트 바 드래그 중 페이지 자체가 바운스/스크롤되는 것 방지 */
+  }
 
   #renderCanvas { width: 100%; height: 100%; touch-action: none; outline: none; display: block; }
 
@@ -45,9 +48,26 @@
     display: flex; justify-content: space-between; padding: 0 16px;
     color: #fff; font-size: 15px; text-shadow: 0 1px 3px rgba(0,0,0,0.6);
   }
-  .start-hint {
-    position: absolute; bottom: 25%; left: 0; right: 0; text-align: center;
-    color: #fff; font-size: 16px; text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  .start-bar {
+    position: absolute; bottom: 22%; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    pointer-events: auto; touch-action: none; /* 이 안에서만 드래그를 받고 브라우저 제스처는 차단 */
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .start-bar.launched { opacity: 0; transform: translateX(-50%) translateY(16px); pointer-events: none; }
+  .start-bar-label { color: #fff; font-size: 15px; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+  .start-bar-track {
+    position: relative; width: 220px; height: 56px; border-radius: 28px;
+    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.35);
+  }
+  .start-bar-fill {
+    position: absolute; top: 4px; left: 4px; height: calc(100% - 8px); width: 0;
+    border-radius: 24px; background: rgba(255,196,0,0.85);
+  }
+  .start-bar-handle {
+    position: absolute; top: 4px; left: 4px; width: 48px; height: 48px; border-radius: 50%;
+    background: #fff; color: #111; display: flex; align-items: center; justify-content: center;
+    font-size: 18px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);
   }
   .camera-toggle {
     position: absolute; bottom: env(safe-area-inset-bottom, 16px); right: 16px;
