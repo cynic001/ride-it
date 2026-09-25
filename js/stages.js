@@ -213,53 +213,74 @@ const STAGES = [
     railType: 'hybrid',
     baseSpeedKmh: 104,
     trackLengthM: 1680,
-    // 폐곡선 — 5개 스테이지 중 가장 다이나믹: 77도 급낙하 이후 무중력 힐을 최대한 촘촘히(원본 5개소 → 8개소 내외로 확장)
-    // 연속 배치하고, 원거리 턴을 돈 뒤 복귀 구간에서 다시 스테이션 높이(56m)까지 상승.
+    // 폐곡선 — 5개 스테이지 중 가장 다이나믹: 77도 급낙하 이후 무중력 힐을 최대한 촘촘히 연속 배치하고,
+    // 원거리 턴을 돈 뒤 복귀 구간에서 다시 스테이션 높이(56m)까지 상승.
+    // 에어타임 힐 10개소(오프닝 드롭 크레스트 포함 시 11회 무중력 체감) — controlPoints 28개를 균등 2개씩
+    // 묶어 segments 14개로 재설계(아래 segments 배열 주석 참고). 12회(T익스프레스 원본) 대비 부족분은
+    // 현재 트랙 길이(1680m)·턴 밀도에서 힐 간격을 더 좁히면 부자연스러워지는 한계선 — 더 늘리려면
+    // 트랙 길이 자체를 늘리거나 복귀 구간을 재설계해야 함(다음 큰 설계 변경 후보로 개발기록에 남김).
     controlPoints: [
       { x: 0,   y: 56, z: 0 },     // 최고높이 56m(스테이션)
-      { x: 0,   y: 56, z: 25 },
-      { x: 6,   y: 10, z: 55 },    // 77도 급낙하
+      { x: 0,   y: 56, z: 25 },    // 리프트 정상 — 여기서 바로 급낙하 시작 (진짜 77도 드롭 크레스트)
+      { x: 6,   y: 10, z: 55 },    // 77도 급낙하 바닥
       { x: 16,  y: 24, z: 110 },   // 에어타임 1
-      { x: 16,  y: 6,  z: 160 },
-      { x: -6,  y: 26, z: 215 },   // 에어타임 2
-      { x: -6,  y: 5,  z: 265 },
-      { x: 12,  y: 22, z: 320 },   // 에어타임 3
-      { x: 12,  y: 5,  z: 370 },
-      { x: -14, y: 20, z: 425 },   // 에어타임 4
-      { x: -14, y: 4,  z: 475 },
-      { x: 8,   y: 18, z: 530 },   // 에어타임 5
-      { x: 8,   y: 4,  z: 580 },
-      { x: -16, y: 16, z: 640 },   // 에어타임 6 + 원거리 턴 진입
+      { x: 16,  y: 6,  z: 154 },
+      { x: -8,  y: 25, z: 198 },   // 에어타임 2
+      { x: -8,  y: 5,  z: 243 },
+      { x: 12,  y: 22, z: 287 },   // 에어타임 3
+      { x: 12,  y: 5,  z: 331 },
+      { x: -14, y: 20, z: 375 },   // 에어타임 4
+      { x: -14, y: 4,  z: 419 },
+      { x: 10,  y: 19, z: 463 },   // 에어타임 5
+      { x: 10,  y: 4,  z: 507 },
+      { x: -12, y: 17, z: 552 },   // 에어타임 6
+      { x: -12, y: 4,  z: 596 },
+      { x: -16, y: 16, z: 640 },   // 에어타임 7 + 원거리 턴 진입
       { x: 0,   y: 10, z: 670 },   // 원거리 턴 정점
       { x: 16,  y: 15, z: 640 },
       { x: 10,  y: 4,  z: 580 },   // 복귀 구간 시작
-      { x: -8,  y: 17, z: 530 },   // 에어타임 7
+      { x: -8,  y: 17, z: 530 },   // 에어타임 8
       { x: -8,  y: 5,  z: 480 },
-      { x: 10,  y: 16, z: 420 },   // 에어타임 8
-      { x: 6,   y: 10, z: 300 },
+      { x: 10,  y: 16, z: 420 },   // 에어타임 9
+      { x: 10,  y: 5,  z: 380 },
+      { x: -10, y: 15, z: 340 },   // 에어타임 10
+      { x: 6,   y: 10, z: 300 },   // 힐 구간 종료 → 전환
       { x: 0,   y: 20, z: 180 },   // 복귀 상승 시작
       { x: 0,   y: 40, z: 90 },
       { x: 0,   y: 54, z: 25 },    // 스테이션 높이 근접
     ],
+    // controlPoints 28개 ÷ 2개씩 = segments 14개(균등분할, track.js의 t=i/segCount 방식과 궁합이
+    // 맞도록 정확히 나눠떨어지게 설계). 실측(getHeightAt 스캔)으로 각 세그먼트가 실제로 어느
+    // 힐/구간을 담당하는지 검증 완료 — 개발기록.md 참고.
     segments: [
-      { type: 'straight', curveDirection: null,   requiredLean: 0,    leanWindow: 0,
+      { type: 'drop',      curveDirection: null,   requiredLean: 0,    leanWindow: 0,           // CP1~2: 진짜 77도 급낙하
+        gate: { type: 'brake', timingWindow: { start: 0.5, end: 0.6 } }, dropAngle: 77, airtimeZone: true },
+      { type: 'curve',     curveDirection: 'right', requiredLean: 0.6,  leanWindow: 0.24,        // 에어타임1
+        gate: null, airtimeZone: true },
+      { type: 'curve',     curveDirection: 'left',  requiredLean: 0.62, leanWindow: 0.23,        // 에어타임2
+        gate: { type: 'boost', timingWindow: { start: 0.4, end: 0.5 } }, airtimeZone: true },
+      { type: 'curve',     curveDirection: 'right', requiredLean: 0.65, leanWindow: 0.22,        // 에어타임3
+        gate: null, airtimeZone: true },
+      { type: 'curve',     curveDirection: 'left',  requiredLean: 0.68, leanWindow: 0.21,        // 에어타임4
+        gate: null, airtimeZone: true },
+      { type: 'curve',     curveDirection: 'right', requiredLean: 0.7,  leanWindow: 0.2,         // 에어타임5
+        gate: { type: 'boost', timingWindow: { start: 0.4, end: 0.5 } }, airtimeZone: true },
+      { type: 'curve',     curveDirection: 'left',  requiredLean: 0.72, leanWindow: 0.19,        // 에어타임6
+        gate: null, airtimeZone: true },
+      { type: 'curve',     curveDirection: 'left',  requiredLean: 0.75, leanWindow: 0.18,        // 에어타임7 + 원거리 턴 진입
+        gate: null, airtimeZone: true },
+      { type: 'curve',     curveDirection: 'right', requiredLean: 0.6,  leanWindow: 0.22,        // 턴 이탈 → 복귀 구간 전환(크레스트 없음)
         gate: null, airtimeZone: false },
-      { type: 'drop',     curveDirection: null,   requiredLean: 0,    leanWindow: 0,
-        gate: { type: 'brake', timingWindow: { start: 0.5, end: 0.58 } }, dropAngle: 77, airtimeZone: true },
-      { type: 'curve',    curveDirection: 'right', requiredLean: 0.65, leanWindow: 0.22,
-        gate: { type: 'boost', timingWindow: { start: 0.38, end: 0.46 } }, airtimeZone: true },
-      { type: 'curve',    curveDirection: 'left',  requiredLean: 0.65, leanWindow: 0.22,
+      { type: 'curve',     curveDirection: 'left',  requiredLean: 0.7,  leanWindow: 0.2,         // 에어타임8
+        gate: { type: 'boost', timingWindow: { start: 0.4, end: 0.5 } }, airtimeZone: true },
+      { type: 'curve',     curveDirection: 'right', requiredLean: 0.72, leanWindow: 0.19,        // 에어타임9
         gate: null, airtimeZone: true },
-      { type: 'curve',    curveDirection: 'right', requiredLean: 0.7,  leanWindow: 0.2,
-        gate: { type: 'boost', timingWindow: { start: 0.4, end: 0.48 } }, airtimeZone: true },
-      { type: 'curve',    curveDirection: 'left',  requiredLean: 0.75, leanWindow: 0.18,
+      { type: 'curve',     curveDirection: 'left',  requiredLean: 0.75, leanWindow: 0.18,        // 에어타임10
         gate: null, airtimeZone: true },
-      { type: 'curve',    curveDirection: 'right', requiredLean: 0.75, leanWindow: 0.18,
-        gate: { type: 'boost', timingWindow: { start: 0.45, end: 0.53 } }, airtimeZone: true },
-      { type: 'curve',    curveDirection: 'left',  requiredLean: 0.8,  leanWindow: 0.16,
-        gate: null, airtimeZone: true },
-      { type: 'straight', curveDirection: null,   requiredLean: 0,    leanWindow: 0,
-        gate: { type: 'finish', timingWindow: { start: 0.92, end: 1.0 } }, airtimeZone: false },
+      { type: 'straight',  curveDirection: null,   requiredLean: 0,    leanWindow: 0,            // 복귀 상승(크레스트 없음)
+        gate: null, airtimeZone: false },
+      { type: 'straight',  curveDirection: null,   requiredLean: 0,    leanWindow: 0,            // 스테이션 복귀 + 피니쉬
+        gate: { type: 'finish', timingWindow: { start: 0.9, end: 1.0 } }, airtimeZone: false },
     ],
   },
 ];
