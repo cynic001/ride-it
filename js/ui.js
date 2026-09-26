@@ -36,6 +36,7 @@ const UI = {
         <button class="quality-toggle" id="qualityBtn">그래픽: ${QualityManager.current}</button>
         <button class="quality-toggle" id="lapsBtn">턴 반복: ${LapsManager.current}랩</button>
         <button class="quality-toggle" id="audioBtn">사운드: ${AudioManager.enabled ? 'ON' : 'OFF'}</button>
+        <button class="quality-toggle" id="howtoBtn">조작법</button>
       </div>
     `;
 
@@ -46,6 +47,71 @@ const UI = {
     document.getElementById('qualityBtn').addEventListener('click', () => this._cycleQuality());
     document.getElementById('lapsBtn').addEventListener('click', () => this._cycleLaps());
     document.getElementById('audioBtn').addEventListener('click', () => this._cycleAudio());
+    document.getElementById('howtoBtn').addEventListener('click', () => this.showHowTo());
+
+    // 최초 1회만 자동으로 조작법 안내 — 이후엔 위 버튼으로만 접근
+    if (!localStorage.getItem('rc_howto_seen')) this.showHowTo();
+  },
+
+  showHowTo(onClose) {
+    const el = document.createElement('div');
+    el.className = 'screen modal-overlay';
+    el.id = 'howtoOverlay';
+    el.innerHTML = `
+      <h2>조작법</h2>
+      <div class="howto-list">
+        <p>➜ <strong>스타트 바</strong> — 바 안에서 당겼다 놓으면 출발</p>
+        <p>↔ <strong>좌우 밸런스</strong> — 주행 중 화면 하단을 좌우로 스와이프</p>
+        <p>👆 <strong>게이트 탭</strong> — 화면 상단/중앙을 타이밍 맞춰 탭 (부스트/브레이크/피니쉬)</p>
+        <p>✋ <strong>에어타임 홀드</strong> — 화면을 길게 눌러 손 들기</p>
+      </div>
+      <button id="howtoCloseBtn" class="primary">확인</button>
+    `;
+    this.root.appendChild(el);
+    document.getElementById('howtoCloseBtn').addEventListener('click', () => {
+      el.remove();
+      localStorage.setItem('rc_howto_seen', '1');
+      if (onClose) onClose();
+    });
+  },
+
+  showLoadingOverlay() {
+    this.root.innerHTML = `
+      <div class="screen modal-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <p>불러오는 중...</p>
+      </div>
+    `;
+  },
+
+  showLoadError(retryFn) {
+    this.root.innerHTML = `
+      <div class="screen modal-overlay">
+        <h2>불러오기 실패</h2>
+        <p>에셋을 불러오지 못했습니다. 네트워크를 확인해주세요.</p>
+        <button id="retryLoadBtn" class="primary">다시 시도</button>
+      </div>
+    `;
+    document.getElementById('retryLoadBtn').addEventListener('click', retryFn);
+  },
+
+  showPauseOverlay() {
+    const el = document.createElement('div');
+    el.className = 'screen modal-overlay';
+    el.id = 'pauseOverlay';
+    el.innerHTML = `
+      <h2>일시정지</h2>
+      <button id="resumeBtn" class="primary">계속하기</button>
+      <button id="pauseExitBtn">스테이지 선택으로</button>
+    `;
+    this.root.appendChild(el);
+    document.getElementById('resumeBtn').addEventListener('click', () => Game.resumeGame());
+    document.getElementById('pauseExitBtn').addEventListener('click', () => Game.exitToStageSelect());
+  },
+
+  hidePauseOverlay() {
+    const el = document.getElementById('pauseOverlay');
+    if (el) el.remove();
   },
 
   _cycleQuality() {
@@ -93,12 +159,22 @@ const UI = {
             <div class="start-bar-handle" id="startBarHandle">➜</div>
           </div>
         </div>
-        <button class="camera-toggle" id="cameraToggleBtn" disabled>시점 전환</button>
+        <div class="hud-controls">
+          <button class="hud-icon-btn" id="soundToggleBtn">${AudioManager.enabled ? '🔊' : '🔇'}</button>
+          <button class="hud-icon-btn" id="pauseBtn" disabled>⏸</button>
+          <button class="camera-toggle" id="cameraToggleBtn" disabled>시점 전환</button>
+        </div>
       </div>
     `;
 
     document.getElementById('cameraToggleBtn').addEventListener('click', () => {
       if (Game.camera && !Game.camera.locked) Game.camera.toggleMode();
+    });
+    document.getElementById('pauseBtn').addEventListener('click', () => Game.pauseGame());
+    document.getElementById('soundToggleBtn').addEventListener('click', () => {
+      const next = !AudioManager.enabled;
+      AudioManager.setEnabled(next);
+      document.getElementById('soundToggleBtn').textContent = next ? '🔊' : '🔇';
     });
 
     // input.js가 실제 드래그를 받는 스타트 바 DOM — main.js가 InputController에 이 엘리먼트를 넘김
@@ -127,6 +203,7 @@ const UI = {
     const comboLabel = document.getElementById('comboLabel');
     const turnLabel = document.getElementById('turnLabel');
     const cameraBtn = document.getElementById('cameraToggleBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
 
     if (speedLabel) speedLabel.textContent = `${Math.round(cart.speed * 3.6)} km/h`; // m/s → km/h
     if (comboLabel) comboLabel.textContent = `Combo ${cart.combo}`;
@@ -138,6 +215,7 @@ const UI = {
       turnLabel.textContent = `${lapPrefix}Turn ${turnNum}/${ranges.length}`;
     }
     if (cameraBtn) cameraBtn.disabled = !cart.launched;
+    if (pauseBtn) pauseBtn.disabled = !cart.launched;
   },
 
   showResult(score, stageIndex) {

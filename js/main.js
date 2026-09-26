@@ -20,6 +20,7 @@ const Game = {
   currentStageIndex: 0,
   accumulator: 0,
   lastTime: 0,
+  paused: false,
 
   init() {
     this.canvas = document.getElementById('renderCanvas');
@@ -49,7 +50,6 @@ const Game = {
     }
 
     this.track = new Track(stageData, this.scene);
-    this.track.loadTrackMeshes();
 
     // 스테이지 배속: 기본 +10%/스테이지를 참고선으로 두되, 모티브별 baseSpeedKmh가 우선
     const stageMultiplier = stageData.baseSpeedKmh / 45; // 1단계(45km/h) 대비 배율로 정규화
@@ -57,15 +57,59 @@ const Game = {
     this.cart = new Cart(this.track, stageMultiplier, LapsManager.current);
     this.camera = new CoasterCamera(this.scene, this.canvas);
 
-    // showStartPrompt가 스타트 바 DOM을 먼저 만들어야 InputController가 그 엘리먼트에 바인딩 가능
-    UI.showStartPrompt(stageData.name, stageData.motif);
-    this.input = new InputController(this.canvas, this.cart, this.camera, UI.startBarEl);
+    // 레일/지지대/스테이션 + 카트 glb 로딩 동안 스피너 표시 — 끝나야 스타트 바 화면으로 전환
+    UI.showLoadingOverlay();
+    Promise.all([this.track.loadTrackMeshes(), this._loadCartMesh()])
+      .then(() => {
+        // showStartPrompt가 스타트 바 DOM을 먼저 만들어야 InputController가 그 엘리먼트에 바인딩 가능
+        UI.showStartPrompt(stageData.name, stageData.motif);
+        this.input = new InputController(this.canvas, this.cart, this.camera, UI.startBarEl);
 
-    this._loadCartMesh();
+        this.accumulator = 0;
+        this.lastTime = performance.now();
+        this.engine.runRenderLoop(() => this._loop());
+      })
+      .catch(err => {
+        console.error('[Assets] 스테이지 에셋 로드 실패:', err);
+        UI.showLoadError(() => this.loadStage(stageIndex));
+      });
+  },
 
+  /** HUD의 일시정지 버튼 — 물리 루프를 완전히 멈추고 오버레이로 전환 */
+  pauseGame() {
+    if (!this.cart || !this.cart.launched || this.paused) return;
+    this.paused = true;
+    this.engine.stopRenderLoop();
+    AudioManager.updateWind(0);
+    AudioManager.setAirtimeHold(false);
+    UI.showPauseOverlay();
+  },
+
+  resumeGame() {
+    if (!this.paused) return;
+    this.paused = false;
+    UI.hidePauseOverlay();
     this.accumulator = 0;
-    this.lastTime = performance.now();
+    this.lastTime = performance.now(); // 정지해 있던 시간만큼 frameTime이 튀지 않도록 리셋
     this.engine.runRenderLoop(() => this._loop());
+  },
+
+  /** 일시정지 메뉴 → 스테이지 선택으로 복귀 (재시도 로직과 동일한 dispose 패턴) */
+  exitToStageSelect() {
+    this.paused = false;
+    this.engine.stopRenderLoop();
+    AudioManager.updateWind(0);
+    AudioManager.setAirtimeHold(false);
+    if (this.cartMesh) {
+      this.cartMesh.dispose();
+      this.cartMesh = null;
+    }
+    if (this.track) {
+      this.track.dispose();
+      this.track = null;
+    }
+    UI.hidePauseOverlay();
+    UI.showStageSelect(STAGES, i => Game.loadStage(i));
   },
 
   /** 카트 glTF 로드 — 트랙 진행률(t)에 따라 매 고정 스텝마다 위치/방향 갱신 */
