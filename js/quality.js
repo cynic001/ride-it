@@ -10,6 +10,8 @@ const QUALITY_PRESETS = {
     cameraShake: false,
     textureResolution: 512,
     postProcessing: [],
+    skyGradient: false,   // low는 단색 하늘 유지(스카이돔 메시+텍스처 생략)
+    backgroundPropCount: 0,
   },
   medium: {
     particleCount: 30,
@@ -17,6 +19,8 @@ const QUALITY_PRESETS = {
     cameraShake: true,
     textureResolution: 1024,
     postProcessing: ['fxaa'],
+    skyGradient: true,
+    backgroundPropCount: 12,
   },
   high: {
     particleCount: 60,
@@ -24,6 +28,8 @@ const QUALITY_PRESETS = {
     cameraShake: true,
     textureResolution: 2048,
     postProcessing: ['fxaa', 'bloom'],
+    skyGradient: true,
+    backgroundPropCount: 24,
   },
 };
 

@@ -4,10 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>떨어진다!!! RIDE IT - chaechae studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --yellow: #ffb80d;
+    --yellow-deep: #e0a000;
+    --navy: #141a33;
+    --navy-soft: rgba(20, 26, 51, 0.8);
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
-    width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, 'Pretendard', sans-serif;
+    width: 100%; height: 100%; overflow: hidden; background: #000;
+    font-family: 'Jua', -apple-system, 'Pretendard', sans-serif;
     overscroll-behavior: none; /* 스타트 바 드래그 중 페이지 자체가 바운스/스크롤되는 것 방지 */
   }
 
@@ -20,22 +30,38 @@
   }
   #uiRoot .screen { pointer-events: auto; }
 
+  /* 화면 전환(스테이지선택/로딩/HUD/결과) 공통 진입 트랜지션 */
+  @keyframes screenFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  #uiRoot .screen { animation: screenFadeIn 0.25s ease both; }
+
+  /* 버튼 공통 눌림 피드백 — 입체감 있는 그림자가 눌렀을 때 줄어들며 눌리는 느낌 연출 */
+  #uiRoot button {
+    font-family: inherit; cursor: pointer;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.25);
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  #uiRoot button:active { transform: scale(0.95) translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+  #uiRoot button:disabled { box-shadow: none; }
+
   .stage-select {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    height: 100%; gap: 16px; color: #fff; background: rgba(0,0,0,0.55);
+    height: 100%; gap: 16px; color: #fff; background: var(--navy-soft);
   }
-  .stage-select h1 { font-size: 28px; margin-bottom: 8px; }
+  .stage-select h1 { font-size: 30px; margin-bottom: 8px; color: var(--yellow); text-shadow: 0 2px 0 rgba(0,0,0,0.35); }
   .stage-list { display: flex; flex-direction: column; gap: 10px; width: 85%; max-width: 400px; }
   .stage-btn {
     display: flex; flex-direction: column; align-items: flex-start;
-    padding: 14px 16px; border-radius: 12px; border: none;
-    background: rgba(255,255,255,0.1); color: #fff; min-height: 44px;
+    padding: 14px 16px; border-radius: 12px; border: none; border-left: 5px solid var(--yellow);
+    background: rgba(255,255,255,0.08); color: #fff; min-height: 44px;
   }
   .stage-name { font-size: 17px; font-weight: 600; }
   .stage-motif { font-size: 12px; opacity: 0.7; margin-top: 4px; }
   .quality-toggle {
-    margin-top: 12px; padding: 10px 18px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.3);
-    background: transparent; color: #fff; min-height: 44px; min-width: 44px;
+    margin-top: 12px; padding: 10px 18px; border-radius: 20px; border: 1px solid var(--yellow);
+    background: rgba(255,184,13,0.12); color: #fff; min-height: 44px; min-width: 44px;
   }
 
   /* .hud는 전체 화면을 덮는 오버레이지만, 실제 조작(드래그 스타트/밸런스/게이트 탭)은
@@ -62,11 +88,11 @@
   }
   .start-bar-fill {
     position: absolute; top: 4px; left: 4px; height: calc(100% - 8px); width: 0;
-    border-radius: 24px; background: rgba(255,196,0,0.85);
+    border-radius: 24px; background: var(--yellow);
   }
   .start-bar-handle {
     position: absolute; top: 4px; left: 4px; width: 48px; height: 48px; border-radius: 50%;
-    background: #fff; color: #111; display: flex; align-items: center; justify-content: center;
+    background: #fff; color: var(--navy); display: flex; align-items: center; justify-content: center;
     font-size: 18px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);
   }
   .hud-controls {
@@ -74,41 +100,50 @@
     display: flex; align-items: center; gap: 8px; pointer-events: auto;
   }
   .hud-icon-btn {
-    width: 44px; height: 44px; border-radius: 50%; border: none;
-    background: rgba(255,255,255,0.85); color: #111; font-size: 18px;
+    width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--yellow);
+    background: #fff; color: var(--navy); font-size: 18px;
     display: flex; align-items: center; justify-content: center; pointer-events: auto;
   }
+  .hud-icon-btn svg { width: 20px; height: 20px; }
   .hud-icon-btn:disabled { opacity: 0.4; }
   .camera-toggle {
-    padding: 10px 16px; border-radius: 20px; border: none;
-    background: rgba(255,255,255,0.85); color: #111; min-height: 44px; min-width: 44px;
-    pointer-events: auto;
+    width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 2px solid var(--yellow);
+    background: #fff; color: var(--navy); min-height: 44px; min-width: 44px;
+    display: flex; align-items: center; justify-content: center; pointer-events: auto;
   }
+  .camera-toggle svg { width: 22px; height: 22px; }
   .camera-toggle:disabled { opacity: 0.4; }
 
   .result {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    height: 100%; gap: 14px; color: #fff; background: rgba(0,0,0,0.7);
+    height: 100%; gap: 14px; color: #fff; background: var(--navy-soft);
   }
+  .result h2 { color: var(--yellow); font-size: 26px; }
   .result .score { font-size: 22px; }
-  .result button { padding: 12px 22px; border-radius: 12px; border: none; min-height: 44px; }
+  .result button {
+    padding: 12px 22px; border-radius: 12px; border: none; min-height: 44px; color: #fff;
+    background: rgba(255,255,255,0.15);
+  }
+  .result button#retryBtn { background: var(--yellow); color: var(--navy); font-weight: 600; }
 
   /* 일시정지/로딩/에러/조작법 안내 공용 오버레이 */
   .modal-overlay {
     position: absolute; inset: 0; z-index: 20; pointer-events: auto;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 14px; padding: 24px; text-align: center; color: #fff; background: rgba(0,0,0,0.78);
+    gap: 14px; padding: 24px; text-align: center; color: #fff; background: rgba(20,26,51,0.88);
   }
-  .modal-overlay h2 { font-size: 20px; }
+  /* 스테이지 선택 화면 위에 뜨는 조작법 안내는 배경 DOM 텍스트와 겹쳐 보이지 않도록 완전 불투명 */
+  #howtoOverlay { background: var(--navy); }
+  .modal-overlay h2 { font-size: 22px; color: var(--yellow); }
   .modal-overlay p { font-size: 14px; line-height: 1.5; opacity: 0.85; }
   .modal-overlay button {
     padding: 12px 22px; border-radius: 12px; border: none; min-height: 44px;
     background: rgba(255,255,255,0.15); color: #fff;
   }
-  .modal-overlay button.primary { background: rgba(255,196,0,0.9); color: #111; font-weight: 600; }
+  .modal-overlay button.primary { background: var(--yellow); color: var(--navy); font-weight: 600; }
   .spinner {
     width: 36px; height: 36px; border-radius: 50%;
-    border: 4px solid rgba(255,255,255,0.25); border-top-color: #fff;
+    border: 4px solid rgba(255,255,255,0.25); border-top-color: var(--yellow);
     animation: spin 0.8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -118,7 +153,7 @@
   .rotate-warning {
     display: none; position: fixed; inset: 0; z-index: 9999;
     flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-    background: #000; color: #fff; text-align: center;
+    background: var(--navy); color: #fff; text-align: center; font-family: 'Jua', sans-serif;
   }
   .rotate-icon { font-size: 48px; animation: rotate-hint 1.6s ease-in-out infinite; }
   @keyframes rotate-hint { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(90deg); } }

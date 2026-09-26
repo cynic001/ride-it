@@ -16,6 +16,7 @@ const Game = {
   cartMesh: null,
   camera: null,
   input: null,
+  _skyMesh: null,
 
   currentStageIndex: 0,
   accumulator: 0,
@@ -29,9 +30,14 @@ const Game = {
     this.scene.clearColor = new BABYLON.Color3(0.53, 0.8, 0.92);
 
     QualityManager.detectInitialPreset(this.engine);
-    this._applyQualitySettings();
 
-    new BABYLON.HemisphericLight('light', new BABYLON.Vector3(0, 1, 0), this.scene);
+    // 태양광 역할의 방향광 하나 추가 — 실시간 그림자 대신 기존 버텍스 컬러 AO 음영 유지, 방향성만 더함
+    const hemi = new BABYLON.HemisphericLight('light', new BABYLON.Vector3(0, 1, 0), this.scene);
+    hemi.intensity = 0.55;
+    const sun = new BABYLON.DirectionalLight('sun', new BABYLON.Vector3(-0.5, -1, 0.3), this.scene);
+    sun.intensity = 0.7;
+
+    this._applyQualitySettings();
 
     window.addEventListener('resize', () => this.engine.resize());
     window.addEventListener('quality-downgraded', e => {
@@ -144,7 +150,40 @@ const Game = {
   _applyQualitySettings() {
     const settings = QualityManager.settings;
     this.engine.setHardwareScalingLevel(settings.textureResolution < 1024 ? 1.5 : 1);
+    this._createSky();
     // TODO: 파티클 수, 그림자, 포스트프로세싱은 실제 에셋/이펙트 구현 시 settings 참조해 적용
+  },
+
+  /** 그래디언트 스카이돔(위=짙은 하늘, 아래=밝은 지평선) — low 프리셋은 기존 단색 하늘 유지 */
+  _createSky() {
+    if (this._skyMesh) {
+      this._skyMesh.dispose();
+      this._skyMesh = null;
+    }
+    this.scene.clearColor = new BABYLON.Color3(0.53, 0.8, 0.92); // 스카이돔 바깥/틈 노출 시 폴백 색상
+
+    if (!QualityManager.settings.skyGradient) return;
+
+    const skyTexture = new BABYLON.DynamicTexture('skyGradientTex', { width: 4, height: 512 }, this.scene, false);
+    const ctx = skyTexture.getContext();
+    const grad = ctx.createLinearGradient(0, 0, 0, 512);
+    grad.addColorStop(0, '#1b3a6b');
+    grad.addColorStop(0.55, '#5fa8d3');
+    grad.addColorStop(1, '#d9f2ff');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 4, 512);
+    skyTexture.update();
+
+    const sky = BABYLON.MeshBuilder.CreateSphere('skyDome', { diameter: 900, segments: 12 }, this.scene);
+    const mat = new BABYLON.StandardMaterial('skyDomeMat', this.scene);
+    mat.emissiveTexture = skyTexture;
+    mat.diffuseColor = BABYLON.Color3.Black();
+    mat.specularColor = BABYLON.Color3.Black();
+    mat.backFaceCulling = false; // 카메라가 구 안쪽에 있으므로 안쪽 면을 렌더
+    mat.disableLighting = true;
+    sky.material = mat;
+    sky.infiniteDistance = true; // 카메라가 움직여도 항상 카메라 중심에 고정
+    this._skyMesh = sky;
   },
 
   _loop() {

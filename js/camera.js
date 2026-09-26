@@ -43,12 +43,16 @@ class CoasterCamera {
     const cartPos = track.getPositionAt(cart.t);
     const tangent = track.getTangentAt(cart.t);
     const speedRatio = Math.min(cart.speed / 30, 1); // 정규화된 속도 (연출용)
+    const seg = track.getSegmentAt(cart.t);
 
     let targetPos, targetLookAt, targetFov;
 
     if (this.mode === CAMERA_MODES.THIRD_PERSON) {
-      const behind = tangent.scale(-8);
-      const up = new BABYLON.Vector3(0, 3, 0);
+      // 급커브(requiredLean 높음)일수록 카메라를 더 멀리·높이 띄워 지지대/레일을 뚫고 들어가
+      // 보이는 것을 방지 (헤어핀 급커브에서 고정 8m 후방 지점이 안쪽 지지대와 겹치는 문제 확인)
+      const bankFactor = seg.requiredLean || 0;
+      const behind = tangent.scale(-(8 + bankFactor * 6));
+      const up = new BABYLON.Vector3(0, 3 + bankFactor * 4, 0);
       targetPos = cartPos.add(behind).add(up);
       targetLookAt = cartPos;
       targetFov = this.baseFov + speedRatio * 0.25; // 속도감 연출: FOV 확장
@@ -71,7 +75,6 @@ class CoasterCamera {
     this.camera.fov = targetFov;
 
     // 커브 구간 뱅킹(roll) 연출 — 1인칭에서만 체감 크게
-    const seg = track.getSegmentAt(cart.t);
     if (seg.requiredLean > 0) {
       const rollAmount = seg.curveDirection === 'left' ? -0.15 : 0.15;
       const rollTarget = this.mode === CAMERA_MODES.FIRST_PERSON ? rollAmount : rollAmount * 0.4;

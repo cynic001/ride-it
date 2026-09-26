@@ -14,6 +14,14 @@ const LapsManager = {
 };
 window.LapsManager = LapsManager;
 
+// HUD 아이콘 — 이모지 대신 인라인 SVG(currentColor로 버튼 색 상속)
+const ICONS = {
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+  soundOn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>',
+  soundOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><line x1="16" y1="9" x2="21" y2="14"/><line x1="21" y1="9" x2="16" y2="14"/></svg>',
+  camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg>',
+};
+
 const UI = {
   root: null,
 
@@ -160,9 +168,9 @@ const UI = {
           </div>
         </div>
         <div class="hud-controls">
-          <button class="hud-icon-btn" id="soundToggleBtn">${AudioManager.enabled ? '🔊' : '🔇'}</button>
-          <button class="hud-icon-btn" id="pauseBtn" disabled>⏸</button>
-          <button class="camera-toggle" id="cameraToggleBtn" disabled>시점 전환</button>
+          <button class="hud-icon-btn" id="soundToggleBtn" aria-label="사운드 켜기/끄기">${AudioManager.enabled ? ICONS.soundOn : ICONS.soundOff}</button>
+          <button class="hud-icon-btn" id="pauseBtn" disabled aria-label="일시정지">${ICONS.pause}</button>
+          <button class="camera-toggle" id="cameraToggleBtn" disabled aria-label="시점 전환">${ICONS.camera}</button>
         </div>
       </div>
     `;
@@ -174,7 +182,7 @@ const UI = {
     document.getElementById('soundToggleBtn').addEventListener('click', () => {
       const next = !AudioManager.enabled;
       AudioManager.setEnabled(next);
-      document.getElementById('soundToggleBtn').textContent = next ? '🔊' : '🔇';
+      document.getElementById('soundToggleBtn').innerHTML = next ? ICONS.soundOn : ICONS.soundOff;
     });
 
     // input.js가 실제 드래그를 받는 스타트 바 DOM — main.js가 InputController에 이 엘리먼트를 넘김

@@ -140,6 +140,45 @@ class Track {
     station.position.copyFrom(stationPos);
     station.lookAt(stationPos.add(stationTangent));
     this._meshes.push(station);
+
+    this._placeBackgroundProps();
+  }
+
+  /** 저비용 배경 나무 실루엣(원기둥 몸통+원뿔 수관 조합, 별도 모델링 없이 절차적 생성)을
+   * 트랙 주변 지면 근처에 인스턴싱 배치 — 그래픽 프리셋의 backgroundPropCount로 개수 차등
+   * (low는 0개로 생략). Track.dispose()가 관리하도록 this._meshes에 편입. */
+  _placeBackgroundProps() {
+    const count = QualityManager.settings.backgroundPropCount;
+    if (count <= 0) return;
+
+    const trunk = BABYLON.MeshBuilder.CreateCylinder('propTrunk', { height: 4, diameterTop: 0.6, diameterBottom: 0.9 }, this.scene);
+    trunk.position.y = 2;
+    const canopy = BABYLON.MeshBuilder.CreateCylinder('propCanopy', { height: 5, diameterTop: 0, diameterBottom: 4, tessellation: 6 }, this.scene);
+    canopy.position.y = 6;
+    const treeTemplate = BABYLON.Mesh.MergeMeshes([trunk, canopy], true);
+    treeTemplate.name = 'BackgroundTree';
+    const mat = new BABYLON.StandardMaterial('propMat', this.scene);
+    mat.diffuseColor = new BABYLON.Color3(0.25, 0.42, 0.22);
+    mat.specularColor = BABYLON.Color3.Black();
+    treeTemplate.material = mat;
+    treeTemplate.setEnabled(false);
+    this._meshes.push(treeTemplate);
+
+    const pts = this.points;
+    const step = Math.max(1, Math.floor(pts.length / count));
+    let placed = 0;
+    for (let i = 0; i < pts.length && placed < count; i += step) {
+      const p = pts[i];
+      const tangent = this.getTangentAt(i / (pts.length - 1));
+      const side = placed % 2 === 0 ? 1 : -1;
+      const perp = new BABYLON.Vector3(-tangent.z, 0, tangent.x).normalize().scale(18 * side);
+      const inst = treeTemplate.createInstance(`tree_${i}`);
+      inst.position.set(p.x + perp.x, 0, p.z + perp.z);
+      const scale = 0.8 + Math.random() * 0.6;
+      inst.scaling.set(scale, scale, scale);
+      this._meshes.push(inst);
+      placed++;
+    }
   }
 
   /** 레일 인스턴스 1개가 커버하는 진행방향(Z) 길이 — 타일 간격으로 사용 */
