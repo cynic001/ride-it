@@ -90,6 +90,7 @@ const Game = {
     AudioManager.updateWind(0);
     AudioManager.setAirtimeHold(false);
     AudioManager.setBgmMode('pause');
+    SpeedLines.draw(0, 0);
     UI.showPauseOverlay();
   },
 
@@ -119,6 +120,7 @@ const Game = {
     }
     UI.hidePauseOverlay();
     AudioManager.setBgmMode('menu');
+    SpeedLines.draw(0, 0);
     UI.showStageSelect(STAGES, i => Game.loadStage(i));
   },
 
@@ -260,6 +262,19 @@ const Game = {
       pipeline.bloomScale = 0.5;
     }
     this._pipeline = pipeline;
+
+    if (this._motionBlur) {
+      this._motionBlur.dispose(); // 이전 스테이지 카메라는 이미 dispose됐을 수 있어 카메라 인자 없이 전체 해제
+      this._motionBlur = null;
+    }
+    if (QualityManager.settings.motionBlur) {
+      // 화면(깊이) 기반 — 카메라 이동에 따른 번짐. 세기는 _render에서 속도 비례로 갱신
+      const mb = new BABYLON.MotionBlurPostProcess('motionBlur', this.scene, 1.0, this.camera.camera);
+      mb.isObjectBased = false;
+      mb.motionBlurSamples = 12;
+      mb.motionStrength = 0;
+      this._motionBlur = mb;
+    }
   },
 
   /** 실시간 그림자는 high 프리셋에서만 — 카트/레일/지지대/소품이 캐스터, 바닥이 리시버 */
@@ -310,11 +325,12 @@ const Game = {
     this._updateCartMesh();
     UI.updateHUD(this.cart, this.track);
 
-    AudioManager.updateWind(this.cart.speed);
+    AudioManager.updateWind(this.cart.speed / this.cart.maxSpeedMs);
     const currentSeg = this.track.getSegmentAt(this.cart.t);
     AudioManager.setAirtimeHold(currentSeg.airtimeZone && this.cart.airtimeHolding);
 
     if (this.cart.isFinished) {
+      SpeedLines.draw(0, 0);
       AudioManager.updateWind(0);
       AudioManager.setAirtimeHold(false);
       this.camera.unlockToggle(); // 이미 풀려있겠지만 안전장치
@@ -330,11 +346,32 @@ const Game = {
   },
 
   _render(alpha) {
+    // 속도감 연출(렌더 프레임 단위): 스피드 라인은 상한 대비 50% 이상부터 차오르고, 부스트/보조 추진 순간 버스트
+    const dt = this.engine.getDeltaTime() / 1000;
+    let ratio = 0;
+    if (this.cart && this.cart.launched && !this.paused) ratio = this.cart.speed / this.cart.maxSpeedMs;
+    this._lineBurst = (this._lineBurst || 0) * Math.exp(-dt * 3);
+    const intensity = Math.min(1, Math.max(0, (ratio - 0.5) / 0.5) * 0.85 + this._lineBurst);
+    SpeedLines.draw(ratio > 0 ? intensity : 0, Math.min(dt, 0.05));
+    if (this._motionBlur) this._motionBlur.motionStrength = Math.max(0, ratio - 0.4) * 0.9;
     this.scene.render();
+  },
+
+  /** 부스트 성공/보조 추진 순간 — 카메라 킥 + 스피드 라인 버스트 (효과음은 audio.js가 같은 이벤트로 재생) */
+  _onBoostMoment(strength) {
+    if (this.camera) this.camera.kick(strength);
+    this._lineBurst = Math.max(this._lineBurst || 0, strength);
   },
 };
 
 window.Game = Game;
+
+window.addEventListener('gate-result', e => {
+  if (e.detail.type === 'boost' && (e.detail.result === 'perfect' || e.detail.result === 'good')) {
+    Game._onBoostMoment(e.detail.result === 'perfect' ? 1 : 0.7);
+  }
+});
+window.addEventListener('booster-assist', () => Game._onBoostMoment(0.45));
 
 // PWA 오프라인 캐싱 — file://이나 미지원 브라우저는 조용히 건너뜀(게임 동작과 무관)
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {

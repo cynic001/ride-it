@@ -87,13 +87,59 @@ const AudioManager = {
     this._windSource.start();
   },
 
-  /** main.js가 매 고정 스텝마다 cart.speed(m/s)로 호출 */
-  updateWind(speedMs) {
+  /** main.js가 매 고정 스텝마다 속도 비율(현재 속도 ÷ 스테이지 최고속도 상한, 0~1)로 호출 — 0이면 무음.
+   * 볼륨·밝기(로우패스)·피치(재생 속도)를 모두 비선형으로 키워 저속↔고속 차이가 확실히 들리게 */
+  updateWind(ratio) {
     if (!this._ready() || !this._windGain) return;
     const t = this.ctx.currentTime;
-    const norm = Math.min(1, speedMs / 40); // 40m/s(≈144km/h) 근방에서 최대치로 클램프
-    this._windFilter.frequency.setTargetAtTime(300 + norm * 2200, t, 0.1);
-    this._windGain.gain.setTargetAtTime(norm * 0.18, t, 0.1);
+    const norm = Math.max(0, Math.min(1, ratio));
+    this._windFilter.frequency.setTargetAtTime(350 + norm * norm * 6500, t, 0.08);
+    this._windSource.playbackRate.setTargetAtTime(0.7 + norm * 0.8, t, 0.1);
+    this._windGain.gain.setTargetAtTime(norm > 0 ? 0.02 + Math.pow(norm, 1.6) * 0.38 : 0, t, 0.08);
+  },
+
+  /** 부스트 성공 "쾅" — 저음 쿵 + 위로 쓸려 올라가는 바람 + 기존 부스트 톤 */
+  playBoostHit(strength = 1) {
+    if (!this._ready()) return;
+    const t0 = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.frequency.setValueAtTime(110, t0);
+    osc.frequency.exponentialRampToValueAtTime(38, t0 + 0.28);
+    g.gain.setValueAtTime(0.45 * strength, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.32);
+    osc.connect(g).connect(this.masterGain);
+    osc.start(t0);
+    osc.stop(t0 + 0.35);
+    this._whoosh(t0, 0.45, 500, 4200, 0.3 * strength);
+  },
+
+  /** 부스터 타이어 보조 추진 — 짧게 차오르는 모터음 + 바람(도움받는 느낌이 아니라 가속되는 느낌) */
+  playAssist() {
+    if (!this._ready()) return;
+    this._blip({ freq: 170, freqEnd: 560, duration: 0.45, type: 'sawtooth', peak: 0.09 });
+    this._whoosh(this.ctx.currentTime, 0.5, 300, 2600, 0.16);
+  },
+
+  _whoosh(t0, dur, f0, f1, peak) {
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.Q.value = 1.2;
+    f.frequency.setValueAtTime(f0, t0);
+    f.frequency.exponentialRampToValueAtTime(f1, t0 + dur * 0.8);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + dur * 0.25);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(f).connect(g).connect(this.masterGain);
+    src.start(t0);
+    src.stop(t0 + dur + 0.02);
   },
 
   // ── 3) 밸런스 판정 성공/실패(perfect/good/miss) — cart.js가 tier 변화 시에만 dispatch ──
@@ -256,7 +302,13 @@ const AudioManager = {
 };
 
 // input.js의 게이트 탭 판정 / cart.js의 밸런스 판정은 이벤트로만 통지 — 오디오와 물리/입력을 분리
-window.addEventListener('gate-result', e => AudioManager.playGateResult(e.detail.type, e.detail.result));
+window.addEventListener('gate-result', e => {
+  AudioManager.playGateResult(e.detail.type, e.detail.result);
+  if (e.detail.type === 'boost' && (e.detail.result === 'perfect' || e.detail.result === 'good')) {
+    AudioManager.playBoostHit(e.detail.result === 'perfect' ? 1 : 0.7);
+  }
+});
+window.addEventListener('booster-assist', () => AudioManager.playAssist());
 window.addEventListener('balance-result', e => AudioManager.playBalanceResult(e.detail));
 
 window.addEventListener('cart-launched', () => AudioManager.setBgmMode('ride'));

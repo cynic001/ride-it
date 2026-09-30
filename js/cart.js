@@ -11,6 +11,13 @@ const MIN_SPEED = 2;          // 최소 속도 (m/s) — 완전 정지 방지
 // 오르막(특히 스테이지 후반 리프트 구간)에서 속도가 MIN_SPEED까지 떨어져 수십 초씩 정체하는
 // 현상을 확인, 리프트힐 체인모터 같은 "동력 보충" 역할을 하도록 상향 조정
 const BOOST_MULTIPLIER = { perfect: 2.2, good: 1.6 };
+// 게임용 속도 과장 — 물리 속도(=HUD 표시, 실제 모티브 km/h 범위)는 그대로 두고, 트랙 위 진행만 이 배율로 빠르게.
+// 1.3~1.5 중 1.4: 1.5는 5단계 급하강에서 게이트 판정창이 0.2초 아래로 좁아져 과함, 1.3은 1단계가 여전히 느긋함
+const GAME_SPEED_SCALE = 1.4;
+// 커브 밸런스 실패 감속 — 초당 3% (이전: 틱당 ×0.995 = 초당 약 26%로, 평균 플레이가 최저속도로 수 분씩 정체하던 주원인)
+const BALANCE_MISS_RETAIN_PER_SECOND = 0.97;
+// 최저 속도 보장(부스터 타이어): 기본 속도의 trigger 미만이면 발동, tau초 시정수로 target까지 끌어올리고 release 이상이면 해제
+const ASSIST = { trigger: 0.6, target: 0.85, release: 0.78, tau: 0.5 };
 // 최고속도 상한 = 스테이지 기본 속도 × 이 배율 — 부스트 연속 성공 시 배율이 누적되어 1500km/h 넘게 폭주하던 문제 방지
 const MAX_SPEED_FACTOR = 1.5;
 
@@ -19,9 +26,8 @@ const SCORE = {
   gate: { perfect: 300, good: 100, miss: 0 },
   balancePerCurve: 100,     // 커브 세그먼트 하나를 밸런스 성공으로 통과 시 1회
   balanceClearRatio: 0.7,   // 그 커브 구간 틱 중 판정창 안(good 이상) 비율이 이 이상이면 성공
-  airtimePerSecond: 120,    // 기존 값 유지(2점 × 60틱)
+  airtimePerMeter: 4.4,     // 홀드한 채 달린 거리 1m당 — 완벽 플레이 에어타임 총량(전 스테이지 합 약 8,400)이 시간 기준(초당 120) 시절과 같도록 맞춘 계수
 };
-const AIRTIME_MIN_SPEED = 4; // m/s — 이 속도 이하(최저속도로 기어가는 정체 상태)에서는 에어타임 점수 없음
 const FINISH_MULTIPLIER = { perfect: 1.5, good: 1.2, miss: 1.0 };
 
 class Cart {
@@ -53,7 +59,13 @@ class Cart {
     this.maxCombo = 0;
     this.balanceTicks = { perfect: 0, good: 0, miss: 0 }; // 커브 구간 고정 스텝(1/60초) 단위 판정 누적
     this.maxSpeed = 0;
-    this.maxSpeedMs = track.stageData.baseSpeedKmh * MAX_SPEED_FACTOR / 3.6;
+    this.baseSpeedMs = track.stageData.baseSpeedKmh / 3.6;
+    this.maxSpeedMs = this.baseSpeedMs * MAX_SPEED_FACTOR; // 물리(=표시) 속도 기준 — 화면 진행은 여기에 GAME_SPEED_SCALE이 곱해짐
+    this.assistActive = false;
+    this.assistTime = 0;      // 보조 추진이 걸린 시간(초) — 결과 화면 통계
+    this.rideTime = 0;
+    this.lowSpeedTime = 0;    // 기본 속도 70% 미만으로 달린 시간(밸런싱 지표)
+    this.airtimeDistance = 0;
     this.atSpeedCap = false;  // HUD 강조용
     // 점수 원천별 내역 — 콤보 배율로 늘어난 몫은 comboBonus로 따로 집계(합계 = score)
     this.scoreBreakdown = { gate: 0, balance: 0, airtime: 0, comboBonus: 0, finishBonus: 0 };
@@ -73,6 +85,19 @@ class Cart {
     this.scoreBreakdown[source] += base;
     this.scoreBreakdown.comboBonus += base * (m - 1);
     this.score += base * m;
+  }
+
+  /** 부스터 타이어: 기본 속도의 60% 아래로 떨어지면 부드럽게(지수 접근) 85%까지 끌어올림 — 중력보다 우선 */
+  _updateAssist(dt) {
+    const base = this.baseSpeedMs;
+    if (!this.assistActive && this.speed < base * ASSIST.trigger) {
+      this.assistActive = true;
+      window.dispatchEvent(new CustomEvent('booster-assist'));
+    }
+    if (!this.assistActive) return;
+    this.speed += (base * ASSIST.target - this.speed) * (1 - Math.exp(-dt / ASSIST.tau));
+    this.assistTime += dt;
+    if (this.speed >= base * ASSIST.release) this.assistActive = false;
   }
 
   _capSpeed() {
@@ -96,6 +121,7 @@ class Cart {
     // pullStrength: 0~1 (드래그 거리를 정규화한 값), flickMultiplier: 0.3~1.6 (release 속도 정규화값) — input.js에서 계산
     this.speed = (5 + pullStrength * 10) * flickMultiplier * this.stageMultiplier; // m/s
     this.launched = true;
+    this._stepDistance = 0;
     this._capSpeed();
     this._lastHeight = this.track.getHeightAt(0);
   }
@@ -104,7 +130,9 @@ class Cart {
   update(dt) {
     if (!this.launched) return;
 
-    const trackLength = this.track.stageData.trackLengthM;
+    // 진행률은 실제 커브 길이 기준 — stageData.trackLengthM(실제 코스터 길이)은 모델링된 커브보다 10~50% 길어서
+    // 그대로 쓰면 화면상 카트가 표시 속도보다 느리게 움직였음
+    const trackLength = this.track.lengthM;
     const currentHeight = this.track.getHeightAt(this.t);
 
     if (this._lastHeight !== null) {
@@ -118,10 +146,14 @@ class Cart {
     // 마찰: 오르막/내리막에서는 위 에너지항이 지배적이라 체감이 작고, 평지에서만 초당 감쇠율이 뚜렷이 느껴짐
     this.speed *= Math.pow(FRICTION_RETAIN_PER_SECOND, dt);
     this.speed = Math.max(this.speed, MIN_SPEED);
+    this._updateAssist(dt);
     this._capSpeed();
 
-    // 진행률 갱신 (속도 * dt / 트랙길이)
-    this.t += (this.speed * dt) / trackLength;
+    // 진행률 갱신 (속도 × 게임 배율 × dt / 트랙길이)
+    this._stepDistance = this.speed * GAME_SPEED_SCALE * dt;
+    this.t += this._stepDistance / trackLength;
+    this.rideTime += dt;
+    if (this.speed < this.baseSpeedMs * 0.7) this.lowSpeedTime += dt;
     if (this.t >= 1) {
       if (this.currentLap < this.totalLaps) {
         this.currentLap += 1;
@@ -150,7 +182,7 @@ class Cart {
         this.combo += 1;
         tier = diff <= seg.leanWindow * 0.4 ? 'perfect' : 'good';
       } else {
-        this.speed *= Math.pow(0.995, dt * 60); // 감속 패널티 — 1/60초 기준 튜닝값, dt 무관하게 동일 초당 감쇠율 유지
+        this.speed *= Math.pow(BALANCE_MISS_RETAIN_PER_SECOND, dt); // 감속 패널티(초당 3%) — 실수의 대가는 주로 점수(콤보 리셋·밸런스 점수 미획득)
         this.combo = 0;
         tier = 'miss';
       }
@@ -171,10 +203,10 @@ class Cart {
     this.maxSpeed = Math.max(this.maxSpeed, this.speed);
 
     // 에어타임(손들기) 보너스
-    // 최저속도 근처로 기어가는 중엔 제외 — 초당 점수라 정체될수록 오히려 점수가 쌓여 평균 플레이가 완벽 플레이를
-    // 이기는 역전이 시뮬레이션에서 확인됨(5단계 평균 48,016 vs 완벽 19,184). 정상 주행 시 획득률은 그대로
-    if (seg.airtimeZone && this.airtimeHolding && this.speed > AIRTIME_MIN_SPEED) {
-      this._addScore('airtime', SCORE.airtimePerSecond * dt); // 초당 보너스 점수(기존 값 유지)
+    // 에어타임(손들기) 보너스 — 홀드한 채 달린 거리 기준(시간 기준이면 느리게 갈수록 점수가 쌓이는 역전이 생김)
+    if (seg.airtimeZone && this.airtimeHolding) {
+      this._addScore('airtime', SCORE.airtimePerMeter * this._stepDistance);
+      this.airtimeDistance += this._stepDistance;
     }
 
     // 게이트 판정은 input.js의 탭 이벤트에서 별도 처리 (타이밍 윈도우 대조)

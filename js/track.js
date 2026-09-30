@@ -83,6 +83,8 @@ class Track {
     // 모든 스테이지가 폐곡선(출발=도착)이므로 closed:true로 이음매 없이 순환하는 커브 생성
     this.curve = BABYLON.Curve3.CreateCatmullRomSpline(vecPoints, nbInterpolated, true);
     this.points = this.curve.getPoints(); // 실제 카트가 따라갈 점들의 배열
+    // 실제 커브 길이(m, 폐곡선 이음매 포함) — cart.js 진행률 계산 기준
+    this.lengthM = this.points.reduce((acc, p, i) => acc + BABYLON.Vector3.Distance(p, this.points[(i + 1) % this.points.length]), 0);
 
     // 각 세그먼트가 전체 트랙에서 차지하는 t범위를 균등 분할
     // (실제로는 제어점 위치 기반으로 비균등 분할하는 게 더 정확하지만, 초기 골격은 균등 분할로 시작)
@@ -312,6 +314,24 @@ class Track {
       this._meshes.push(inst);
       placed++;
     }
+
+    // 스쳐 지나가는 나무(속도감): 트랙을 따라 일정 간격으로 좌우 번갈아 6.5~9m 옆에 — 원경 산포(14m 밖)와 별도.
+    // 카트/카메라(3인칭 후방 카메라는 곡선 안쪽으로 최대 약 2m 치우침)·지지대(인버티드 옆 2.2m)와 겹치지 않게 수평 6m 여유
+    const near = QualityManager.settings.nearPropCount || 0;
+    const trees = templates.map((t, k) => ({ t, k })).filter(({ k }) => /^tree/.test(NATURE_PROPS[k].file));
+    const samples = this._sampleLoop(Math.max(8, this.lengthM / Math.max(1, near)));
+    samples.forEach(({ pos, tangent }, i) => {
+      if (i === 0 || Math.hypot(pos.x - station.x, pos.z - station.z) < 40) return;
+      const side = new BABYLON.Vector3(-tangent.z, 0, tangent.x).normalize().scale((i % 2 ? 1 : -1) * (6.5 + rand() * 2.5));
+      const x = pos.x + side.x, z = pos.z + side.z;
+      if (this._minTrackDistXZ(x, z) < 6) return;
+      const { t, k } = trees[Math.floor(rand() * trees.length)];
+      const inst = t.createInstance(`nearTree_${i}`);
+      inst.position.set(x, 0, z);
+      inst.rotation.y = rand() * Math.PI * 2;
+      inst.scaling.setAll(3.5 + rand() * 2); // 원경보다 작게(약 6~10m) — 트랙 높이와 비슷해 옆으로 휙휙 지나가 보임
+      this._meshes.push(inst);
+    });
   }
 
   /** 스테이션(t=0) 옆 지면에 놀이공원 소품 광장 — 트랙이 위로 지나가는 쪽을 피해 좌/우 중 빈 쪽을 고르고,

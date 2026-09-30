@@ -7,10 +7,13 @@ const QUALITY_PRESETS = {
   low: {
     particleCount: 10,
     shadows: 'none',
-    cameraShake: false,
+    cameraShake: true,    // 속도감 핵심 연출이라 low도 유지(연산 비용 거의 없음)
     textureResolution: 512,
     postProcessing: ['fxaa'], // low는 FXAA만(HDR 파이프라인·톤매핑·bloom 생략)
     backgroundPropCount: 40,  // Nature Kit 나무/바위/풀 인스턴스 수 — 인스턴싱이라 드로우콜은 종류 수만큼만 늘어남
+    nearPropCount: 16,        // 트랙 가까이 스쳐 지나가는 나무(속도감)
+    speedLineCount: 14,       // 화면 가장자리 스피드 라인 수(2D 캔버스)
+    motionBlur: false,
   },
   medium: {
     particleCount: 30,
@@ -19,6 +22,9 @@ const QUALITY_PRESETS = {
     textureResolution: 1024,
     postProcessing: ['fxaa', 'aces', 'bloom'],
     backgroundPropCount: 120,
+    nearPropCount: 30,
+    speedLineCount: 26,
+    motionBlur: false,
   },
   high: {
     particleCount: 60,
@@ -27,6 +33,9 @@ const QUALITY_PRESETS = {
     textureResolution: 2048,
     postProcessing: ['fxaa', 'aces', 'bloom'],
     backgroundPropCount: 220,
+    nearPropCount: 44,
+    speedLineCount: 40,
+    motionBlur: true,         // 화면 기반 모션 블러 — 깊이 버퍼 추가 패스가 필요해 high 전용
   },
 };
 

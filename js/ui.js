@@ -91,6 +91,61 @@ const LOGO = (small = false) => `
 const JUDGE_LABEL = { perfect: 'PERFECT!', good: 'GOOD', miss: 'MISS' };
 const GATE_LABEL = { boost: '부스트 게이트', brake: '브레이크 게이트', finish: '피니쉬!' };
 
+/** 스피드 라인 — 화면 중앙은 비우고 가장자리에서 바깥으로 흐르는 선(만화식 집중선). 2D 캔버스 1장, CSS 픽셀 해상도라
+ * DPR 3 기기에서도 부담 없음. 개수는 그래픽 프리셋(speedLineCount)으로 차등 */
+const SpeedLines = {
+  canvas: null, ctx: null, parts: [], w: 0, h: 0, _clear: true,
+
+  _resize() {
+    this.w = this.canvas.width = window.innerWidth;
+    this.h = this.canvas.height = window.innerHeight;
+  },
+
+  _spawn(p, fresh) {
+    p.a = Math.random() * Math.PI * 2;
+    p.r = fresh ? 0.35 + Math.random() * 0.7 : 0.35 + Math.random() * 0.1; // 반지름(화면 반대각선 대비)
+    p.len = 0.08 + Math.random() * 0.14;
+    p.v = 1.2 + Math.random() * 1.6;
+    p.wid = 1 + Math.random() * 2;
+    return p;
+  },
+
+  /** intensity 0~1 — 0이면 한 번 지우고 이후엔 아무것도 안 그림 */
+  draw(intensity, dt) {
+    if (!this.canvas) {
+      this.canvas = document.getElementById('speedLines');
+      this.ctx = this.canvas.getContext('2d');
+      this._resize();
+      window.addEventListener('resize', () => this._resize());
+    }
+    const n = QualityManager.settings.speedLineCount || 0;
+    while (this.parts.length < n) this.parts.push(this._spawn({}, true));
+    this.parts.length = n;
+    const ctx = this.ctx;
+    if (intensity <= 0.02 || !n) {
+      if (!this._clear) { ctx.clearRect(0, 0, this.w, this.h); this._clear = true; }
+      return;
+    }
+    this._clear = false;
+    ctx.clearRect(0, 0, this.w, this.h);
+    const cx = this.w / 2, cy = this.h * 0.45, R = Math.hypot(this.w, this.h) / 2;
+    ctx.lineCap = 'round';
+    for (const p of this.parts) {
+      p.r += p.v * (0.4 + intensity) * dt;
+      if (p.r > 1.1) this._spawn(p, false);
+      const r0 = p.r * R, r1 = (p.r + p.len * (0.5 + intensity)) * R;
+      const c = Math.cos(p.a), s = Math.sin(p.a);
+      ctx.strokeStyle = `rgba(255,255,255,${(intensity * 0.55 * Math.min(1, (p.r - 0.35) * 4)).toFixed(3)})`;
+      ctx.lineWidth = p.wid;
+      ctx.beginPath();
+      ctx.moveTo(cx + c * r0, cy + s * r0);
+      ctx.lineTo(cx + c * r1, cy + s * r1);
+      ctx.stroke();
+    }
+  },
+};
+window.SpeedLines = SpeedLines;
+
 const UI = {
   root: null,
 
@@ -483,6 +538,7 @@ const UI = {
           <div class="stats">
             <div class="stat"><small>최고 콤보</small><b>${cart.maxCombo.toLocaleString()}</b></div>
             <div class="stat"><small>밸런스 정확도</small><b>${Math.round(sum.balanceAcc * 100)}%</b></div>
+            <div class="stat full"><small>부스터 보조 추진</small><b>${cart.rideTime ? Math.round(cart.assistTime / cart.rideTime * 100) : 0}%</b><small> 주행 시간 중 속도가 떨어져 부스터 타이어가 밀어준 비율</small></div>
             <div class="stat full"><small>게이트 판정${sum.gateMissed ? ` · 놓침 ${sum.gateMissed}` : ''}</small>
               <div class="judge-row"><span class="p">PERFECT ${sum.gates.perfect}</span><span class="g">GOOD ${sum.gates.good}</span><span class="m">MISS ${sum.gates.miss}</span></div>
             </div>
