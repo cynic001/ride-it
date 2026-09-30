@@ -79,6 +79,22 @@ async function main() {
 
   try {
     await page.goto(`${base}/index.html`, { waitUntil: 'load' });
+    if (args.pwa) {
+      const man = await page.evaluate(async () => {
+        const href = document.querySelector('link[rel=manifest]').href;
+        const m = await (await fetch(href)).json();
+        const icons = await Promise.all(m.icons.map(async i => (await fetch(new URL(i.src, href))).ok));
+        return { name: m.name, display: m.display, icons: icons.every(Boolean), n: m.icons.length };
+      });
+      check('pwa manifest', man.display === 'fullscreen' && man.icons && man.n >= 2, JSON.stringify(man));
+      const sw = await page.evaluate(async () => {
+        const reg = await Promise.race([navigator.serviceWorker.ready, new Promise(r => setTimeout(() => r(null), 15000))]);
+        if (!reg || !reg.active) return 'none';
+        for (let i = 0; i < 50 && reg.active.state !== 'activated'; i++) await new Promise(r => setTimeout(r, 100)); // ready는 activating 중에도 풀림
+        return reg.active.state;
+      });
+      check('service worker active', sw === 'activated', sw);
+    }
     // 타이틀 화면(있으면) — 탭해서 진행
     if (await page.locator('#titleScreen').count()) {
       await sleep(600);
@@ -138,20 +154,13 @@ async function main() {
       check(`${tag} gate taps (top/upper-middle)`, gates === 2, `gate-result=${gates}`);
       await sleep(900);
       await shot(`${tag}_2_ride_3rd`);
-      // 한 프레임 드로우콜 실측 — gl draw* 호출을 직접 세서 그림자/포스트프로세싱 패스까지 포함
+      // 한 프레임 드로우콜 실측(그림자/포스트프로세싱 패스 포함) — Babylon SceneInstrumentation
       const dc = await page.evaluate(() => new Promise(resolve => {
-        const gl = Game.engine._gl;
-        const names = ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced'];
-        const orig = {};
-        let n = 0;
-        names.forEach(k => { orig[k] = gl[k]; gl[k] = function (...a) { n++; return orig[k].apply(this, a); }; });
-        Game.scene.onAfterRenderObservable.addOnce(() => {
-          n = 0;
-          Game.scene.onAfterRenderObservable.addOnce(() => {
-            names.forEach(k => { gl[k] = orig[k]; });
-            resolve({ drawCalls: n, activeMeshes: Game.scene.getActiveMeshes().length, instances: Game.scene.meshes.filter(m => m instanceof BABYLON.InstancedMesh).length });
-          });
-        });
+        const ins = new BABYLON.SceneInstrumentation(Game.scene);
+        setTimeout(() => {
+          resolve({ drawCalls: ins.drawCallsCounter.current, activeMeshes: Game.scene.getActiveMeshes().length, instances: Game.scene.meshes.filter(m => m instanceof BABYLON.InstancedMesh).length });
+          ins.dispose();
+        }, 300);
       }));
       console.log(`[verify] ${tag} frame`, JSON.stringify(dc));
 
@@ -214,11 +223,20 @@ async function main() {
     await sleep(400);
     await shot('10_stage_select_reloaded');
 
-    const draw = await page.evaluate(() => ({
-      meshes: Game.scene.meshes.length,
-      activeIndices: Game.engine._drawCalls ? Game.engine._drawCalls.current : null,
-    }));
-    console.log('[verify] scene', JSON.stringify(draw));
+    if (args.pwa) {
+      // 오프라인 재실행: 한 번 방문(+플레이한 스테이지 런타임 캐싱) 후 네트워크 차단 상태로 새로고침해 1스테이지 진입
+      await ctx.setOffline(true);
+      await page.reload({ waitUntil: 'load' });
+      if (await page.locator('#titleScreen').count()) await page.locator('#titleScreen').click();
+      await page.waitForSelector('.stage-btn', { timeout: 15000 });
+      await page.locator('.stage-btn[data-index="0"]').click();
+      const ok = await page.waitForSelector('#startBar', { timeout: 30000 }).then(() => true).catch(() => false);
+      await sleep(800);
+      await shot('11_offline_stage1');
+      check('offline replay (stage 1)', ok);
+      await ctx.setOffline(false);
+    }
+
   } catch (e) {
     check('flow', false, e.message.split('\n')[0]);
     await shot('ZZ_failure').catch(() => {});

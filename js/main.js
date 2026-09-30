@@ -331,6 +331,11 @@ const Game = {
 
 window.Game = Game;
 
+// PWA 오프라인 캐싱 — file://이나 미지원 브라우저는 조용히 건너뜀(게임 동작과 무관)
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(err => console.warn('[SW] 등록 실패:', err)));
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   Game.init();
   UI.showTitle(() => UI.showStageSelect(STAGES, stageIndex => Game.loadStage(stageIndex)));
