@@ -1,6 +1,6 @@
 /**
  * ui.js
- * DOM 오버레이 기반 UI: 스테이지 선택, HUD, 시작 안내, 결과 화면, 품질 설정
+ * DOM 오버레이 기반 UI: 타이틀, 스테이지 선택, HUD, 시작 안내, 결과 화면, 품질 설정
  * (Canvas 내부가 아닌 별도 DOM 레이어 — 터치 타겟 확보가 쉽고 CSS로 다루기 편함)
  */
 
@@ -14,13 +14,53 @@ const LapsManager = {
 };
 window.LapsManager = LapsManager;
 
-// HUD 아이콘 — 이모지 대신 인라인 SVG(currentColor로 버튼 색 상속)
+// 아이콘 — 이모지 대신 인라인 SVG(currentColor로 버튼 색 상속)
+const svg = (body, fill = false) =>
+  `<svg viewBox="0 0 24 24" ${fill ? 'fill="currentColor"' : 'fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"'} aria-hidden="true">${body}</svg>`;
 const ICONS = {
-  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
-  soundOn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>',
-  soundOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><line x1="16" y1="9" x2="21" y2="14"/><line x1="21" y1="9" x2="16" y2="14"/></svg>',
-  camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg>',
+  pause: svg('<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>', true),
+  soundOn: svg('<path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a8.5 8.5 0 0 1 0 12"/>'),
+  soundOff: svg('<path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><line x1="16" y1="9" x2="21" y2="14"/><line x1="21" y1="9" x2="16" y2="14"/>'),
+  camera: svg('<path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/>'),
+  arrowRight: svg('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/>'),
+  swipe: svg('<polyline points="7 8 3 12 7 16"/><polyline points="17 8 21 12 17 16"/><line x1="3" y1="12" x2="21" y2="12"/>'),
+  tap: svg('<circle cx="12" cy="9" r="3"/><path d="M12 12v8"/><path d="M6.5 5.5a8 8 0 0 1 11 0"/>'),
+  hand: svg('<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 10.5V4a1.5 1.5 0 0 1 3 0v6.5"/><path d="M14 10.5V5.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-.5a6 6 0 0 1-5-2.7L3.3 14a1.5 1.5 0 0 1 2.4-1.8L8 15"/>'),
+  sparkle: svg('<path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/>'),
+  repeat: svg('<polyline points="17 2 21 6 17 10"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><polyline points="7 22 3 18 7 14"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>'),
+  help: svg('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14"/><line x1="12" y1="17" x2="12" y2="17.01"/>'),
+  info: svg('<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8.01"/>'),
+  play: svg('<polygon points="7 4 20 12 7 20"/>', true),
+  retry: svg('<polyline points="3 4 3 10 9 10"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L3 10"/>'),
+  list: svg('<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>'),
 };
+
+// 메뉴 배경 — 하늘 그라데이션/햇살/구름 + 코스터 트랙 실루엣(SVG). 타이틀·스테이지 선택 공용
+const PILLAR_TOPS = [88, 50, 22, 28, 76, 108, 84, 56, 70, 90]; // 실루엣 곡선의 x=20,60,…,380 지점 높이
+const MENU_BG = `
+  <div class="menu-bg" aria-hidden="true">
+    <div class="rays"></div>
+    <div class="cloud" style="top:12%;width:70px;height:26px;animation-duration:46s;animation-delay:-8s"></div>
+    <div class="cloud" style="top:24%;width:54px;height:20px;animation-duration:58s;animation-delay:-30s"></div>
+    <div class="cloud" style="top:6%;width:44px;height:16px;animation-duration:70s;animation-delay:-50s"></div>
+    <svg class="coaster" viewBox="0 0 400 140" preserveAspectRatio="none">
+      <path d="M0 140 V96 C40 96 60 20 110 20 C160 20 170 110 220 110 C262 110 270 54 310 54 C350 54 360 92 400 92 V140 Z" fill="#141a33" opacity=".18"/>
+      <g stroke="#141a33" stroke-width="3" opacity=".5">
+        ${PILLAR_TOPS.map((y, i) => `<line x1="${20 + i * 40}" y1="140" x2="${20 + i * 40}" y2="${y}"/>`).join('')}
+      </g>
+      <path d="M0 92 C40 92 60 16 110 16 C160 16 170 106 220 106 C262 106 270 50 310 50 C350 50 360 88 400 88" fill="none" stroke="#141a33" stroke-width="7" stroke-linecap="round"/>
+      <path d="M0 92 C40 92 60 16 110 16 C160 16 170 106 220 106 C262 106 270 50 310 50 C350 50 360 88 400 88" fill="none" stroke="#ffb80d" stroke-width="2.5" stroke-dasharray="6 6"/>
+    </svg>
+  </div>`;
+
+const LOGO = (small = false) => `
+  <div class="logo${small ? ' small' : ''}">
+    <div class="logo-ko">떨어진다<span class="bang">!</span><span class="bang">!</span><span class="bang">!</span></div>
+    <div class="logo-en">RIDE IT</div>
+  </div>`;
+
+const JUDGE_LABEL = { perfect: 'PERFECT!', good: 'GOOD', miss: 'MISS' };
+const GATE_LABEL = { boost: '부스트 게이트', brake: '브레이크 게이트', finish: '피니쉬!' };
 
 const UI = {
   root: null,
@@ -29,27 +69,68 @@ const UI = {
     this.root = document.getElementById('uiRoot');
   },
 
+  /** 화면 교체 — 직전 화면을 id 없는 복제본(ghost)으로 남겨 페이드 아웃시키고 새 화면은 즉시 렌더
+   * (호출부가 innerHTML 직후 getElementById로 바로 이벤트를 붙이므로 교체 자체는 동기로 유지) */
+  _setScreen(html) {
+    if (this.root.children.length) {
+      const ghost = document.createElement('div');
+      ghost.className = 'ui-ghost';
+      while (this.root.firstChild) ghost.appendChild(this.root.firstChild);
+      ghost.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+      document.body.appendChild(ghost);
+      setTimeout(() => ghost.remove(), 220);
+    }
+    this.root.innerHTML = html;
+  },
+
+  _modal(id, inner, { solid = false } = {}) {
+    const el = document.createElement('div');
+    el.className = `screen modal-overlay${solid ? ' solid' : ''}`;
+    el.id = id;
+    el.innerHTML = `<div class="card">${inner}</div>`;
+    this.root.appendChild(el);
+    return el;
+  },
+
+  showTitle(onStart) {
+    this._setScreen(`
+      <div class="screen title-screen" id="titleScreen">
+        ${MENU_BG}
+        ${LOGO()}
+        <div class="tap-hint">화면을 터치해서 시작</div>
+        <div class="studio">chaechae studio</div>
+      </div>
+    `);
+    document.getElementById('titleScreen').addEventListener('click', onStart, { once: true });
+  },
+
   showStageSelect(stages, onSelect) {
-    this.root.innerHTML = `
+    this._setScreen(`
       <div class="screen stage-select">
-        <h1>롤러코스터</h1>
+        ${MENU_BG}
+        ${LOGO(true)}
         <div class="stage-list">
           ${stages.map((s, i) => `
             <button class="stage-btn" data-index="${i}">
-              <span class="stage-name">${s.name}</span>
-              <span class="stage-motif">${s.motif}</span>
+              <span class="stage-num">${i + 1}</span>
+              <span class="stage-info">
+                <span class="stage-name">${s.name}</span>
+                <span class="stage-motif">${s.motif}</span>
+                <span class="stage-meta"><span class="stars">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span>${s.baseSpeedKmh}km/h</span>
+              </span>
+              <span class="stage-side">${this._stageBadges(i)}</span>
             </button>
           `).join('')}
         </div>
         <div class="settings-row">
-          <button class="quality-toggle" id="qualityBtn">그래픽: ${QualityManager.current}</button>
-          <button class="quality-toggle" id="lapsBtn">턴 반복: ${LapsManager.current}랩</button>
-          <button class="quality-toggle" id="audioBtn">사운드: ${AudioManager.enabled ? 'ON' : 'OFF'}</button>
-          <button class="quality-toggle" id="howtoBtn">조작법</button>
-          <button class="quality-toggle" id="creditsBtn">크레딧</button>
+          <button class="pill" id="qualityBtn">${ICONS.sparkle}<span>그래픽 ${this._qualityLabel()}</span></button>
+          <button class="pill" id="lapsBtn">${ICONS.repeat}<span>${LapsManager.current}랩</span></button>
+          <button class="pill" id="audioBtn">${AudioManager.enabled ? ICONS.soundOn : ICONS.soundOff}<span>사운드 ${AudioManager.enabled ? 'ON' : 'OFF'}</span></button>
+          <button class="pill" id="howtoBtn">${ICONS.help}<span>조작법</span></button>
+          <button class="pill" id="creditsBtn">${ICONS.info}<span>크레딧</span></button>
         </div>
       </div>
-    `;
+    `);
 
     this.root.querySelectorAll('.stage-btn').forEach(btn => {
       btn.addEventListener('click', () => onSelect(Number(btn.dataset.index)));
@@ -65,21 +146,27 @@ const UI = {
     if (!localStorage.getItem('rc_howto_seen')) this.showHowTo();
   },
 
+  /** 스테이지 카드 오른쪽 배지 — 진행 저장(D) 전에는 비어 있음 */
+  _stageBadges() {
+    return '';
+  },
+
+  _qualityLabel() {
+    return { low: '낮음', medium: '보통', high: '높음' }[QualityManager.current] || QualityManager.current;
+  },
+
   showHowTo(onClose) {
-    const el = document.createElement('div');
-    el.className = 'screen modal-overlay';
-    el.id = 'howtoOverlay';
-    el.innerHTML = `
+    const item = (ico, title, desc) => `<div class="howto-item"><span class="ico">${ico}</span><span><b>${title}</b><span>${desc}</span></span></div>`;
+    const el = this._modal('howtoOverlay', `
       <h2>조작법</h2>
       <div class="howto-list">
-        <p>➜ <strong>스타트 바</strong> — 바 안에서 당겼다 놓으면 출발</p>
-        <p>↔ <strong>좌우 밸런스</strong> — 주행 중 화면 하단을 좌우로 스와이프</p>
-        <p>👆 <strong>게이트 탭</strong> — 화면 상단/중앙을 타이밍 맞춰 탭 (부스트/브레이크/피니쉬)</p>
-        <p>✋ <strong>에어타임 홀드</strong> — 화면을 길게 눌러 손 들기</p>
+        ${item(ICONS.arrowRight, '스타트 바', '바 안의 손잡이를 끌었다가 휙 놓으면 출발! 빠르게 놓을수록 세게')}
+        ${item(ICONS.swipe, '좌우 밸런스', '커브에서 화면 아래쪽을 좌우로 밀어 노란 구간에 맞추기')}
+        ${item(ICONS.tap, '게이트 탭', '게이트가 초록색일 때 화면 위쪽을 탭 (부스트/브레이크/피니쉬)')}
+        ${item(ICONS.hand, '에어타임 홀드', '무중력 구간에서 화면을 길게 눌러 손 들기 — 보너스 점수')}
       </div>
-      <button id="howtoCloseBtn" class="primary">확인</button>
-    `;
-    this.root.appendChild(el);
+      <div class="actions"><button id="howtoCloseBtn" class="btn primary wide">알겠어요!</button></div>
+    `, { solid: true });
     document.getElementById('howtoCloseBtn').addEventListener('click', () => {
       el.remove();
       localStorage.setItem('rc_howto_seen', '1');
@@ -89,10 +176,7 @@ const UI = {
 
   /** 서드파티 에셋 표기 — Kenney/Poly Haven 모두 CC0라 의무는 없지만 감사 표기 */
   showCredits() {
-    const el = document.createElement('div');
-    el.className = 'screen modal-overlay';
-    el.id = 'creditsOverlay';
-    el.innerHTML = `
+    const el = this._modal('creditsOverlay', `
       <h2>크레딧</h2>
       <div class="credits-list">
         <p><strong>떨어진다!!! RIDE IT</strong><br>chaechae studio</p>
@@ -100,42 +184,45 @@ const UI = {
         <p><strong>하늘 HDRI</strong><br>Kloofendal 43d Clear (Pure Sky) — Greg Zaal, <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a> (CC0)</p>
         <p><strong>엔진</strong><br>Babylon.js</p>
       </div>
-      <button id="creditsCloseBtn" class="primary">닫기</button>
-    `;
-    this.root.appendChild(el);
+      <div class="actions"><button id="creditsCloseBtn" class="btn primary wide">닫기</button></div>
+    `, { solid: true });
     document.getElementById('creditsCloseBtn').addEventListener('click', () => el.remove());
   },
 
   showLoadingOverlay() {
-    this.root.innerHTML = `
-      <div class="screen modal-overlay" id="loadingOverlay">
-        <div class="spinner"></div>
-        <p>불러오는 중...</p>
+    this._setScreen(`
+      <div class="screen modal-overlay solid" id="loadingOverlay">
+        <div class="card loading-card">
+          ${LOGO(true)}
+          <div class="spinner"></div>
+          <p>코스터 준비 중...</p>
+        </div>
       </div>
-    `;
+    `);
   },
 
   showLoadError(retryFn) {
-    this.root.innerHTML = `
-      <div class="screen modal-overlay">
-        <h2>불러오기 실패</h2>
-        <p>에셋을 불러오지 못했습니다. 네트워크를 확인해주세요.</p>
-        <button id="retryLoadBtn" class="primary">다시 시도</button>
+    this._setScreen(`
+      <div class="screen modal-overlay solid">
+        <div class="card">
+          <h2>불러오기 실패</h2>
+          <p>에셋을 불러오지 못했어요.<br>네트워크를 확인해주세요.</p>
+          <div class="actions"><button id="retryLoadBtn" class="btn primary wide">${ICONS.retry}다시 시도</button></div>
+        </div>
       </div>
-    `;
+    `);
     document.getElementById('retryLoadBtn').addEventListener('click', retryFn);
   },
 
   showPauseOverlay() {
-    const el = document.createElement('div');
-    el.className = 'screen modal-overlay';
-    el.id = 'pauseOverlay';
-    el.innerHTML = `
-      <h2>일시정지</h2>
-      <button id="resumeBtn" class="primary">계속하기</button>
-      <button id="pauseExitBtn">스테이지 선택으로</button>
-    `;
-    this.root.appendChild(el);
+    this._modal('pauseOverlay', `
+      <div class="ribbon">일시정지</div>
+      <p>잠깐 쉬어가요</p>
+      <div class="actions">
+        <button id="resumeBtn" class="btn primary wide">${ICONS.play}계속하기</button>
+        <button id="pauseExitBtn" class="btn wide">${ICONS.list}스테이지 선택</button>
+      </div>
+    `);
     document.getElementById('resumeBtn').addEventListener('click', () => Game.resumeGame());
     document.getElementById('pauseExitBtn').addEventListener('click', () => Game.exitToStageSelect());
   },
@@ -150,7 +237,7 @@ const UI = {
     const next = order[(order.indexOf(QualityManager.current) + 1) % order.length];
     QualityManager.setPreset(next);
     const btn = document.getElementById('qualityBtn');
-    if (btn) btn.textContent = `그래픽: ${next}`;
+    if (btn) btn.lastElementChild.textContent = `그래픽 ${this._qualityLabel()}`;
   },
 
   _cycleLaps() {
@@ -158,14 +245,14 @@ const UI = {
     const next = order[(order.indexOf(LapsManager.current) + 1) % order.length];
     LapsManager.setLaps(next);
     const btn = document.getElementById('lapsBtn');
-    if (btn) btn.textContent = `턴 반복: ${next}랩`;
+    if (btn) btn.lastElementChild.textContent = `${next}랩`;
   },
 
   _cycleAudio() {
     const next = !AudioManager.enabled;
     AudioManager.setEnabled(next);
     const btn = document.getElementById('audioBtn');
-    if (btn) btn.textContent = `사운드: ${next ? 'ON' : 'OFF'}`;
+    if (btn) btn.innerHTML = `${next ? ICONS.soundOn : ICONS.soundOff}<span>사운드 ${next ? 'ON' : 'OFF'}</span>`;
   },
 
   showStartPrompt(name, motif) {
@@ -174,45 +261,65 @@ const UI = {
     // 계속 쌓이는 누수가 생김
     if (this._pullProgressHandler) window.removeEventListener('pull-progress', this._pullProgressHandler);
     if (this._launchedHandler) window.removeEventListener('cart-launched', this._launchedHandler);
+    if (this._gateHandler) window.removeEventListener('gate-result', this._gateHandler);
 
-    this.root.innerHTML = `
+    this._setScreen(`
       <div class="screen hud">
-        <div class="top-bar">
-          <span class="stage-label">${name}</span>
-          <span class="speed-label" id="speedLabel">0 km/h</span>
-          <span class="turn-label" id="turnLabel"></span>
-          <span class="combo-label" id="comboLabel">Combo 0</span>
+        <div class="hud-top">
+          <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+          <div class="hud-row">
+            <span class="stage-chip stage-label">${name}</span>
+            <span class="speedo"><span class="num" id="speedLabel">0</span><span class="unit">km/h</span><span class="sub turn-label" id="turnLabel"></span></span>
+            <span class="combo-chip" id="comboChip"><small>COMBO</small><b id="comboLabel">0</b></span>
+          </div>
+        </div>
+        <div class="judge" id="judgeToast"></div>
+        <div class="guide gate" id="gateGuide">
+          <div class="guide-label" id="gateGuideLabel"></div>
+          <div class="guide-bar"><div class="guide-zone" id="gateZone"></div><div class="guide-marker" id="gateMarker"></div></div>
+        </div>
+        <div class="guide balance" id="balanceGuide">
+          <div class="guide-label">밸런스!</div>
+          <div class="guide-bar"><div class="guide-zone" id="balanceZone"></div><div class="guide-marker" id="balanceMarker"></div></div>
         </div>
         <div class="start-bar" id="startBar">
           <div class="start-bar-label">당겨서 출발!</div>
           <div class="start-bar-track">
             <div class="start-bar-fill" id="startBarFill"></div>
-            <div class="start-bar-handle" id="startBarHandle">➜</div>
+            <div class="start-bar-handle" id="startBarHandle">${ICONS.arrowRight}</div>
           </div>
         </div>
         <div class="hud-controls">
           <button class="hud-icon-btn" id="soundToggleBtn" aria-label="사운드 켜기/끄기">${AudioManager.enabled ? ICONS.soundOn : ICONS.soundOff}</button>
           <button class="hud-icon-btn" id="pauseBtn" disabled aria-label="일시정지">${ICONS.pause}</button>
-          <button class="camera-toggle" id="cameraToggleBtn" disabled aria-label="시점 전환">${ICONS.camera}</button>
+          <button class="hud-icon-btn camera-toggle" id="cameraToggleBtn" disabled aria-label="시점 전환">${ICONS.camera}</button>
         </div>
       </div>
-    `;
+    `);
+    const $ = id => document.getElementById(id);
+    this._hud = {
+      speed: $('speedLabel'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'),
+      progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
+      balance: $('balanceGuide'), balanceZone: $('balanceZone'), balanceMarker: $('balanceMarker'),
+      gate: $('gateGuide'), gateLabel: $('gateGuideLabel'), gateZone: $('gateZone'), gateMarker: $('gateMarker'),
+      judge: $('judgeToast'), lastCombo: 0,
+    };
 
-    document.getElementById('cameraToggleBtn').addEventListener('click', () => {
+    $('cameraToggleBtn').addEventListener('click', () => {
       if (Game.camera && !Game.camera.locked) Game.camera.toggleMode();
     });
-    document.getElementById('pauseBtn').addEventListener('click', () => Game.pauseGame());
-    document.getElementById('soundToggleBtn').addEventListener('click', () => {
+    $('pauseBtn').addEventListener('click', () => Game.pauseGame());
+    $('soundToggleBtn').addEventListener('click', () => {
       const next = !AudioManager.enabled;
       AudioManager.setEnabled(next);
-      document.getElementById('soundToggleBtn').innerHTML = next ? ICONS.soundOn : ICONS.soundOff;
+      $('soundToggleBtn').innerHTML = next ? ICONS.soundOn : ICONS.soundOff;
     });
 
     // input.js가 실제 드래그를 받는 스타트 바 DOM — main.js가 InputController에 이 엘리먼트를 넘김
-    this.startBarEl = document.getElementById('startBar');
+    this.startBarEl = $('startBar');
     const track = this.startBarEl.querySelector('.start-bar-track');
-    const fill = document.getElementById('startBarFill');
-    const handle = document.getElementById('startBarHandle');
+    const fill = $('startBarFill');
+    const handle = $('startBarHandle');
 
     this._pullProgressHandler = e => {
       const strength = Math.max(0, Math.min(1, e.detail));
@@ -225,42 +332,124 @@ const UI = {
     this._launchedHandler = () => {
       this.startBarEl.classList.add('launched');
     };
+    // 게이트 탭 판정 토스트(게이트 없는 곳의 탭 = 'none'은 표시하지 않음)
+    this._gateHandler = e => {
+      const { result } = e.detail;
+      if (!JUDGE_LABEL[result] || !this._hud) return;
+      const j = this._hud.judge;
+      j.textContent = JUDGE_LABEL[result];
+      j.className = 'judge';
+      void j.offsetWidth; // 애니메이션 재시작
+      j.className = `judge show ${result}`;
+    };
     window.addEventListener('pull-progress', this._pullProgressHandler);
     window.addEventListener('cart-launched', this._launchedHandler);
+    window.addEventListener('gate-result', this._gateHandler);
   },
 
   updateHUD(cart, track) {
-    const speedLabel = document.getElementById('speedLabel');
-    const comboLabel = document.getElementById('comboLabel');
-    const turnLabel = document.getElementById('turnLabel');
-    const cameraBtn = document.getElementById('cameraToggleBtn');
-    const pauseBtn = document.getElementById('pauseBtn');
+    const h = this._hud;
+    if (!h || !h.speed.isConnected) return;
 
-    if (speedLabel) speedLabel.textContent = `${Math.round(cart.speed * 3.6)} km/h`; // m/s → km/h
-    if (comboLabel) comboLabel.textContent = `Combo ${cart.combo}`;
-    if (turnLabel && track) {
+    h.speed.textContent = Math.round(cart.speed * 3.6); // m/s → km/h
+    if (cart.combo !== h.lastCombo) {
+      h.combo.textContent = cart.combo;
+      // 콤보는 커브 구간에서 매 틱 오르므로 10단위를 넘을 때만 튀는 연출(매 프레임 애니메이션 재시작 방지)
+      if (Math.floor(cart.combo / 10) > Math.floor(h.lastCombo / 10)) {
+        h.comboChip.classList.remove('bump');
+        void h.comboChip.offsetWidth;
+        h.comboChip.classList.add('bump');
+      }
+      h.lastCombo = cart.combo;
+    }
+    if (track) {
       const ranges = track.segmentRanges;
       const idx = ranges.findIndex(s => cart.t >= s.tStart && cart.t < s.tEnd);
       const turnNum = idx === -1 ? ranges.length : idx + 1;
       const lapPrefix = cart.totalLaps > 1 ? `Lap ${cart.currentLap}/${cart.totalLaps} · ` : '';
-      turnLabel.textContent = `${lapPrefix}Turn ${turnNum}/${ranges.length}`;
+      h.turn.textContent = `${lapPrefix}Turn ${turnNum}/${ranges.length}`;
+      const overall = ((cart.currentLap - 1) + Math.min(1, cart.t)) / cart.totalLaps;
+      h.progress.style.width = `${(overall * 100).toFixed(1)}%`;
+
+      // 밸런스 가이드: 목표 기울기 ±leanWindow를 노란 구간으로, 현재 입력을 흰 마커로 (−1~1 → 0~100%)
+      const seg = track.getSegmentAt(cart.t);
+      const pct = v => (Math.max(-1, Math.min(1, v)) + 1) * 50;
+      if (cart.launched && seg.requiredLean > 0) {
+        const target = seg.curveDirection === 'left' ? -seg.requiredLean : seg.requiredLean;
+        h.balanceZone.style.left = `${pct(target - seg.leanWindow).toFixed(1)}%`;
+        h.balanceZone.style.right = `${(100 - pct(target + seg.leanWindow)).toFixed(1)}%`;
+        h.balanceMarker.style.left = `${pct(cart.leanInput).toFixed(1)}%`;
+        h.balance.classList.add('on');
+      } else {
+        h.balance.classList.remove('on');
+      }
+
+      // 게이트 가이드: 세그먼트 진행률 위 판정 창(초록 = 지금 탭)
+      if (cart.launched && seg.gate) {
+        const local = (cart.t - seg.tStart) / (seg.tEnd - seg.tStart);
+        const { start, end } = seg.gate.timingWindow;
+        h.gateLabel.textContent = GATE_LABEL[seg.gate.type] || '';
+        h.gateZone.style.left = `${start * 100}%`;
+        h.gateZone.style.right = `${(1 - end) * 100}%`;
+        h.gateMarker.style.left = `${Math.min(100, local * 100).toFixed(1)}%`;
+        h.gate.classList.toggle('ready', local >= start && local <= end);
+        h.gate.classList.add('on');
+      } else {
+        h.gate.classList.remove('on');
+      }
     }
-    if (cameraBtn) cameraBtn.disabled = !cart.launched;
-    if (pauseBtn) pauseBtn.disabled = !cart.launched;
+    h.cameraBtn.disabled = !cart.launched;
+    h.pauseBtn.disabled = !cart.launched;
   },
 
-  showResult(score, stageIndex) {
+  /** 결과 판정 요약 — 밸런스 정확도(커브 구간 good 이상 비율)와 게이트 성공률로 S/A/B/C */
+  _summarize(cart, stageData) {
+    const bt = cart.balanceTicks;
+    const bTotal = bt.perfect + bt.good + bt.miss;
+    const balanceAcc = bTotal ? (bt.perfect + bt.good) / bTotal : 1;
+    const gates = { perfect: 0, good: 0, miss: 0 };
+    cart._gateResults.forEach(g => { gates[g.result] += 1; });
+    const gateTotal = stageData.segments.filter(s => s.gate).length * cart.totalLaps; // 못 누른 게이트도 실패로 취급
+    const gateAcc = gateTotal ? (gates.perfect + gates.good * 0.6) / gateTotal : 1;
+    const r = balanceAcc * 0.6 + Math.min(1, gateAcc) * 0.4;
+    const rank = r >= 0.9 ? 'S' : r >= 0.75 ? 'A' : r >= 0.5 ? 'B' : 'C';
+    return { rank, balanceAcc, gates, gateMissed: Math.max(0, gateTotal - gates.perfect - gates.good - gates.miss) };
+  },
+
+  showResult(cart, stageIndex) {
     AudioManager.playResultFanfare();
-    this.root.innerHTML = `
-      <div class="screen result">
-        <h2>완주!</h2>
-        <p class="score">Score: ${Math.round(score)}</p>
-        <button id="retryBtn">다시 도전</button>
-        <button id="stageSelectBtn">스테이지 선택</button>
+    const stageData = STAGES[stageIndex];
+    const sum = this._summarize(cart, stageData);
+    const score = Math.round(cart.score);
+    this._setScreen(`
+      <div class="screen modal-overlay" id="resultScreen">
+        <div class="card result-card">
+          <div class="ribbon">완주!</div>
+          <div class="result-stage">${stageData.name}</div>
+          <div class="rank ${sum.rank}">${sum.rank}</div>
+          <div class="result-score"><small>SCORE</small>${score.toLocaleString()}</div>
+          ${this._bestBadge(stageIndex, score, sum.rank)}
+          <div class="stats">
+            <div class="stat"><small>최고 콤보</small><b>${cart.maxCombo.toLocaleString()}</b></div>
+            <div class="stat"><small>밸런스 정확도</small><b>${Math.round(sum.balanceAcc * 100)}%</b></div>
+            <div class="stat full"><small>게이트 판정${sum.gateMissed ? ` · 놓침 ${sum.gateMissed}` : ''}</small>
+              <div class="judge-row"><span class="p">PERFECT ${sum.gates.perfect}</span><span class="g">GOOD ${sum.gates.good}</span><span class="m">MISS ${sum.gates.miss}</span></div>
+            </div>
+          </div>
+          <div class="actions">
+            <button id="retryBtn" class="btn primary wide">${ICONS.retry}다시 도전</button>
+            <button id="stageSelectBtn" class="btn wide">${ICONS.list}스테이지 선택</button>
+          </div>
+        </div>
       </div>
-    `;
+    `);
     document.getElementById('retryBtn').addEventListener('click', () => Game.loadStage(stageIndex));
     document.getElementById('stageSelectBtn').addEventListener('click', () => this.showStageSelect(STAGES, i => Game.loadStage(i)));
+  },
+
+  /** 진행 저장(D) 전에는 표시 없음 */
+  _bestBadge() {
+    return '';
   },
 };
 

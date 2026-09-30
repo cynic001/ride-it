@@ -36,23 +36,32 @@ class InputController {
     this._bindEvents();
   }
 
+  /** 스테이지 재로드 시 이전 컨트롤러의 리스너 제거 — 안 하면 이전 카트용 컨트롤러가 캔버스 탭을 계속 받아
+   * 게이트 판정/효과음이 스테이지를 다시 할 때마다 중복으로 발생 */
+  dispose() {
+    this._abort.abort();
+    clearTimeout(this._holdTimer);
+  }
+
   _bindEvents() {
+    this._abort = new AbortController();
+    const opt = { signal: this._abort.signal };
     this.canvas.style.touchAction = 'none'; // 브라우저 기본 제스처(스크롤/줌) 차단
 
     // 스타트 전: 스타트 바 안에서만 당기기(pull) 인식
     if (this.startBar) {
       this.startBar.style.touchAction = 'none';
-      this.startBar.addEventListener('pointerdown', e => this._onPullDown(e));
-      this.startBar.addEventListener('pointermove', e => this._onPullMove(e));
-      this.startBar.addEventListener('pointerup', e => this._onPullUp(e));
-      this.startBar.addEventListener('pointercancel', e => this._onPullUp(e));
+      this.startBar.addEventListener('pointerdown', e => this._onPullDown(e), opt);
+      this.startBar.addEventListener('pointermove', e => this._onPullMove(e), opt);
+      this.startBar.addEventListener('pointerup', e => this._onPullUp(e), opt);
+      this.startBar.addEventListener('pointercancel', e => this._onPullUp(e), opt);
     }
 
     // 발사 후: 캔버스 전체에서 밸런스/게이트/손들기
-    this.canvas.addEventListener('pointerdown', e => this._onDriveDown(e));
-    this.canvas.addEventListener('pointermove', e => this._onDriveMove(e));
-    this.canvas.addEventListener('pointerup', e => this._onDriveUp(e));
-    this.canvas.addEventListener('pointercancel', e => this._onDriveUp(e));
+    this.canvas.addEventListener('pointerdown', e => this._onDriveDown(e), opt);
+    this.canvas.addEventListener('pointermove', e => this._onDriveMove(e), opt);
+    this.canvas.addEventListener('pointerup', e => this._onDriveUp(e), opt);
+    this.canvas.addEventListener('pointercancel', e => this._onDriveUp(e), opt);
 
     // iOS Safari 더블탭 줌 방지 (JS 레벨)
     let lastTouchEnd = 0;
@@ -60,7 +69,7 @@ class InputController {
       const now = Date.now();
       if (now - lastTouchEnd <= 300) e.preventDefault();
       lastTouchEnd = now;
-    }, { passive: false });
+    }, { passive: false, signal: this._abort.signal });
   }
 
   _onPullDown(e) {

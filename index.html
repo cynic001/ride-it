@@ -10,167 +10,295 @@
 <style>
   :root {
     --yellow: #ffb80d;
-    --yellow-deep: #e0a000;
+    --yellow-deep: #d99700;
+    --yellow-soft: #ffe08a;
     --navy: #141a33;
-    --navy-soft: rgba(20, 26, 51, 0.8);
+    --navy-2: #1f2850;
+    --navy-3: #2d3a6e;
+    --navy-soft: rgba(20, 26, 51, 0.82);
+    --red: #ff5a4e;
+    --green: #3ddc84;
+    --sky-top: #2f7de1;
+    --sky-bottom: #9fd8ff;
+    --ease-pop: cubic-bezier(.34, 1.56, .64, 1);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
-    width: 100%; height: 100%; overflow: hidden; background: #000;
+    width: 100%; height: 100%; overflow: hidden; background: var(--navy);
     font-family: 'Jua', -apple-system, 'Pretendard', sans-serif;
     overscroll-behavior: none; /* 스타트 바 드래그 중 페이지 자체가 바운스/스크롤되는 것 방지 */
+    -webkit-user-select: none; user-select: none;
   }
 
   #renderCanvas { width: 100%; height: 100%; touch-action: none; outline: none; display: block; }
 
-  #uiRoot {
+  #uiRoot, .ui-ghost {
     position: fixed; inset: 0; pointer-events: none;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   #uiRoot .screen { pointer-events: auto; }
 
-  /* 화면 전환(스테이지선택/로딩/HUD/결과) 공통 진입 트랜지션 */
-  @keyframes screenFadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  #uiRoot .screen { animation: screenFadeIn 0.25s ease both; }
+  /* 화면 전환: 새 화면은 페이드+슬라이드 인, 직전 화면은 ui.js가 복제(ghost)해 페이드 아웃 → 크로스페이드 */
+  @keyframes screenIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes screenOut { from { opacity: 1; } to { opacity: 0; transform: translateY(-8px); } }
+  @keyframes cardIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  #uiRoot .screen { animation: screenIn .26s ease both; }
+  #uiRoot .hud { animation: fadeIn .22s ease both; }
+  .ui-ghost { z-index: 5; animation: screenOut .2s ease forwards; }
+  .ui-ghost * { pointer-events: none !important; }
+  .modal-overlay .card { animation: cardIn .26s var(--ease-pop) both; }
 
-  /* 버튼 공통 눌림 피드백 — 입체감 있는 그림자가 눌렀을 때 줄어들며 눌리는 느낌 연출 */
+  /* ── 버튼: 통통한 입체(아래 그림자 턱) + 눌림 시 턱이 사라지며 내려앉음 ── */
   #uiRoot button {
-    font-family: inherit; cursor: pointer;
-    box-shadow: 0 3px 0 rgba(0,0,0,0.25);
-    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    font-family: inherit; cursor: pointer; border: none; /* 색은 각 버튼 클래스가 지정(여기서 inherit하면 흰 카드 위 흰 글씨) */
+    transition: transform .08s ease, box-shadow .08s ease, filter .15s ease;
   }
-  #uiRoot button:active { transform: scale(0.95) translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
-  #uiRoot button:disabled { box-shadow: none; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 48px; padding: 12px 24px; border-radius: 16px; font-size: 18px;
+    background: var(--navy-3); color: #fff; box-shadow: 0 4px 0 #111733, 0 8px 18px rgba(0,0,0,.25);
+  }
+  .btn.primary { background: var(--yellow); color: var(--navy); box-shadow: 0 5px 0 var(--yellow-deep), 0 10px 20px rgba(0,0,0,.25); }
+  .btn.wide { width: 100%; }
+  #uiRoot .btn:active, #uiRoot .pill:active, #uiRoot .stage-btn:active, #uiRoot .hud-icon-btn:active {
+    transform: translateY(4px); box-shadow: 0 0 0 transparent, 0 2px 6px rgba(0,0,0,.2);
+  }
+  .btn svg, .pill svg { width: 20px; height: 20px; flex: none; }
+  #uiRoot button:disabled { opacity: .45; box-shadow: none; }
 
+  /* ── 메뉴 배경(타이틀/스테이지 선택): 하늘 그라데이션 + 회전 햇살 + 코스터 실루엣 ── */
+  .menu-bg {
+    position: absolute; inset: 0; overflow: hidden; z-index: -1;
+    background: linear-gradient(180deg, var(--sky-top) 0%, #57a6f0 55%, var(--sky-bottom) 100%);
+  }
+  .menu-bg .rays {
+    position: absolute; left: 50%; top: 30%; width: 220vmax; height: 220vmax; margin: -110vmax 0 0 -110vmax;
+    background: repeating-conic-gradient(rgba(255,255,255,.10) 0 10deg, transparent 10deg 20deg);
+    animation: spin 60s linear infinite;
+  }
+  .menu-bg .cloud {
+    position: absolute; background: #fff; border-radius: 999px; opacity: .85;
+    box-shadow: 30px -14px 0 6px #fff, 64px 0 0 -2px #fff;
+    animation: drift 40s linear infinite;
+  }
+  @keyframes drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
+  .menu-bg svg.coaster { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 34%; }
+
+  /* ── 로고 ── */
+  .logo { text-align: center; line-height: 1; transform: rotate(-4deg); }
+  .logo-ko {
+    display: inline-block; font-size: 68px; color: var(--yellow); letter-spacing: -1px;
+    -webkit-text-stroke: 8px var(--navy); paint-order: stroke fill;
+    text-shadow: 0 7px 0 var(--navy), 0 14px 22px rgba(0,0,0,.3);
+  }
+  .logo-ko .bang { color: var(--red); display: inline-block; animation: wobble 1.4s ease-in-out infinite; }
+  .logo-ko .bang:nth-child(2) { animation-delay: .12s; } .logo-ko .bang:nth-child(3) { animation-delay: .24s; }
+  @keyframes wobble { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-6px) rotate(6deg); } }
+  .logo-en {
+    margin-top: 12px; font-size: 26px; letter-spacing: 10px; padding-left: 10px; color: #fff;
+    -webkit-text-stroke: 5px var(--navy); paint-order: stroke fill; text-shadow: 0 4px 0 var(--navy);
+  }
+  .logo.small .logo-ko { font-size: 40px; -webkit-text-stroke-width: 6px; text-shadow: 0 5px 0 var(--navy); }
+  .logo.small .logo-en { font-size: 15px; letter-spacing: 6px; margin-top: 6px; -webkit-text-stroke-width: 4px; }
+
+  /* ── 타이틀 ── */
+  .title-screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; color: #fff; cursor: pointer; }
+  .title-screen .logo { animation: logoDrop .7s var(--ease-pop) both; }
+  @keyframes logoDrop { from { opacity: 0; transform: translateY(-60px) rotate(-4deg) scale(.8); } to { opacity: 1; transform: rotate(-4deg); } }
+  .tap-hint {
+    margin-top: 40px; padding: 10px 22px; border-radius: 999px; background: var(--navy-soft); font-size: 18px;
+    animation: pulse 1.3s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.06); opacity: .75; } }
+  .studio { position: absolute; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); font-size: 13px; color: rgba(255,255,255,.9); letter-spacing: 1px; }
+
+  /* ── 스테이지 선택 ── */
   .stage-select {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    height: 100%; gap: 16px; color: #fff; background: var(--navy-soft);
-    overflow-y: auto; padding: 24px 0; /* SE2(667px)에서도 설정 버튼까지 닿도록 넘치면 스크롤 */
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+    gap: 14px; color: #fff; overflow-y: auto; padding: 22px 16px 28px;
   }
-  .settings-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 90%; max-width: 420px; }
-  .settings-row .quality-toggle { margin-top: 0; padding: 8px 14px; }
-  .stage-select h1 { font-size: 30px; margin-bottom: 8px; color: var(--yellow); text-shadow: 0 2px 0 rgba(0,0,0,0.35); }
-  .stage-list { display: flex; flex-direction: column; gap: 10px; width: 85%; max-width: 400px; }
+  .stage-select .logo { margin-bottom: 6px; }
+  .stage-list { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 420px; }
   .stage-btn {
-    display: flex; flex-direction: column; align-items: flex-start;
-    padding: 14px 16px; border-radius: 12px; border: none; border-left: 5px solid var(--yellow);
-    background: rgba(255,255,255,0.08); color: #fff; min-height: 44px;
+    position: relative; display: flex; align-items: center; gap: 12px; text-align: left;
+    padding: 12px 14px; border-radius: 18px; background: #fff; color: var(--navy); min-height: 64px;
+    box-shadow: 0 5px 0 #c9d3ea, 0 10px 18px rgba(20,26,51,.18);
   }
-  .stage-name { font-size: 17px; font-weight: 600; }
-  .stage-motif { font-size: 12px; opacity: 0.7; margin-top: 4px; }
-  .quality-toggle {
-    margin-top: 12px; padding: 10px 18px; border-radius: 20px; border: 1px solid var(--yellow);
-    background: rgba(255,184,13,0.12); color: #fff; min-height: 44px; min-width: 44px;
+  .stage-num {
+    flex: none; width: 40px; height: 40px; border-radius: 12px; background: var(--yellow);
+    display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--navy);
+    box-shadow: inset 0 -3px 0 var(--yellow-deep);
   }
+  .stage-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .stage-name { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stage-motif { font-size: 12px; color: #5b6488; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  .stage-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #5b6488; }
+  .stars { color: var(--yellow-deep); letter-spacing: 1px; }
+  .stage-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 12px; }
+  .badge { padding: 3px 8px; border-radius: 999px; font-size: 12px; background: #eef1f8; color: #5b6488; }
+  .badge.clear { background: var(--green); color: #fff; }
+  .badge.rank { background: var(--navy); color: var(--yellow); font-size: 14px; min-width: 28px; text-align: center; }
+  .settings-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; max-width: 420px; margin-top: 4px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 14px; border-radius: 999px;
+    background: var(--navy); color: #fff; font-size: 14px; box-shadow: 0 4px 0 #0a0e1f;
+  }
+  .pill svg { width: 18px; height: 18px; color: var(--yellow); }
 
-  /* .hud는 전체 화면을 덮는 오버레이지만, 실제 조작(드래그 스타트/밸런스/게이트 탭)은
-     input.js가 캔버스에서 직접 받아야 하므로 hud 자체는 클릭을 통과시키고
-     그 안의 실제 버튼(camera-toggle)만 다시 pointer-events: auto로 살린다.
-     (#uiRoot .screen의 pointer-events:auto보다 명시도가 같거나 높아야 하므로 #uiRoot .hud로 지정) */
+  /* ── HUD ── .hud는 클릭을 통과시키고(캔버스가 밸런스/게이트 입력을 받음) 실제 버튼만 다시 살림 */
   #uiRoot .hud { position: relative; height: 100%; pointer-events: none; }
-  .top-bar {
-    position: absolute; top: 12px; left: 0; right: 0;
-    display: flex; justify-content: space-between; padding: 0 16px;
-    color: #fff; font-size: 15px; text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  .hud-top { position: absolute; top: 10px; left: 12px; right: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .progress { height: 8px; border-radius: 999px; background: rgba(20,26,51,.45); overflow: hidden; }
+  .progress-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--yellow), #ffd966); }
+  .hud-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; color: #fff; }
+  .stage-chip {
+    max-width: 44%; padding: 5px 10px; border-radius: 999px; background: var(--navy-soft); font-size: 13px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  .speedo { text-align: center; line-height: 1; text-shadow: 0 2px 0 var(--navy), 0 0 12px rgba(20,26,51,.5); }
+  .speedo .num { font-size: 34px; color: #fff; -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; }
+  .speedo .unit { font-size: 13px; color: var(--yellow); margin-left: 2px; }
+  .speedo .sub { display: block; margin-top: 4px; font-size: 12px; color: #fff; }
+  .combo-chip {
+    min-width: 64px; padding: 5px 10px; border-radius: 12px; background: var(--yellow); color: var(--navy);
+    text-align: center; line-height: 1.1; box-shadow: 0 3px 0 var(--yellow-deep);
+  }
+  .combo-chip small { display: block; font-size: 10px; letter-spacing: 1px; }
+  .combo-chip b { font-size: 18px; font-weight: normal; }
+  .combo-chip.bump { animation: bump .25s var(--ease-pop); }
+  @keyframes bump { 50% { transform: scale(1.18); } }
+
+  /* 판정 토스트(게이트 탭 결과) */
+  .judge { position: absolute; top: 24%; left: 0; right: 0; text-align: center; pointer-events: none; font-size: 40px;
+    -webkit-text-stroke: 6px var(--navy); paint-order: stroke fill; opacity: 0; }
+  .judge.show { animation: judgePop .7s var(--ease-pop) forwards; }
+  @keyframes judgePop { 0% { opacity: 0; transform: scale(.4); } 25% { opacity: 1; transform: scale(1.1); } 70% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: translateY(-20px); } }
+  .judge.perfect { color: var(--yellow); } .judge.good { color: var(--green); } .judge.miss { color: var(--red); }
+
+  /* 밸런스 가이드(커브 구간) / 게이트 타이밍 가이드 */
+  .guide { position: absolute; left: 50%; transform: translateX(-50%); width: min(240px, 64vw); pointer-events: none; opacity: 0; transition: opacity .2s ease; }
+  .guide.on { opacity: 1; }
+  .guide-label { text-align: center; color: #fff; font-size: 13px; margin-bottom: 5px; -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; }
+  .guide-bar { position: relative; height: 14px; border-radius: 999px; background: rgba(20,26,51,.6); border: 2px solid rgba(255,255,255,.7); overflow: hidden; }
+  .guide-zone { position: absolute; top: 0; bottom: 0; background: rgba(255,184,13,.85); }
+  .guide-marker { position: absolute; top: -3px; width: 8px; height: 16px; margin-left: -4px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 2px var(--navy); }
+  .guide.balance { bottom: calc(104px + env(safe-area-inset-bottom, 0px)); }
+  .guide.gate { top: 16%; }
+  .guide.gate.ready .guide-zone { background: var(--green); }
+
   .start-bar {
     position: absolute; bottom: 22%; left: 50%; transform: translateX(-50%);
     display: flex; flex-direction: column; align-items: center; gap: 10px;
     pointer-events: auto; touch-action: none; /* 이 안에서만 드래그를 받고 브라우저 제스처는 차단 */
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transition: opacity .3s ease, transform .3s ease;
   }
   .start-bar.launched { opacity: 0; transform: translateX(-50%) translateY(16px); pointer-events: none; }
-  .start-bar-label { color: #fff; font-size: 15px; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+  .start-bar-label { color: #fff; font-size: 18px; -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; }
   .start-bar-track {
-    position: relative; width: 220px; height: 56px; border-radius: 28px;
-    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.35);
+    position: relative; width: 240px; height: 60px; border-radius: 30px;
+    background: rgba(20,26,51,.55); border: 3px solid #fff; box-shadow: 0 6px 16px rgba(0,0,0,.25);
   }
-  .start-bar-fill {
-    position: absolute; top: 4px; left: 4px; height: calc(100% - 8px); width: 0;
-    border-radius: 24px; background: var(--yellow);
+  .start-bar-track::after { /* 당기는 방향 힌트 화살표 */
+    content: '›››'; position: absolute; right: 18px; top: 50%; transform: translateY(-52%); color: rgba(255,255,255,.55);
+    font-size: 26px; letter-spacing: 2px; animation: nudge 1s ease-in-out infinite;
   }
+  @keyframes nudge { 50% { transform: translate(6px, -52%); } }
+  .start-bar-fill { position: absolute; top: 4px; left: 4px; height: calc(100% - 8px); width: 0; border-radius: 26px; background: var(--yellow); }
   .start-bar-handle {
-    position: absolute; top: 4px; left: 4px; width: 48px; height: 48px; border-radius: 50%;
-    background: #fff; color: var(--navy); display: flex; align-items: center; justify-content: center;
-    font-size: 18px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    position: absolute; top: 4px; left: 4px; width: 46px; height: 46px; border-radius: 50%;
+    background: var(--yellow); color: var(--navy); display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 0 var(--yellow-deep), 0 4px 10px rgba(0,0,0,.35); z-index: 1;
   }
+  .start-bar-handle svg { width: 24px; height: 24px; }
   .hud-controls {
-    position: absolute; bottom: env(safe-area-inset-bottom, 16px); right: 16px;
-    display: flex; align-items: center; gap: 8px; pointer-events: auto;
+    position: absolute; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); right: 14px;
+    display: flex; align-items: center; gap: 10px; pointer-events: auto;
   }
   .hud-icon-btn {
-    width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--yellow);
-    background: #fff; color: var(--navy); font-size: 18px;
+    width: 46px; height: 46px; padding: 0; border-radius: 50%; background: #fff; color: var(--navy);
     display: flex; align-items: center; justify-content: center; pointer-events: auto;
+    box-shadow: 0 4px 0 #b8c2dc, 0 6px 12px rgba(0,0,0,.25);
   }
-  .hud-icon-btn svg { width: 20px; height: 20px; }
-  .hud-icon-btn:disabled { opacity: 0.4; }
-  .camera-toggle {
-    width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 2px solid var(--yellow);
-    background: #fff; color: var(--navy); min-height: 44px; min-width: 44px;
-    display: flex; align-items: center; justify-content: center; pointer-events: auto;
-  }
-  .camera-toggle svg { width: 22px; height: 22px; }
-  .camera-toggle:disabled { opacity: 0.4; }
+  .hud-icon-btn svg { width: 22px; height: 22px; }
 
-  .result {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    height: 100%; gap: 14px; color: #fff; background: var(--navy-soft);
-  }
-  .result h2 { color: var(--yellow); font-size: 26px; }
-  .result .score { font-size: 22px; }
-  .result button {
-    padding: 12px 22px; border-radius: 12px; border: none; min-height: 44px; color: #fff;
-    background: rgba(255,255,255,0.15);
-  }
-  .result button#retryBtn { background: var(--yellow); color: var(--navy); font-weight: 600; }
-
-  /* 일시정지/로딩/에러/조작법 안내 공용 오버레이 */
+  /* ── 모달(일시정지/로딩/에러/조작법/크레딧/결과) ── */
   .modal-overlay {
     position: absolute; inset: 0; z-index: 20; pointer-events: auto;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 14px; padding: 24px; text-align: center; color: #fff; background: rgba(20,26,51,0.88);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+    background: rgba(12, 16, 36, .62); color: var(--navy);
   }
-  /* 스테이지 선택 화면 위에 뜨는 조작법 안내는 배경 DOM 텍스트와 겹쳐 보이지 않도록 완전 불투명 */
-  #howtoOverlay { background: var(--navy); }
-  .modal-overlay h2 { font-size: 22px; color: var(--yellow); }
-  .modal-overlay p { font-size: 14px; line-height: 1.5; opacity: 0.85; }
-  .modal-overlay button {
-    padding: 12px 22px; border-radius: 12px; border: none; min-height: 44px;
-    background: rgba(255,255,255,0.15); color: #fff;
+  .modal-overlay.solid { background: linear-gradient(180deg, var(--sky-top), var(--sky-bottom)); }
+  .card {
+    width: 100%; max-width: 360px; border-radius: 24px; background: #fff; padding: 26px 22px 22px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+    box-shadow: 0 8px 0 #c9d3ea, 0 18px 40px rgba(0,0,0,.35);
   }
-  .modal-overlay button.primary { background: var(--yellow); color: var(--navy); font-weight: 600; }
+  .card h2 { font-size: 28px; color: var(--navy); }
+  .card p { font-size: 15px; line-height: 1.5; color: #4a5378; }
+  .card .actions { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 4px; }
+  .ribbon {
+    margin-top: -46px; padding: 8px 26px; border-radius: 14px; background: var(--yellow); color: var(--navy);
+    font-size: 24px; box-shadow: 0 4px 0 var(--yellow-deep);
+  }
+  .loading-card { background: transparent; box-shadow: none; color: #fff; }
+  .loading-card p { color: #fff; }
   .spinner {
-    width: 36px; height: 36px; border-radius: 50%;
-    border: 4px solid rgba(255,255,255,0.25); border-top-color: var(--yellow);
-    animation: spin 0.8s linear infinite;
+    width: 54px; height: 54px; border-radius: 50%;
+    border: 6px solid rgba(255,255,255,.35); border-top-color: var(--yellow);
+    animation: spin .8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .howto-list { display: flex; flex-direction: column; gap: 10px; text-align: left; max-width: 320px; }
-  .howto-list p { font-size: 14px; }
-  #creditsOverlay { background: var(--navy); }
-  .credits-list { display: flex; flex-direction: column; gap: 14px; max-width: 320px; }
-  .credits-list p { font-size: 14px; line-height: 1.5; }
-  .credits-list a { color: var(--yellow); }
+  .howto-list { display: flex; flex-direction: column; gap: 10px; width: 100%; text-align: left; }
+  .howto-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: #f2f5fb; }
+  .howto-item .ico { flex: none; width: 42px; height: 42px; border-radius: 12px; background: var(--navy); color: var(--yellow); display: flex; align-items: center; justify-content: center; }
+  .howto-item .ico svg { width: 24px; height: 24px; }
+  .howto-item b { display: block; font-weight: normal; font-size: 16px; color: var(--navy); }
+  .howto-item span { font-size: 13px; color: #5b6488; line-height: 1.35; }
+  .credits-list { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+  .credits-list p { font-size: 14px; line-height: 1.45; }
+  .credits-list strong { color: var(--navy); font-weight: normal; font-size: 15px; }
+  .credits-list a { color: #2f6fd6; }
+
+  /* 결과 */
+  .result-card { gap: 12px; }
+  .rank {
+    width: 92px; height: 92px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 54px; color: var(--navy); background: var(--yellow); box-shadow: inset 0 -6px 0 var(--yellow-deep), 0 6px 14px rgba(0,0,0,.2);
+    animation: rankIn .6s .15s var(--ease-pop) both;
+  }
+  .rank.S { background: linear-gradient(135deg, #ffe066, #ffb80d); } .rank.C { background: #d8deee; box-shadow: inset 0 -6px 0 #b8c2dc; }
+  @keyframes rankIn { from { opacity: 0; transform: scale(.2) rotate(-30deg); } to { opacity: 1; transform: none; } }
+  .result-stage { font-size: 14px; color: #5b6488; }
+  .result-score { font-size: 40px; color: var(--navy); line-height: 1; }
+  .result-score small { display: block; font-size: 13px; color: #5b6488; margin-bottom: 4px; }
+  .new-best { padding: 3px 12px; border-radius: 999px; background: var(--red); color: #fff; font-size: 13px; animation: pulse 1s ease-in-out infinite; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+  .stat { padding: 10px; border-radius: 14px; background: #f2f5fb; text-align: left; }
+  .stat small { display: block; font-size: 12px; color: #5b6488; }
+  .stat b { font-weight: normal; font-size: 20px; color: var(--navy); }
+  .stat.full { grid-column: 1 / -1; }
+  .judge-row { display: flex; gap: 6px; margin-top: 4px; }
+  .judge-row span { flex: 1; padding: 4px 0; border-radius: 8px; text-align: center; font-size: 13px; color: #fff; }
+  .judge-row .p { background: #e0a000; } .judge-row .g { background: #27b36a; } .judge-row .m { background: #e5484d; }
 
   .rotate-warning {
     display: none; position: fixed; inset: 0; z-index: 9999;
     flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-    background: var(--navy); color: #fff; text-align: center; font-family: 'Jua', sans-serif;
+    background: var(--navy); color: #fff; text-align: center; font-family: 'Jua', sans-serif; font-size: 18px;
   }
-  .rotate-icon { font-size: 48px; animation: rotate-hint 1.6s ease-in-out infinite; }
+  .rotate-icon { width: 64px; height: 64px; color: var(--yellow); animation: rotate-hint 1.6s ease-in-out infinite; }
   @keyframes rotate-hint { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(90deg); } }
   /* 폰 세로 전용 UI(스타트 바/게이트 탭 영역 비율) 기준 — 가로 폭이 넓은 태블릿/데스크톱 창은 제외 */
   @media (orientation: landscape) and (max-height: 500px) {
     .rotate-warning { display: flex; }
   }
-
-  @media (prefers-color-scheme: light) {
-    /* 라이트 모드에서도 UI는 게임 톤 유지 위해 다크 오버레이 고정 */
+  @media (max-height: 620px) { /* 아주 낮은 화면: 타이틀/목록 간격 축소 */
+    .logo-ko { font-size: 54px; } .stage-btn { min-height: 56px; padding: 9px 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   }
 </style>
 </head>
@@ -178,7 +306,7 @@
   <canvas id="renderCanvas"></canvas>
   <div id="uiRoot"></div>
   <div class="rotate-warning" id="rotateWarning">
-    <div class="rotate-icon">📱</div>
+    <svg class="rotate-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
     <p>세로로 돌려주세요</p>
   </div>
 

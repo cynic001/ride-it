@@ -36,6 +36,11 @@ class Cart {
     this._lastHeight = null;
     this._gateResults = [];    // 게이트 판정 기록 (디버그/리더보드용)
     this._lastBalanceTier = null; // 밸런스 판정 tier 변화 감지용(오디오 이벤트 중복 발생 방지)
+
+    // 결과 화면 통계용(판정/물리에는 관여하지 않음)
+    this.maxCombo = 0;
+    this.balanceTicks = { perfect: 0, good: 0, miss: 0 }; // 커브 구간 고정 스텝(1/60초) 단위 판정 누적
+    this.maxSpeed = 0;
   }
 
   /** 스타트: 드래그 거리(pullStrength) × release 순간 속도(flickMultiplier)로 초기 속도 부여 */
@@ -96,6 +101,7 @@ class Cart {
         this.combo = 0;
         tier = 'miss';
       }
+      this.balanceTicks[tier] += 1;
       // tier가 바뀔 때만 이벤트 발생 — 매 틱(60Hz) 발사하면 사운드가 겹쳐 스팸이 됨
       if (tier !== this._lastBalanceTier) {
         window.dispatchEvent(new CustomEvent('balance-result', { detail: tier }));
@@ -104,6 +110,9 @@ class Cart {
     } else {
       this._lastBalanceTier = null; // 밸런스 불필요 구간을 지나면 리셋 — 다음 커브 진입 시 다시 엣지 감지되도록
     }
+
+    this.maxCombo = Math.max(this.maxCombo, this.combo);
+    this.maxSpeed = Math.max(this.maxSpeed, this.speed);
 
     // 에어타임(손들기) 보너스
     if (seg.airtimeZone && this.airtimeHolding) {
@@ -147,6 +156,7 @@ class Cart {
 
     if (result === 'perfect') this.combo += 3;
     else if (result === 'miss') this.combo = 0;
+    this.maxCombo = Math.max(this.maxCombo, this.combo);
   }
 
   get isFinished() {

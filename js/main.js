@@ -57,6 +57,7 @@ const Game = {
     const stageMultiplier = stageData.baseSpeedKmh / 45; // 1단계(45km/h) 대비 배율로 정규화
 
     this.cart = new Cart(this.track, stageMultiplier, LapsManager.current);
+    if (this.input) this.input.dispose(); // 이전 스테이지 입력 리스너가 남아 탭이 중복 판정되던 문제 방지
     if (this.camera) this.camera.dispose(); // 이전 스테이지 카메라가 activeCamera로 남아 빈 하늘만 보이던 문제 방지
     this.camera = new CoasterCamera(this.scene, this.canvas);
     this._setupPipeline();
@@ -313,7 +314,7 @@ const Game = {
       AudioManager.updateWind(0);
       AudioManager.setAirtimeHold(false);
       this.camera.unlockToggle(); // 이미 풀려있겠지만 안전장치
-      UI.showResult(this.cart.score, this.currentStageIndex);
+      UI.showResult(this.cart, this.currentStageIndex);
       this.engine.stopRenderLoop();
     }
 
@@ -332,7 +333,7 @@ window.Game = Game;
 
 window.addEventListener('DOMContentLoaded', () => {
   Game.init();
-  UI.showStageSelect(STAGES, stageIndex => Game.loadStage(stageIndex));
+  UI.showTitle(() => UI.showStageSelect(STAGES, stageIndex => Game.loadStage(stageIndex)));
 });
 
 // iOS Safari 등 자동재생 제한 대응 — 페이지 전체에서 가장 먼저 발생하는 pointerdown(스테이지
