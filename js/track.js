@@ -192,10 +192,11 @@ class Track {
     const pillarBB = this._extent(pillarTemplate);
     const railTopY = this._extent(railTemplate).y * KIT_SCALE;
     const HANGING_SIDE_OFFSET = 2.2;
-    this._sampleLoop(PILLAR_SPACING_M).forEach(({ pos, tangent }, k) => {
+    this._sampleLoop(PILLAR_SPACING_M).forEach(({ pos, tangent, s: arc }, k) => {
       if (pos.y < 0.5) return; // 지면 높이 근처는 지지대 불필요
       const side = new BABYLON.Vector3(-tangent.z, 0, tangent.x).normalize();
       const base = isHanging ? pos.add(side.scale(HANGING_SIDE_OFFSET)) : pos;
+      if (this._pillarHitsLowerTrack(base, pos.y, arc)) return;
       const topY = isHanging ? pos.y + railTopY : pos.y;
       const inst = pillarTemplate.createInstance(`pillar_${k}`);
       inst.scaling.set(KIT_SCALE, topY / pillarBB.y, KIT_SCALE);
@@ -212,16 +213,18 @@ class Track {
       }
     });
 
-    // 스테이션: 1.5m 플랫폼 타일을 출발점(t=0) 앞뒤로 이어 붙임 — 뱅킹 없이 수평 유지
+    // 스테이션: 1.5m 플랫폼 타일을 출발점(t=0) "뒤쪽"(트랙 끝 = 스테이션 진입부)에만 이어 붙임 — 실제 열차처럼
+    // 플랫폼 앞끝에서 출발(타일은 뱅킹 없이 피치만 따라감). 출발점 앞쪽은 4·5단계에서 곧바로 낙하 경사라, 앞뒤로 깔면 경사면에 계단식으로 박혔음
     const stationSpacing = this._extent(stationTemplate).z * KIT_SCALE;
-    const STATION_HALF_LEN = 4.5;
+    const STATION_LEN = 9;
     this._sampleLoop(stationSpacing)
-      .filter(({ s, L }) => s <= STATION_HALF_LEN || s >= L - STATION_HALF_LEN)
+      .filter(({ s, L }) => s === 0 || s >= L - STATION_LEN)
       .forEach(({ pos, tangent }, k) => {
         const inst = stationTemplate.createInstance(k === 0 ? 'station' : `station_${k}`);
         inst.scaling.setAll(KIT_SCALE);
-        inst.position.copyFrom(pos);
-        inst.lookAt(pos.add(new BABYLON.Vector3(tangent.x, 0, tangent.z)));
+        // 인버티드는 카트가 레일 아래 약 1.1m까지 매달리므로 플랫폼도 카트 바닥 높이로 내림(레일 옆에 있으면 허공 승강장)
+        inst.position.copyFrom(isHanging ? pos.add(new BABYLON.Vector3(0, -1.6, 0)) : pos);
+        inst.lookAt(inst.position.add(tangent)); // 트랙 경사를 그대로 따름 — 수평 고정이면 드롭 직전 크레스트(4·5단계)에서 계단처럼 어긋남
         this._meshes.push(inst);
       });
 
@@ -241,6 +244,18 @@ class Track {
   /** high 프리셋 그림자 캐스터 — 레일/지지대/스테이션/소품 인스턴스(풀·덤불은 그림자 효과 대비 비용이 커서 제외) */
   shadowCasters() {
     return this._meshes.filter(m => m instanceof BABYLON.InstancedMesh && !/^(grass|plant)/.test(m.name));
+  }
+
+  /** 지지대(base 수직선, 0~topY)가 아래쪽을 지나는 다른 트랙 구간을 관통하는지 — 교차 구간 위쪽 레일의
+   * 지지대가 아래 레일을 뚫고 내려가는 것 방지(실제 코스터도 교차부는 옆으로 비켜 받침) */
+  _pillarHitsLowerTrack(base, topY, arc) {
+    if (!this._pillarProbe) this._pillarProbe = this._sampleLoop(1);
+    const L = this._pillarProbe[0].L;
+    return this._pillarProbe.some(p => {
+      const d = Math.abs(p.s - arc);
+      if (Math.min(d, L - d) < 12) return false; // 자기 자신 주변 구간 제외
+      return p.pos.y < topY - 1 && Math.hypot(p.pos.x - base.x, p.pos.z - base.z) < 1.5;
+    });
   }
 
   /** 트랙 수평거리 판정용 샘플 — 3m 간격이면 1680m 트랙도 560점 남짓이라 전수 비교해도 충분히 가벼움 */

@@ -130,6 +130,13 @@ const Game = {
     // 실제 지오메트리 메시(meshes[1])를 부모에서 분리해 깨끗한 트랜스폼으로 사용
     this.cartMesh = result.meshes[1];
     this.cartMesh.parent = null;
+    // 인버티드 카트(coaster-train-hanging)는 원점이 차체 중심에서 옆으로 약 0.3 치우쳐 있어 레일 옆에 매달려
+    // 보였음 — 바운딩박스 수평 중심을 원점으로 옮겨 레일 바로 아래에 오도록(대칭 모델은 사실상 변화 없음)
+    const cbb = this.cartMesh.getBoundingInfo().boundingBox;
+    const cx = (cbb.minimum.x + cbb.maximum.x) / 2, cz = (cbb.minimum.z + cbb.maximum.z) / 2;
+    if (Math.abs(cx) > 0.01 || Math.abs(cz) > 0.01) {
+      this.cartMesh.bakeTransformIntoVertices(BABYLON.Matrix.Translation(-cx, 0, -cz));
+    }
     this.cartMesh.scaling.setAll(KIT_SCALE);
     // 카트 도장면 광택 — Kenney 기본값(거친 무광)보다 반사를 살려 IBL 하늘이 비치게
     const cartMat = this.cartMesh.material;

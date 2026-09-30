@@ -101,7 +101,10 @@ class InputController {
     if (this.state !== 'launched') return;
     try { this.canvas.setPointerCapture(e.pointerId); } catch (err) { /* iOS Safari 대응 */ }
 
-    const isBalanceZone = e.clientY > this.canvas.height * (1 - this._balanceZoneRatio);
+    // canvas.height는 렌더 해상도(하드웨어 스케일링 반영)라 CSS 픽셀 clientY와 단위가 다름 — low 프리셋(스케일 1.5)에서
+    // 게이트 탭 영역이 화면 위 1/3로 줄어들던 문제. 화면상 크기(getBoundingClientRect) 기준으로 비교
+    const rect = this.canvas.getBoundingClientRect();
+    const isBalanceZone = e.clientY - rect.top > rect.height * (1 - this._balanceZoneRatio);
     if (isBalanceZone) {
       this._dragStart = { x: e.clientX, y: e.clientY };
     } else {

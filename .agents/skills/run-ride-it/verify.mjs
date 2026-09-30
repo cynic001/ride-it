@@ -130,7 +130,12 @@ async function main() {
       const lean = await page.evaluate(() => Game.cart.leanInput);
       await page.mouse.up();
       check(`${tag} balance swipe`, lean > 0.5, `leanInput=${lean.toFixed(2)}`);
+      // 게이트 탭: 화면 상단(150)과 중앙 약간 위(300 = 45%) 모두 게이트 판정으로 들어가야 함(하단 50%만 밸런스)
+      await page.evaluate(() => { window.__gates = 0; if (!window.__gateHooked) { window.__gateHooked = true; window.addEventListener('gate-result', () => window.__gates++); } });
       await page.mouse.click(187, 150);
+      await page.mouse.click(187, 300);
+      const gates = await page.evaluate(() => window.__gates);
+      check(`${tag} gate taps (top/upper-middle)`, gates === 2, `gate-result=${gates}`);
       await sleep(900);
       await shot(`${tag}_2_ride_3rd`);
       // 한 프레임 드로우콜 실측 — gl draw* 호출을 직접 세서 그림자/포스트프로세싱 패스까지 포함

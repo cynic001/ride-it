@@ -54,18 +54,29 @@ class CoasterCamera {
 
     let targetPos, targetLookAt, targetFov;
 
+    // 인버티드(hanging)는 카트가 레일 아래에 매달려 있으므로 카메라도 레일보다 낮게 — 위에서 보면 레일이 카트를 가림
+    const isHanging = track.stageData.railType === 'hanging';
+
     if (this.mode === CAMERA_MODES.THIRD_PERSON) {
       // 급커브(requiredLean 높음)일수록 카메라를 더 멀리·높이 띄워 지지대/레일을 뚫고 들어가
       // 보이는 것을 방지 (헤어핀 급커브에서 고정 8m 후방 지점이 안쪽 지지대와 겹치는 문제 확인)
       const bankFactor = seg.requiredLean || 0;
       const behind = tangent.scale(-(8 + bankFactor * 6));
-      const up = new BABYLON.Vector3(0, 3 + bankFactor * 4, 0);
+      // 인버티드는 카트 높이(레일 아래) 뒤쪽에서 — 레일 바로 위/안이면 레일 상자가 화면을 통째로 가림
+      const up = new BABYLON.Vector3(0, isHanging ? -0.8 - bankFactor : 3 + bankFactor * 4, 0);
       targetPos = cartPos.add(behind).add(up);
-      targetLookAt = cartPos;
+      targetLookAt = isHanging ? cartPos.add(new BABYLON.Vector3(0, -0.5, 0)) : cartPos;
       targetFov = this.baseFov + speedRatio * 0.25; // 속도감 연출: FOV 확장
     } else {
-      targetPos = cartPos.add(new BABYLON.Vector3(0, 1.2, 0));
-      targetLookAt = cartPos.add(tangent.scale(10));
+      // 월드 위쪽이 아니라 카트 기준 위쪽(트랙 법선)으로 띄우고 앞좌석 쪽으로 당김 — 월드 +Y로만 띄우면
+      // 4·5단계 급낙하처럼 카트가 크게 기울 때 카메라가 카트 몸체 안으로 들어가 화면이 통째로 가려졌음
+      let right = BABYLON.Vector3.Cross(BABYLON.Vector3.Up(), tangent);
+      if (right.lengthSquared() < 0.01) right = this._lastRight || BABYLON.Vector3.Right(); // 수직 구간 특이점
+      right.normalize();
+      this._lastRight = right;
+      const localUp = BABYLON.Vector3.Cross(tangent, right).normalize();
+      targetPos = cartPos.add(localUp.scale(isHanging ? -0.45 : 1.05)).add(tangent.scale(0.6));
+      targetLookAt = targetPos.add(tangent.scale(10));
       targetFov = this.baseFov + speedRatio * 0.15;
     }
 
