@@ -14,7 +14,7 @@ const CORE = [
   './',
   'index.html',
   'manifest.webmanifest',
-  'js/quality.js', 'js/audio.js', 'js/stages.js', 'js/track.js', 'js/cart.js',
+  'js/quality.js', 'js/style.js', 'js/audio.js', 'js/stages.js', 'js/track.js', 'js/cart.js',
   'js/camera.js', 'js/input.js', 'js/ui.js', 'js/main.js',
   'assets/icons/icon-192.png', 'assets/icons/icon-512.png',
   'assets/vendor/polyhaven/sky_256.env',

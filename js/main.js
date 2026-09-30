@@ -61,6 +61,7 @@ const Game = {
     if (this.camera) this.camera.dispose(); // 이전 스테이지 카메라가 activeCamera로 남아 빈 하늘만 보이던 문제 방지
     this.camera = new CoasterCamera(this.scene, this.canvas);
     this._setupPipeline();
+    StyleManager.apply(this);
 
     // 레일/지지대/스테이션 + 카트 glb 로딩 동안 스피너 표시 — 끝나야 스타트 바 화면으로 전환
     UI.showLoadingOverlay();
@@ -68,6 +69,7 @@ const Game = {
     Promise.all([this.track.loadTrackMeshes(), this._loadCartMesh()])
       .then(() => {
         this._setupShadows();
+        StyleManager.apply(this); // 새로 로드된 glb 재질에 단계형 음영 적용
         // showStartPrompt가 스타트 바 DOM을 먼저 만들어야 InputController가 그 엘리먼트에 바인딩 가능
         UI.showStartPrompt(stageData.name, stageData.motif);
         this.input = new InputController(this.canvas, this.cart, this.camera, UI.startBarEl);
@@ -179,6 +181,7 @@ const Game = {
     scene.environmentTexture = env;
     scene.environmentIntensity = 0.9;
     const sky = scene.createDefaultSkybox(env, true, 1000, 0, false);
+    this._skybox = sky;
     sky.infiniteDistance = true;
     sky.applyFog = false; // 안개는 지형/소품에만 — 하늘까지 덮으면 뿌옇게 바랜 느낌
 
@@ -233,6 +236,7 @@ const Game = {
     this.engine.setHardwareScalingLevel(settings.textureResolution < 1024 ? 1.5 : 1);
     this._setupPipeline();
     this._setupShadows();
+    StyleManager.apply(this); // 파이프라인이 새로 만들어졌으니 스타일 색보정/외곽선 다시 적용
   },
 
   /** DefaultRenderingPipeline — low는 FXAA만(LDR), medium/high는 HDR + ACES 톤매핑 + 약한 bloom.
