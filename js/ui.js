@@ -359,7 +359,12 @@ const UI = {
         ${item(ICONS.arrowUp, '출발', '하단 바를 아래로 당겼다가 위로 휙 밀어 올리기 — 많이 당기고 빨리 올릴수록 세게')}
         ${drive}
         ${item(ICONS.tap, '부스트 게이트', '링을 지나는 순간 부스트 — 게이지 가운데 초록일 때 Perfect, 오래 세게 가속')}
-        ${item(ICONS.hand, '손 들기', '무중력 구간에서 누르고 있으면 에어타임 보너스')}
+        ${item(ICONS.hand, '손 들기', '무중력 구간·체인 리프트에서 누르고 있으면 보너스')}
+        ${item(ICONS.retry, '뒤로 떨어지기', '가파른 언덕에서 뒤로 미끄러질 수 있어요! 1단계는 부스터가 다시 쏴 주고, 4단계는 부스트 연타(톡톡·BOOST·↑)로 올라가요')}
+        ${item(ICONS.camera, '시점', '3인칭(기본)은 부스트·급하강 때 자동으로 1인칭 — 설정에서 1인칭 고정도 가능, 카메라 버튼은 잠깐 전환')}
+        <div class="howto-item legend"><span><b>바닥 표시</b><span class="legend-row">
+          <i style="background:#ffc61a"></i>부스트 <i style="background:#73d1ff"></i>손 들기 <i style="background:#59ff8c"></i>커브 방향
+          <i style="background:#ff801a"></i>급하강·물 <i style="background:#ff4099"></i>뒤로 떨어짐(2랩부터)</span></span></div>
         ${item(ICONS.sparkle, '키보드', '출발 ↓ 누르고 있다가 ↑ · 주행 ← → 밸런스, ↑ 부스트, Space 손 들기')}
       </div>
       <p class="field-desc">조작 방식(한손 / 한손+기울기 / 양손)은 설정(톱니바퀴)에서 바꿀 수 있어요.</p>
