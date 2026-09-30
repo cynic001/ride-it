@@ -161,6 +161,11 @@ async function main() {
       const launched = await page.evaluate(() => Game.cart.launched);
       check(`${tag} launch via start bar`, launched);
       if (s === STAGES[0]) check(`${tag} bgm ride mode after launch`, await page.evaluate(() => AudioManager._bgmMode === 'ride'));
+      // 최고속도 상한: 속도를 강제로 올려도 기본 속도×1.5에서 멈추고 HUD 속도계가 강조되어야 함
+      await page.evaluate(() => { Game.cart.speed = 999; });
+      await sleep(120);
+      const cap = await page.evaluate(() => ({ kmh: Game.cart.speed * 3.6, cap: Game.cart.maxSpeedMs * 3.6, capped: document.getElementById('speedo').classList.contains('capped') }));
+      check(`${tag} speed cap`, cap.kmh <= cap.cap + 0.01 && cap.capped, `${cap.kmh.toFixed(1)}/${cap.cap.toFixed(1)}km/h highlight=${cap.capped}`);
       if (!launched) continue;
 
       // 밸런스 스와이프(하단) + 게이트 탭(상단)
@@ -228,7 +233,8 @@ async function main() {
       await page.waitForSelector('#retryBtn', { timeout: 10000 });
       await sleep(700);
       await shot(`${tag}_5_result`);
-      check(`${tag} result screen`, true);
+      const sc = await page.evaluate(() => { const b = Game.cart.scoreBreakdown; return { score: Game.cart.score, sum: b.gate + b.balance + b.airtime + b.comboBonus + b.finishBonus, rows: document.querySelectorAll('.bd-row').length }; });
+      check(`${tag} result screen + score breakdown`, Math.abs(sc.score - sc.sum) < 0.5 && sc.rows >= 4, `score=${sc.score.toFixed(1)} sum=${sc.sum.toFixed(1)} rows=${sc.rows}`);
       await page.locator('#stageSelectBtn').click();
       await page.waitForSelector('.stage-btn');
       await sleep(300);

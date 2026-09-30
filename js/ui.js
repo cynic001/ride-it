@@ -301,8 +301,8 @@ const UI = {
           <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
           <div class="hud-row">
             <span class="stage-chip stage-label">${name}</span>
-            <span class="speedo"><span class="num" id="speedLabel">0</span><span class="unit">km/h</span><span class="sub turn-label" id="turnLabel"></span></span>
-            <span class="combo-chip" id="comboChip"><small>COMBO</small><b id="comboLabel">0</b></span>
+            <span class="speedo" id="speedo"><span class="max-tag">MAX</span><span class="num" id="speedLabel">0</span><span class="unit">km/h</span><span class="sub turn-label" id="turnLabel"></span></span>
+            <span class="combo-chip" id="comboChip"><small>COMBO</small><b id="comboLabel">0</b><small class="mult" id="comboMult">×1.0</small></span>
           </div>
         </div>
         <div class="judge" id="judgeToast"></div>
@@ -330,7 +330,7 @@ const UI = {
     `);
     const $ = id => document.getElementById(id);
     this._hud = {
-      speed: $('speedLabel'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'),
+      speed: $('speedLabel'), speedo: $('speedo'), comboMult: $('comboMult'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'),
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
       balance: $('balanceGuide'), balanceZone: $('balanceZone'), balanceMarker: $('balanceMarker'),
       gate: $('gateGuide'), gateLabel: $('gateGuideLabel'), gateZone: $('gateZone'), gateMarker: $('gateMarker'),
@@ -384,8 +384,10 @@ const UI = {
     if (!h || !h.speed.isConnected) return;
 
     h.speed.textContent = Math.round(cart.speed * 3.6); // m/s → km/h
+    h.speedo.classList.toggle('capped', cart.launched && cart.atSpeedCap); // 최고속도 상한 도달 강조
     if (cart.combo !== h.lastCombo) {
       h.combo.textContent = cart.combo;
+      h.comboMult.textContent = `×${cart.comboMultiplier.toFixed(1)}`;
       // 콤보는 커브 구간에서 매 틱 오르므로 10단위를 넘을 때만 튀는 연출(매 프레임 애니메이션 재시작 방지)
       if (Math.floor(cart.combo / 10) > Math.floor(h.lastCombo / 10)) {
         h.comboChip.classList.remove('bump');
@@ -434,18 +436,24 @@ const UI = {
     h.pauseBtn.disabled = !cart.launched;
   },
 
-  /** 결과 판정 요약 — 밸런스 정확도(커브 구간 good 이상 비율)와 게이트 성공률로 S/A/B/C */
+  /** 결과 판정 요약 — 랭크는 "판정 점수"(게이트+커브 밸런스 기본 점수) ÷ 그 스테이지 만점 비율.
+   * 에어타임은 초당 점수라 느리게 갈수록 쌓여(완벽 플레이보다 평균 플레이가 높아지는 역전) 랭크에서 제외하고,
+   * 콤보/피니쉬 배율도 제외해 순수 판정 실력만 반영. 기준은 score-sim.mjs 시뮬레이션으로 정함(개발기록 27번) */
   _summarize(cart, stageData) {
     const bt = cart.balanceTicks;
     const bTotal = bt.perfect + bt.good + bt.miss;
     const balanceAcc = bTotal ? (bt.perfect + bt.good) / bTotal : 1;
     const gates = { perfect: 0, good: 0, miss: 0 };
     cart._gateResults.forEach(g => { gates[g.result] += 1; });
-    const gateTotal = stageData.segments.filter(s => s.gate).length * cart.totalLaps; // 못 누른 게이트도 실패로 취급
-    const gateAcc = gateTotal ? (gates.perfect + gates.good * 0.6) / gateTotal : 1;
-    const r = balanceAcc * 0.6 + Math.min(1, gateAcc) * 0.4;
-    const rank = r >= 0.9 ? 'S' : r >= 0.75 ? 'A' : r >= 0.5 ? 'B' : 'C';
-    return { rank, balanceAcc, gates, gateMissed: Math.max(0, gateTotal - gates.perfect - gates.good - gates.miss) };
+    const gateCount = stageData.segments.filter(s => s.gate).length * cart.totalLaps; // 못 누른 게이트도 실패로 취급
+    const curveCount = stageData.segments.filter(s => s.requiredLean > 0).length * cart.totalLaps;
+    const judgeMax = gateCount * SCORE.gate.perfect + curveCount * SCORE.balancePerCurve;
+    const judgeRatio = judgeMax ? (cart.scoreBreakdown.gate + cart.scoreBreakdown.balance) / judgeMax : 1;
+    const rank = judgeRatio >= 0.9 ? 'S' : judgeRatio >= 0.7 ? 'A' : judgeRatio >= 0.45 ? 'B' : 'C';
+    return {
+      rank, balanceAcc, gates, judgeRatio, curveCount, curvesCleared: cart.curvesCleared || 0,
+      gateMissed: Math.max(0, gateCount - gates.perfect - gates.good - gates.miss),
+    };
   },
 
   showResult(cart, stageIndex) {
@@ -453,6 +461,7 @@ const UI = {
     const stageData = STAGES[stageIndex];
     const sum = this._summarize(cart, stageData);
     const score = Math.round(cart.score);
+    const bd = cart.scoreBreakdown;
     const rec = ProgressManager.record(stageData.id, score, sum.rank);
     this._setScreen(`
       <div class="screen modal-overlay" id="resultScreen">
@@ -462,6 +471,15 @@ const UI = {
           <div class="rank ${sum.rank}">${sum.rank}</div>
           <div class="result-score"><small>SCORE</small>${score.toLocaleString()}</div>
           ${rec.firstClear ? '<div class="new-best">첫 클리어!</div>' : rec.newBest ? '<div class="new-best">NEW BEST!</div>' : `<div class="result-stage">최고 ${ProgressManager.get(stageData.id).best.toLocaleString()}</div>`}
+          <div class="breakdown">
+            ${[
+              ['게이트', bd.gate],
+              [`밸런스 (커브 ${sum.curvesCleared}/${sum.curveCount})`, bd.balance],
+              ['에어타임', bd.airtime],
+              ['콤보 보너스', bd.comboBonus],
+              ...(bd.finishBonus > 0 ? [['피니쉬 보너스', bd.finishBonus]] : []),
+            ].map(([k, v]) => `<div class="bd-row"><span>${k}</span><b>+${Math.round(v).toLocaleString()}</b></div>`).join('')}
+          </div>
           <div class="stats">
             <div class="stat"><small>최고 콤보</small><b>${cart.maxCombo.toLocaleString()}</b></div>
             <div class="stat"><small>밸런스 정확도</small><b>${Math.round(sum.balanceAcc * 100)}%</b></div>

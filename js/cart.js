@@ -11,6 +11,18 @@ const MIN_SPEED = 2;          // 최소 속도 (m/s) — 완전 정지 방지
 // 오르막(특히 스테이지 후반 리프트 구간)에서 속도가 MIN_SPEED까지 떨어져 수십 초씩 정체하는
 // 현상을 확인, 리프트힐 체인모터 같은 "동력 보충" 역할을 하도록 상향 조정
 const BOOST_MULTIPLIER = { perfect: 2.2, good: 1.6 };
+// 최고속도 상한 = 스테이지 기본 속도 × 이 배율 — 부스트 연속 성공 시 배율이 누적되어 1500km/h 넘게 폭주하던 문제 방지
+const MAX_SPEED_FACTOR = 1.5;
+
+// 점수 체계 — 모든 획득 점수에 콤보 배율(콤보 10마다 +0.1, 최대 2배) 적용, 피니쉬 배율은 마지막에 총점에 곱함
+const SCORE = {
+  gate: { perfect: 300, good: 100, miss: 0 },
+  balancePerCurve: 100,     // 커브 세그먼트 하나를 밸런스 성공으로 통과 시 1회
+  balanceClearRatio: 0.7,   // 그 커브 구간 틱 중 판정창 안(good 이상) 비율이 이 이상이면 성공
+  airtimePerSecond: 120,    // 기존 값 유지(2점 × 60틱)
+};
+const AIRTIME_MIN_SPEED = 4; // m/s — 이 속도 이하(최저속도로 기어가는 정체 상태)에서는 에어타임 점수 없음
+const FINISH_MULTIPLIER = { perfect: 1.5, good: 1.2, miss: 1.0 };
 
 class Cart {
   /**
@@ -41,6 +53,42 @@ class Cart {
     this.maxCombo = 0;
     this.balanceTicks = { perfect: 0, good: 0, miss: 0 }; // 커브 구간 고정 스텝(1/60초) 단위 판정 누적
     this.maxSpeed = 0;
+    this.maxSpeedMs = track.stageData.baseSpeedKmh * MAX_SPEED_FACTOR / 3.6;
+    this.atSpeedCap = false;  // HUD 강조용
+    // 점수 원천별 내역 — 콤보 배율로 늘어난 몫은 comboBonus로 따로 집계(합계 = score)
+    this.scoreBreakdown = { gate: 0, balance: 0, airtime: 0, comboBonus: 0, finishBonus: 0 };
+    this._curve = null;        // 진행 중인 커브 세그먼트 { key, inWindow, total }
+    this._resolvedGates = new Set(); // 게이트당(랩별) 판정 1회 — 연타로 점수/부스트를 반복 획득하는 것 방지
+  }
+
+  /** 현재 콤보 배율: 콤보 10마다 +0.1배, 최대 2배 */
+  get comboMultiplier() {
+    return Math.min(2, 1 + Math.floor(this.combo / 10) * 0.1);
+  }
+
+  /** 원천별 기본 점수에 콤보 배율을 적용해 가산 */
+  _addScore(source, base) {
+    if (base <= 0) return;
+    const m = this.comboMultiplier;
+    this.scoreBreakdown[source] += base;
+    this.scoreBreakdown.comboBonus += base * (m - 1);
+    this.score += base * m;
+  }
+
+  _capSpeed() {
+    // 상한에 붙어 달리면 매 틱 마찰로 아주 조금씩 밑돌므로 1.5% 이내는 상한 도달로 취급(HUD 강조 깜빡임 방지)
+    this.atSpeedCap = this.speed >= this.maxSpeedMs * 0.985;
+    if (this.speed > this.maxSpeedMs) this.speed = this.maxSpeedMs;
+  }
+
+  /** 커브 세그먼트를 빠져나올 때(또는 완주 시) 그 구간의 밸런스 성공 여부로 1회 점수 */
+  _finalizeCurve() {
+    const c = this._curve;
+    this._curve = null;
+    if (c && c.total > 0 && c.inWindow / c.total >= SCORE.balanceClearRatio) {
+      this._addScore('balance', SCORE.balancePerCurve);
+      this.curvesCleared = (this.curvesCleared || 0) + 1;
+    }
   }
 
   /** 스타트: 드래그 거리(pullStrength) × release 순간 속도(flickMultiplier)로 초기 속도 부여 */
@@ -48,6 +96,7 @@ class Cart {
     // pullStrength: 0~1 (드래그 거리를 정규화한 값), flickMultiplier: 0.3~1.6 (release 속도 정규화값) — input.js에서 계산
     this.speed = (5 + pullStrength * 10) * flickMultiplier * this.stageMultiplier; // m/s
     this.launched = true;
+    this._capSpeed();
     this._lastHeight = this.track.getHeightAt(0);
   }
 
@@ -69,6 +118,7 @@ class Cart {
     // 마찰: 오르막/내리막에서는 위 에너지항이 지배적이라 체감이 작고, 평지에서만 초당 감쇠율이 뚜렷이 느껴짐
     this.speed *= Math.pow(FRICTION_RETAIN_PER_SECOND, dt);
     this.speed = Math.max(this.speed, MIN_SPEED);
+    this._capSpeed();
 
     // 진행률 갱신 (속도 * dt / 트랙길이)
     this.t += (this.speed * dt) / trackLength;
@@ -82,11 +132,14 @@ class Cart {
     }
 
     this._evaluateSegment(dt);
+    if (this.isFinished) this._finalizeCurve();
   }
 
   /** 현재 세그먼트의 밸런스/게이트 판정 처리 */
   _evaluateSegment(dt) {
     const seg = this.track.getSegmentAt(this.t);
+    const segKey = `${this.currentLap}:${seg.tStart}`;
+    if (this._curve && this._curve.key !== segKey) this._finalizeCurve();
 
     // 좌우 밸런스 판정 — 통과/실패 기준(leanWindow)은 그대로, tier는 오디오 피드백 선택용으로만 추가
     if (seg.requiredLean > 0) {
@@ -102,6 +155,9 @@ class Cart {
         tier = 'miss';
       }
       this.balanceTicks[tier] += 1;
+      if (!this._curve) this._curve = { key: segKey, inWindow: 0, total: 0 };
+      this._curve.total += 1;
+      if (tier !== 'miss') this._curve.inWindow += 1;
       // tier가 바뀔 때만 이벤트 발생 — 매 틱(60Hz) 발사하면 사운드가 겹쳐 스팸이 됨
       if (tier !== this._lastBalanceTier) {
         window.dispatchEvent(new CustomEvent('balance-result', { detail: tier }));
@@ -115,8 +171,10 @@ class Cart {
     this.maxSpeed = Math.max(this.maxSpeed, this.speed);
 
     // 에어타임(손들기) 보너스
-    if (seg.airtimeZone && this.airtimeHolding) {
-      this.score += 2 * dt * 60; // 초당 보너스 점수
+    // 최저속도 근처로 기어가는 중엔 제외 — 초당 점수라 정체될수록 오히려 점수가 쌓여 평균 플레이가 완벽 플레이를
+    // 이기는 역전이 시뮬레이션에서 확인됨(5단계 평균 48,016 vs 완벽 19,184). 정상 주행 시 획득률은 그대로
+    if (seg.airtimeZone && this.airtimeHolding && this.speed > AIRTIME_MIN_SPEED) {
+      this._addScore('airtime', SCORE.airtimePerSecond * dt); // 초당 보너스 점수(기존 값 유지)
     }
 
     // 게이트 판정은 input.js의 탭 이벤트에서 별도 처리 (타이밍 윈도우 대조)
@@ -126,6 +184,9 @@ class Cart {
   resolveGate(localT) {
     const seg = this.track.getSegmentAt(this.t);
     if (!seg.gate) return 'none';
+    const gateKey = `${this.currentLap}:${seg.tStart}`;
+    if (this._resolvedGates.has(gateKey)) return 'none';
+    this._resolvedGates.add(gateKey);
 
     const { start, end } = seg.gate.timingWindow;
     const center = (start + end) / 2;
@@ -149,14 +210,20 @@ class Cart {
     } else if (gateType === 'brake') {
       if (result === 'perfect') this.speed *= 0.9;
       else if (result === 'miss') this.speed *= 0.6; // 이탈 위험 연출
-    } else if (gateType === 'finish') {
-      const multiplier = result === 'perfect' ? 1.5 : result === 'good' ? 1.2 : 1.0;
-      this.score *= multiplier;
     }
+    this._capSpeed();
 
     if (result === 'perfect') this.combo += 3;
     else if (result === 'miss') this.combo = 0;
     this.maxCombo = Math.max(this.maxCombo, this.combo);
+
+    this._addScore('gate', SCORE.gate[result]);
+    if (gateType === 'finish') {
+      // 피니쉬 배율(기존 유지)은 그때까지의 총점에 곱함 — 늘어난 몫을 finishBonus로 기록
+      const multiplier = FINISH_MULTIPLIER[result];
+      this.scoreBreakdown.finishBonus += this.score * (multiplier - 1);
+      this.score *= multiplier;
+    }
   }
 
   get isFinished() {
