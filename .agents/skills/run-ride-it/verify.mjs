@@ -252,7 +252,9 @@ async function main() {
       await page.locator('#cameraToggleBtn').click();
       await sleep(900);
       await shot(`${tag}_3_ride_toggled`);
-      check(`${tag} camera button switches view temporarily`, await page.evaluate(v => Game.camera.mode !== v, viewBefore), `${viewBefore} → toggled`);
+      // 자동 전환(부스트/급하강) 도중엔 읽는 순간과 누르는 순간 사이에 화면이 바뀔 수 있으므로, "수동 전환이 걸렸고 그 목표 시점에 도달했는지"로 확인
+      const tog = await page.evaluate(() => { const c = Game.camera; return { active: c._clock < c._manualUntil, target: c._manualTarget ? 'first' : 'third', mode: c.mode }; });
+      check(`${tag} camera button switches view temporarily`, tog.active && tog.mode === tog.target, `${viewBefore} → ${tog.mode} (target ${tog.target})`);
 
       await page.locator('#pauseBtn').click();
       await sleep(350);

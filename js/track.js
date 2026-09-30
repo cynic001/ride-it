@@ -287,47 +287,111 @@ class Track {
 
     this._placeWater();
     this._placeGateMarkers(railTopY, isHanging);
-    this._placeRollbackMarkers(railTopY, isHanging);
+    this._placeEventMarkers(railTopY, isHanging);
     this._placeTrackside(railTopY, isHanging);
     this._placeTunnels(isHanging);
     await Promise.all([this._placeNatureProps(), this._placeParkProps()]);
   }
 
-  /** 뒤로 떨어지기 경고 표시 — 골짜기~꼭대기 레일 위 빨간 역방향 화살표. 매 플레이 첫 랩은 숨기고 두 번째 랩부터 보임 */
-  _placeRollbackMarkers(railTopY, isHanging) {
-    const z = this.rollbackZone;
-    if (!z) return;
+  /** 이벤트 구간 바닥 표시(9번) — 레일 사이에 눕힌 인스턴스 판. 종류별 색/모양:
+   *  부스트 = 노란 화살표 띠(진행 방향으로 흐르는 애니메이션) / 에어타임 = 하늘색 띠 + 손 / 커브 = 커브 방향 쉐브론 /
+   *  급하강·물 = 주황 경고 줄무늬 / 뒤로 떨어지기 = 빨간 역방향 화살표(매 플레이 두 번째 랩부터).
+   * 인스턴스 색(instancedBuffers.color)으로 카트가 다가올수록 밝아짐(updateEventMarkers). 겹치면 우선순위 높은 것만 */
+  _placeEventMarkers(railTopY, isHanging) {
     const scene = this.scene;
-    const tex = new BABYLON.DynamicTexture('rbTex', { width: 128, height: 128 }, scene, true);
-    const ctx = tex.getContext();
-    ctx.clearRect(0, 0, 128, 128);
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); // 아래(진행 반대 방향)를 가리키는 꺾쇠
-    ctx.moveTo(64, 114); ctx.lineTo(118, 58); ctx.lineTo(96, 36); ctx.lineTo(64, 68); ctx.lineTo(32, 36); ctx.lineTo(10, 58);
-    ctx.closePath(); ctx.fill();
-    tex.hasAlpha = true;
-    tex.update();
-    const m = new BABYLON.StandardMaterial('rbMat', scene);
-    m.diffuseTexture = tex; m.opacityTexture = tex; m.emissiveColor = new BABYLON.Color3(1, 0.2, 0.25);
-    m.disableLighting = true; m.backFaceCulling = false;
-    const plane = BABYLON.MeshBuilder.CreatePlane('rbChevron', { width: 1.3, height: 1.0 }, scene);
-    plane.rotation.x = Math.PI / 2;
-    plane.bakeCurrentTransformIntoVertices();
-    plane.material = m;
-    plane.setEnabled(false);
-    this._meshes.push(plane, m, tex);
     const L = this.lengthM;
+    const wrap = t => ((t % 1) + 1) % 1;
+    const draw = {
+      up: c => { c.beginPath(); c.moveTo(64, 14); c.lineTo(118, 70); c.lineTo(96, 92); c.lineTo(64, 60); c.lineTo(32, 92); c.lineTo(10, 70); c.closePath(); c.fill(); },
+      down: c => { c.beginPath(); c.moveTo(64, 114); c.lineTo(118, 58); c.lineTo(96, 36); c.lineTo(64, 68); c.lineTo(32, 36); c.lineTo(10, 58); c.closePath(); c.fill(); },
+      right: c => { c.beginPath(); c.moveTo(114, 64); c.lineTo(58, 10); c.lineTo(36, 32); c.lineTo(68, 64); c.lineTo(36, 96); c.lineTo(58, 118); c.closePath(); c.fill(); },
+      left: c => { c.beginPath(); c.moveTo(14, 64); c.lineTo(70, 10); c.lineTo(92, 32); c.lineTo(60, 64); c.lineTo(92, 96); c.lineTo(70, 118); c.closePath(); c.fill(); },
+      hand: c => { c.globalAlpha = 0.45; c.fillRect(0, 0, 128, 128); c.globalAlpha = 1; // 띠 바탕 + 손바닥
+        c.beginPath(); c.arc(64, 80, 26, 0, Math.PI * 2); c.fill();
+        [[38, 26], [54, 18], [70, 18], [86, 26]].forEach(([x, y]) => { c.beginPath(); c.roundRect ? c.roundRect(x - 7, y, 14, 46, 7) : c.rect(x - 7, y, 14, 46); c.fill(); });
+        c.save(); c.translate(96, 70); c.rotate(-0.7); c.fillRect(-7, -6, 14, 34); c.restore(); },
+      stripes: c => { for (let i = -128; i < 256; i += 32) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + 16, 0); c.lineTo(i + 144, 128); c.lineTo(i + 128, 128); c.closePath(); c.fill(); } },
+    };
+    const groups = {};
+    const makeGroup = (key, shape, color, size, scroll) => {
+      const tex = new BABYLON.DynamicTexture(`mk_${key}`, { width: 128, height: 128 }, scene, true);
+      const ctx = tex.getContext();
+      ctx.clearRect(0, 0, 128, 128);
+      ctx.fillStyle = '#ffffff';
+      draw[shape](ctx);
+      tex.hasAlpha = true;
+      tex.update();
+      if (scroll) tex.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
+      const m = new BABYLON.StandardMaterial(`mkMat_${key}`, scene);
+      // 인스턴스 색이 곱해지려면 조명 경로가 살아 있어야 함(disableLighting이면 결과가 검정) — 확산색은 검정, 자체발광 흰색×모양 텍스처
+      m.emissiveTexture = tex; m.opacityTexture = tex; m.backFaceCulling = false;
+      m.diffuseColor = BABYLON.Color3.Black(); m.specularColor = BABYLON.Color3.Black(); m.emissiveColor = BABYLON.Color3.White();
+      const plane = BABYLON.MeshBuilder.CreatePlane(`mk_${key}_tpl`, { width: size[0], height: size[1] }, scene);
+      plane.rotation.x = Math.PI / 2; // 레일 위에 눕히고 그림의 위쪽이 +Z(진행 방향)
+      plane.bakeCurrentTransformIntoVertices();
+      plane.material = m;
+      plane.registerInstancedBuffer('color', 4);
+      plane.instancedBuffers.color = new BABYLON.Color4(1, 1, 1, 1);
+      plane.setEnabled(false);
+      this._meshes.push(plane, m, tex);
+      groups[key] = { key, plane, tex, color, list: [], scroll };
+      return groups[key];
+    };
+    makeGroup('boost', 'up', [1, 0.78, 0.1], [1.3, 1.0], true);
+    makeGroup('rollback', 'down', [1, 0.25, 0.6], [1.6, 1.2], false); // 분홍빛 빨강 — 1단계의 붉은 레일과 구분되게
+    makeGroup('drop', 'stripes', [1, 0.5, 0.1], [1.4, 1.2], false);
+    makeGroup('curveL', 'left', [0.35, 1, 0.55], [1.2, 1.0], false);
+    makeGroup('curveR', 'right', [0.35, 1, 0.55], [1.2, 1.0], false);
+    makeGroup('air', 'hand', [0.45, 0.82, 1], [1.4, 1.2], false);
+
+    const occupied = [];
     const up = isHanging ? -0.08 : railTopY + 0.05;
-    this._rollbackMarkers = [];
-    for (let t = z.tValley; t <= z.tPeak; t += 3 / L) {
+    const add = (g, t) => {
+      t = wrap(t);
+      const s = t * L;
+      if (occupied.some(o => Math.min(Math.abs(o - s), L - Math.abs(o - s)) < 1.4)) return; // 이미 더 중요한 표시가 있음
+      occupied.push(s);
       const p = this.getPositionAt(t), tn = this.getTangentAt(t);
-      const c = plane.createInstance(`rbMark_${this._rollbackMarkers.length}`);
-      c.position = p.add(new BABYLON.Vector3(0, up, 0));
-      c.lookAt(c.position.add(tn), 0, 0, this.getBankRollAt(t));
-      c.setEnabled(false); // 첫 랩은 숨김
-      this._rollbackMarkers.push(c);
-      this._meshes.push(c);
-    }
+      const inst = g.plane.createInstance(`mk_${g.key}_${g.list.length}`);
+      inst.position = p.add(new BABYLON.Vector3(0, up, 0));
+      inst.lookAt(inst.position.add(tn), 0, 0, this.getBankRollAt(t));
+      inst.instancedBuffers.color = new BABYLON.Color4(g.color[0] * 0.4, g.color[1] * 0.4, g.color[2] * 0.4, 1);
+      g.list.push({ inst, t });
+      this._meshes.push(inst);
+    };
+    const step = (t0, t1, spacing, g) => { for (let s = t0 * L; s <= t1 * L; s += spacing) add(g, s / L); };
+    // 우선순위 순서대로 배치: 부스트 > 뒤로 떨어지기 > 급하강/물 > 커브 > 에어타임
+    this.gateCenters().filter(x => x.type === 'boost').forEach(({ t }) => step(t - 20 / L, t + 40 / L, 3, groups.boost));
+    if (this.rollbackZone) step(this.rollbackZone.tValley, this.rollbackZone.tPeak, 3, groups.rollback);
+    const S = this._sampleLoop(2.5);
+    S.forEach(q => { if (q.tangent.y < -0.35) add(groups.drop, q.t); });
+    if (this.splash) step(this.splash.t - 20 / L, this.splash.t + 20 / L, 2.5, groups.drop);
+    this.segmentRanges.forEach(seg => {
+      if (seg.requiredLean > 0) step(seg.tStart, Math.min(seg.tEnd, seg.tStart + 30 / L), 4, seg.curveDirection === 'left' ? groups.curveL : groups.curveR);
+    });
+    this.segmentRanges.forEach(seg => { if (seg.airtimeZone) step(seg.tStart, seg.tEnd, 6, groups.air); });
+    groups.rollback.list.forEach(({ inst }) => inst.setEnabled(false)); // 매 플레이 첫 랩은 숨김
+    this._markerGroups = Object.values(groups);
+    this._rollbackMarkers = groups.rollback.list.map(x => x.inst);
+  }
+
+  /** 카트 앞 120m 안의 표시는 가까울수록 밝게(0.4→1.0), 지나간 표시는 어둡게. animate=false(low)면 부스트 흐름 애니메이션 생략 */
+  updateEventMarkers(cartT, dt, animate) {
+    if (!this._markerGroups) return;
+    if (this._lastMarkerT !== undefined && Math.abs(cartT - this._lastMarkerT) * this.lengthM < 1 && !animate) return;
+    this._lastMarkerT = cartT;
+    const L = this.lengthM, AHEAD = 120;
+    this._markerGroups.forEach(g => {
+      if (g.scroll && animate) g.tex.vOffset -= dt * 1.6; // 화살표가 진행 방향으로 흐르는 빛
+      g.list.forEach(({ inst, t }) => {
+        let d = (t - cartT) * L;
+        if (d < -L / 2) d += L; else if (d > L / 2) d -= L;
+        const k = d >= 0 && d <= AHEAD ? 0.4 + 0.6 * (1 - d / AHEAD) : d < 0 && d > -10 ? 1 : 0.4;
+        if (Math.abs((inst._mkK ?? -1) - k) < 0.02) return; // 변화가 있을 때만 버퍼 갱신
+        inst._mkK = k;
+        inst.instancedBuffers.color = new BABYLON.Color4(g.color[0] * k, g.color[1] * k, g.color[2] * k, 1);
+      });
+    });
   }
 
   /** main.js가 랩이 바뀔 때 호출 — 두 번째 랩부터 경고 표시 */
@@ -542,26 +606,6 @@ class Track {
    * 진행률 ↔ 거리는 cart.js와 같은 모델(t × lengthM)로 환산 */
   _placeGateMarkers(railTopY, isHanging) {
     const scene = this.scene;
-    const tex = new BABYLON.DynamicTexture('chevronTex', { width: 128, height: 128 }, scene, true);
-    const ctx = tex.getContext();
-    ctx.clearRect(0, 0, 128, 128);
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); // 위(진행 방향)를 가리키는 굵은 화살 꺾쇠
-    ctx.moveTo(64, 14); ctx.lineTo(118, 70); ctx.lineTo(96, 92); ctx.lineTo(64, 60); ctx.lineTo(32, 92); ctx.lineTo(10, 70);
-    ctx.closePath(); ctx.fill();
-    tex.hasAlpha = true;
-    tex.update();
-    const mk = (name, color) => {
-      const m = new BABYLON.StandardMaterial(name, scene);
-      m.diffuseTexture = tex; m.opacityTexture = tex; m.emissiveColor = color;
-      m.disableLighting = true; m.backFaceCulling = false;
-      return m;
-    };
-    const chevron = BABYLON.MeshBuilder.CreatePlane('gateChevron', { width: 1.3, height: 1.0 }, scene);
-    chevron.rotation.x = Math.PI / 2; // 레일 위에 눕히고 화살표 끝이 +Z(진행 방향)를 향하게
-    chevron.bakeCurrentTransformIntoVertices();
-    chevron.material = mk('chevronMat', new BABYLON.Color3(1, 0.78, 0.1));
-    chevron.setEnabled(false);
     const ring = BABYLON.MeshBuilder.CreateTorus('gateRing', { diameter: 5.6, thickness: 0.28, tessellation: 32 }, scene);
     ring.rotation.x = Math.PI / 2; // 링 면이 진행 방향(Z)에 수직
     ring.bakeCurrentTransformIntoVertices();
@@ -574,11 +618,7 @@ class Track {
     finishRing.material = ringMat.clone('finishRingMat');
     finishRing.material.emissiveColor = new BABYLON.Color3(0.25, 1, 0.55);
     finishRing.setEnabled(false);
-    this._meshes.push(chevron, ring, finishRing, chevron.material, ringMat, finishRing.material, tex);
-
-    const L = this.lengthM;
-    const wrap = t => ((t % 1) + 1) % 1;
-    const up = isHanging ? -0.08 : railTopY + 0.04;
+    this._meshes.push(ring, finishRing, ringMat, finishRing.material);
     this.passMarkers = [];
     this.gateCenters().forEach(({ t, type }, g) => {
       const pos = this.getPositionAt(t), tan = this.getTangentAt(t);
@@ -588,14 +628,6 @@ class Track {
       r.lookAt(r.position.add(tan));
       this._meshes.push(r);
       this.passMarkers.push({ t, kind: 'ring' });
-      for (let d = -20; d <= 40; d += 3) {
-        const tt = wrap(t + d / L);
-        const p = this.getPositionAt(tt), tn = this.getTangentAt(tt);
-        const c = chevron.createInstance(`gateChevron_${g}_${d}`);
-        c.position = p.add(new BABYLON.Vector3(0, up, 0));
-        c.lookAt(c.position.add(tn), 0, 0, this.getBankRollAt(tt));
-        this._meshes.push(c);
-      }
     });
   }
 

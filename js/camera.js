@@ -88,8 +88,8 @@ class CoasterCamera {
   toggleMode() {
     if (this.locked) return;
     this.forceMode = null;
-    // 지금 향하고 있는 시점의 반대로 — 전환 도중(섞인 비율 기준)에 누르면 같은 시점을 고르는 경우가 있었음
-    this._manualTarget = (this._lastTarget ?? (this._blendLin >= 0.5 ? 1 : 0)) ? 0 : 1;
+    // 지금 화면에 보이는 시점의 반대로(사용자가 보고 누른 기준)
+    this._manualTarget = this._blendLin >= 0.5 ? 0 : 1;
     this._manualUntil = this._clock + MANUAL_VIEW_SEC;
   }
 

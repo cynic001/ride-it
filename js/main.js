@@ -423,6 +423,7 @@ const Game = {
     SpeedLines.draw(ratio > 0 ? intensity : 0, Math.min(dt, 0.05));
     if (this._motionBlur) this._motionBlur.motionStrength = Math.max(0, ratio - 0.4) * 0.9;
     this._updateBoostFx(dt, ratio);
+    if (this.track && this.cart) this.track.updateEventMarkers(this.cart.t, dt, QualityManager.current !== 'low');
     if (this._bannerSwing > 0.01 && this.track && this.track.finishBanner) { // 통과 순간 배너가 펄럭이다 잦아듦
       this._bannerSwing *= Math.exp(-dt * 1.5);
       this._bannerClock = (this._bannerClock || 0) + dt;
