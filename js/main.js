@@ -64,6 +64,7 @@ const Game = {
 
     // 레일/지지대/스테이션 + 카트 glb 로딩 동안 스피너 표시 — 끝나야 스타트 바 화면으로 전환
     UI.showLoadingOverlay();
+    AudioManager.setBgmMode('menu'); // 재도전 시 드럼 빠진 잔잔한 버전으로 — 발사(cart-launched) 때 ride로 전환
     Promise.all([this.track.loadTrackMeshes(), this._loadCartMesh()])
       .then(() => {
         this._setupShadows();
@@ -88,6 +89,7 @@ const Game = {
     this.engine.stopRenderLoop();
     AudioManager.updateWind(0);
     AudioManager.setAirtimeHold(false);
+    AudioManager.setBgmMode('pause');
     UI.showPauseOverlay();
   },
 
@@ -95,6 +97,7 @@ const Game = {
     if (!this.paused) return;
     this.paused = false;
     UI.hidePauseOverlay();
+    AudioManager.setBgmMode('ride');
     this.accumulator = 0;
     this.lastTime = performance.now(); // 정지해 있던 시간만큼 frameTime이 튀지 않도록 리셋
     this.engine.runRenderLoop(() => this._loop());
@@ -115,6 +118,7 @@ const Game = {
       this.track = null;
     }
     UI.hidePauseOverlay();
+    AudioManager.setBgmMode('menu');
     UI.showStageSelect(STAGES, i => Game.loadStage(i));
   },
 
@@ -314,6 +318,7 @@ const Game = {
       AudioManager.updateWind(0);
       AudioManager.setAirtimeHold(false);
       this.camera.unlockToggle(); // 이미 풀려있겠지만 안전장치
+      AudioManager.setBgmMode('menu');
       UI.showResult(this.cart, this.currentStageIndex);
       this.engine.stopRenderLoop();
     }

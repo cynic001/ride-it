@@ -110,6 +110,28 @@ async function main() {
     await shot('02_stage_select');
     check('stage select', (await page.locator('.stage-btn').count()) === 5);
 
+    // BGM(F): 첫 제스처 후 실제 출력이 나오는지(마스터 게인 RMS), 사운드 토글 버튼으로 무음 전환되는지
+    const rms = () => page.evaluate(() => new Promise(resolve => {
+      const A = AudioManager;
+      if (!A.ctx) return resolve(-1);
+      if (!A.__an) { A.__an = A.ctx.createAnalyser(); A.__an.fftSize = 2048; A.masterGain.connect(A.__an); }
+      const buf = new Float32Array(2048);
+      let peak = 0, n = 0;
+      const iv = setInterval(() => {
+        A.__an.getFloatTimeDomainData(buf);
+        peak = Math.max(peak, Math.sqrt(buf.reduce((a, v) => a + v * v, 0) / buf.length));
+        if (++n >= 25) { clearInterval(iv); resolve(peak); }
+      }, 40);
+    }));
+    const bgmOn = await rms();
+    check('bgm audible after first gesture', bgmOn > 0.005, `rms=${bgmOn.toFixed(4)} state=${await page.evaluate(() => AudioManager.ctx && AudioManager.ctx.state)}`);
+    await page.locator('#audioBtn').click();
+    await sleep(400);
+    const bgmOff = await rms();
+    check('sound toggle mutes bgm', bgmOff < 0.001, `rms=${bgmOff.toFixed(5)}`);
+    await page.locator('#audioBtn').click();
+    await sleep(300);
+
     if (await page.locator('#creditsBtn').count()) {
       await page.locator('#creditsBtn').click();
       await page.waitForSelector('#creditsOverlay');
@@ -138,6 +160,7 @@ async function main() {
       await sleep(100);
       const launched = await page.evaluate(() => Game.cart.launched);
       check(`${tag} launch via start bar`, launched);
+      if (s === STAGES[0]) check(`${tag} bgm ride mode after launch`, await page.evaluate(() => AudioManager._bgmMode === 'ride'));
       if (!launched) continue;
 
       // 밸런스 스와이프(하단) + 게이트 탭(상단)

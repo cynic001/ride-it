@@ -28,6 +28,7 @@ const AudioManager = {
       this.masterGain.connect(this.ctx.destination);
       this._initWind();
       this._initAirtimeTone();
+      this.startBgm();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
   },
@@ -139,6 +140,113 @@ const AudioManager = {
     this._airtimeGain.gain.setTargetAtTime(active ? 0.12 : 0, this.ctx.currentTime, 0.08);
   },
 
+  // ── 8) 배경음악 — 외부 음원 없이 합성한 4마디 루프(C-G-Am-F, 118BPM) ─────────────
+  // 16분음표 스텝 시퀀서: setInterval(25ms)로 0.12초 앞까지 미리 예약(Web Audio 시계 기준이라 타이머 지터와 무관).
+  // mode: 'menu'(드럼 없이 잔잔) / 'ride'(드럼 추가) / 'pause'(볼륨만 낮춤). 마스터 게인 경유라 사운드 토글에 자동 연동
+  _bgm: null,
+  _bgmMode: 'menu',
+
+  startBgm() {
+    if (!this.ctx || this._bgm) return;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0;
+    gain.connect(this.masterGain);
+    const leadFilter = this.ctx.createBiquadFilter(); // 사각파 멜로디의 날카로운 배음을 깎아 부드럽게
+    leadFilter.type = 'lowpass';
+    leadFilter.frequency.value = 1800;
+    leadFilter.connect(gain);
+    const len = Math.floor(this.ctx.sampleRate * 0.25);
+    const noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = noise.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    this._bgm = { gain, leadFilter, noise, step: 0, nextTime: this.ctx.currentTime + 0.1 };
+    this._bgmTimer = setInterval(() => this._scheduleBgm(), 25);
+    this.setBgmMode(this._bgmMode);
+  },
+
+  setBgmMode(mode) {
+    this._bgmMode = mode;
+    if (!this._bgm) return;
+    const vol = { menu: 0.5, ride: 0.42, pause: 0.15 }[mode] ?? 0.5;
+    this._bgm.gain.gain.setTargetAtTime(vol, this.ctx.currentTime, 0.25);
+  },
+
+  _scheduleBgm() {
+    const b = this._bgm;
+    const now = this.ctx.currentTime;
+    const stepDur = 60 / 118 / 4;
+    // 탭 백그라운드 등으로 타이머가 한참 밀렸으면 지난 음을 몰아서 내지 않고 현재 시점부터 이어감
+    if (b.nextTime < now - 0.2) b.nextTime = now + 0.05;
+    while (b.nextTime < now + 0.12) {
+      if (this.enabled) this._bgmStep(b.step, b.nextTime, stepDur);
+      b.nextTime += stepDur;
+      b.step = (b.step + 1) % 64;
+    }
+  },
+
+  _bgmStep(step, t, dur) {
+    const midi = m => 440 * Math.pow(2, (m - 69) / 12);
+    const bar = step >> 4, s = step & 15;
+    const CHORDS = [[48, 52, 55], [43, 47, 50], [45, 48, 52], [41, 45, 48]]; // C, G, Am, F
+    const MELODY = [ // 마디별 16스텝, -1 = 쉼
+      [72, -1, 76, -1, 79, -1, 76, -1, 74, -1, 72, -1, 74, -1, -1, -1],
+      [71, -1, 74, -1, 79, -1, 74, -1, 71, -1, 74, -1, -1, -1, 67, -1],
+      [72, -1, 76, -1, 81, -1, 79, -1, 76, -1, 74, -1, 72, -1, -1, -1],
+      [69, -1, 72, -1, 77, -1, 76, -1, 74, -1, 72, -1, 71, -1, -1, -1],
+    ];
+    const chord = CHORDS[bar];
+    const out = this._bgm.gain;
+    if (s % 2 === 0) this._bgmNote(midi(chord[0] - 12 + (s % 8 === 4 ? 7 : 0)), t, dur * 1.8, 'triangle', 0.22, out); // 베이스(루트/5도)
+    this._bgmNote(midi(chord[[0, 1, 2, 1][s % 4]] + 12), t, dur * 0.9, 'triangle', 0.06, out); // 아르페지오
+    const m = MELODY[bar][s];
+    if (m > 0) this._bgmNote(midi(m), t, dur * 1.7, 'square', 0.045, this._bgm.leadFilter);
+
+    if (this._bgmMode === 'ride') {
+      if (s % 8 === 0) this._bgmKick(t);
+      if (s === 4 || s === 12) this._bgmNoise(t, 0.12, 'bandpass', 1800, 0.18);
+      if (s % 2 === 0) this._bgmNoise(t, 0.03, 'highpass', 7000, s % 4 === 2 ? 0.07 : 0.04);
+    }
+  },
+
+  _bgmNote(freq, t, dur, type, peak, dest) {
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(peak, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g).connect(dest);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  },
+
+  _bgmKick(t) {
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.frequency.setValueAtTime(140, t);
+    osc.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    g.gain.setValueAtTime(0.35, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    osc.connect(g).connect(this._bgm.gain);
+    osc.start(t);
+    osc.stop(t + 0.2);
+  },
+
+  _bgmNoise(t, dur, filterType, freq, peak) {
+    const src = this.ctx.createBufferSource();
+    src.buffer = this._bgm.noise;
+    const f = this.ctx.createBiquadFilter();
+    f.type = filterType;
+    f.frequency.value = freq;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(peak, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(this._bgm.gain);
+    src.start(t);
+    src.stop(t + dur + 0.02);
+  },
+
   // ── 7) 완주 결과화면 등장음 — 3음 상승 아르페지오 ──────────────────────
   playResultFanfare() {
     [523, 659, 784].forEach((freq, i) => {
@@ -150,5 +258,13 @@ const AudioManager = {
 // input.js의 게이트 탭 판정 / cart.js의 밸런스 판정은 이벤트로만 통지 — 오디오와 물리/입력을 분리
 window.addEventListener('gate-result', e => AudioManager.playGateResult(e.detail.type, e.detail.result));
 window.addEventListener('balance-result', e => AudioManager.playBalanceResult(e.detail));
+
+window.addEventListener('cart-launched', () => AudioManager.setBgmMode('ride'));
+// 백그라운드 탭/홈 화면 전환 시 오디오 정지(모바일 배터리·iOS 정책), 복귀 시 재개
+document.addEventListener('visibilitychange', () => {
+  if (!AudioManager.ctx) return;
+  if (document.hidden) AudioManager.ctx.suspend();
+  else AudioManager.ctx.resume();
+});
 
 window.AudioManager = AudioManager;
