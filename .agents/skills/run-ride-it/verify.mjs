@@ -147,6 +147,15 @@ async function main() {
     await page.waitForSelector('#settingsOverlay');
     await sleep(400);
     await shot('03_settings');
+    await page.locator('#graphicsBtn').click();
+    await page.waitForSelector('#graphicsOverlay');
+    await page.locator('.gfx-opt[data-group="style"][data-value="pastel"]').click();
+    const gsaved = await page.evaluate(() => [localStorage.getItem('rc_style'), StyleManager.current]);
+    await page.locator('.gfx-opt[data-group="style"][data-value="toon"]').click();
+    await sleep(300);
+    await shot('03a_graphics');
+    check('graphics popup saves style', gsaved[0] === 'pastel' && gsaved[1] === 'pastel', JSON.stringify(gsaved));
+    await page.locator('#graphicsCloseBtn').click();
     await page.locator('#creditsBtn').click();
     await page.waitForSelector('#creditsOverlay');
     await sleep(400);

@@ -298,10 +298,8 @@ const UI = {
       `<button class="seg-btn${v === current ? ' on' : ''}" data-value="${v}">${l}</button>`).join('')}</div>`;
     const el = this._modal('settingsOverlay', `
       <h2>설정</h2>
-      <div class="field"><span class="field-label">그래픽 품질</span>
-        ${seg('quality', [['low', '낮음'], ['medium', '보통'], ['high', '높음']], QualityManager.current)}</div>
-      <div class="field"><span class="field-label">그래픽 스타일</span>
-        ${seg('style', Object.entries(STYLES).map(([k, v]) => [k, v.label]), StyleManager.current)}</div>
+      <div class="field"><span class="field-label">그래픽</span>
+        <button class="btn wide graphics-open" id="graphicsBtn">${ICONS.sparkle}<span id="graphicsSummary">${this._graphicsSummary()}</span></button></div>
       <div class="field"><span class="field-label">사운드</span>
         ${seg('audio', [['on', '켜기'], ['off', '끄기']], AudioManager.enabled ? 'on' : 'off')}
         <p class="field-desc">소리가 안 나면 아이폰 무음 모드를 꺼주세요</p></div>
@@ -318,15 +316,14 @@ const UI = {
       const v = b.dataset.value;
       group.querySelectorAll('.seg-btn').forEach(x => x.classList.toggle('on', x === b));
       const key = group.dataset.setting;
-      if (key === 'quality') { QualityManager.setPreset(v); if (Game.scene) Game._applyQualitySettings(); }
-      else if (key === 'style') StyleManager.set(v);
-      else if (key === 'audio') AudioManager.setEnabled(v === 'on');
+      if (key === 'audio') AudioManager.setEnabled(v === 'on');
       else if (key === 'control') {
         ControlSettings.set(v);
         document.getElementById('controlDesc').textContent = CONTROL_MODES[v].desc;
         if (v === 'tilt' && window.InputController && InputController.requestTiltPermission) InputController.requestTiltPermission(); // 이 탭이 권한 요청 제스처
       }
     })));
+    document.getElementById('graphicsBtn').addEventListener('click', () => this.showGraphics());
     document.getElementById('settingsHowtoBtn').addEventListener('click', () => this.showHowTo());
     document.getElementById('creditsBtn').addEventListener('click', () => this.showCredits());
     document.getElementById('settingsCloseBtn').addEventListener('click', () => el.remove());
@@ -368,6 +365,50 @@ const UI = {
       localStorage.setItem('rc_howto_seen', '1');
       if (onClose) onClose();
     });
+  },
+
+  _graphicsSummary() {
+    return `${this._qualityLabel()} · ${STYLES[StyleManager.current].label}`;
+  },
+
+  /** 그래픽 팝업 — 품질(Low/Medium/High)과 스타일을 한곳에서. 각 선택지에 설명 한 줄, 스타일은 하늘/지면 색 미리보기 */
+  showGraphics() {
+    const Q = {
+      low: ['낮음', 'SE2 등 저사양용 — 그림자·블러 끔, 프레임 우선'],
+      medium: ['보통', '균형 — 가벼운 부스트 블러와 색보정'],
+      high: ['높음', '최고 — 실시간 그림자, 모션·방사형 블러, 색수차'],
+    };
+    const S = {
+      standard: '사실적인 조명 + 맑은 하늘(HDRI)',
+      toon: '단계형 음영 + 외곽선 + 노을빛 — 고속에서 형태가 가장 또렷',
+      pastel: '부드러운 단계형 음영 + 따뜻한 파스텔',
+    };
+    const preview = k => {
+      const st = STYLES[k];
+      const sky = st.sky ? `linear-gradient(180deg, ${st.sky.join(',')})` : 'linear-gradient(180deg, #4f8fe0, #cfe6ff)';
+      const g = st.ground || [1, 1, 1]; // 잔디 기본색(#5a9a3c)에 스타일 지면 색조를 곱한 색
+      const ground = `rgb(${[90, 154, 60].map((c, i) => Math.round(Math.min(255, c * g[i]))).join(',')})`;
+      return `<span class="gfx-preview" style="background:${sky}"><span style="background:${ground}"></span>${st.outline ? '<i></i>' : ''}</span>`;
+    };
+    const opt = (group, k, title, desc, on, extra = '') =>
+      `<button class="gfx-opt${on ? ' on' : ''}" data-group="${group}" data-value="${k}">${extra}<span><b>${title}</b><small>${desc}</small></span></button>`;
+    const el = this._modal('graphicsOverlay', `
+      <h2>그래픽</h2>
+      <div class="field"><span class="field-label">품질</span>
+        ${Object.entries(Q).map(([k, [t, d]]) => opt('quality', k, t, d, k === QualityManager.current)).join('')}</div>
+      <div class="field"><span class="field-label">스타일</span>
+        ${Object.keys(STYLES).map(k => opt('style', k, STYLES[k].label, S[k] || '', k === StyleManager.current, preview(k))).join('')}</div>
+      <div class="actions"><button id="graphicsCloseBtn" class="btn primary wide">확인</button></div>
+    `, { solid: true });
+    el.querySelectorAll('.gfx-opt').forEach(b => b.addEventListener('click', () => {
+      const { group, value } = b.dataset;
+      el.querySelectorAll(`.gfx-opt[data-group="${group}"]`).forEach(x => x.classList.toggle('on', x === b));
+      if (group === 'quality') { QualityManager.setPreset(value); if (Game.scene) Game._applyQualitySettings(); }
+      else StyleManager.set(value);
+      const sum = document.getElementById('graphicsSummary');
+      if (sum) sum.textContent = this._graphicsSummary();
+    }));
+    document.getElementById('graphicsCloseBtn').addEventListener('click', () => el.remove());
   },
 
   /** 서드파티 에셋 표기 — Kenney/Poly Haven 모두 CC0라 의무는 없지만 감사 표기 */
