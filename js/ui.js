@@ -435,6 +435,26 @@ const UI = {
     document.getElementById('creditsCloseBtn').addEventListener('click', () => el.remove());
   },
 
+  /** 화면 물방울(4·5단계 착수) — 가벼운 DOM 원 몇 개가 번졌다 사라짐 */
+  splashDroplets(n) {
+    for (let i = 0; i < n; i++) {
+      const d = document.createElement('div');
+      d.className = 'droplet';
+      const sz = 30 + Math.random() * 70;
+      d.style.cssText = `left:${Math.random() * 100}%;top:${Math.random() * 80}%;width:${sz}px;height:${sz}px;animation-delay:${(Math.random() * 0.25).toFixed(2)}s`;
+      document.body.appendChild(d);
+      setTimeout(() => d.remove(), 2200);
+    }
+  },
+
+  /** 5단계 착수 물안개 — 흰 막이 확 덮였다 걷힘 + 무지개빛 */
+  flashMist() {
+    const m = document.createElement('div');
+    m.className = 'mist-flash';
+    document.body.appendChild(m);
+    setTimeout(() => m.remove(), 2200);
+  },
+
   /** 새 버전 안내 — 주행 중에도 방해되지 않게 화면 위 작은 토스트, 누르면 새로고침 */
   showUpdateToast() {
     if (document.getElementById('updateToast')) return;

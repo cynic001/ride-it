@@ -43,6 +43,15 @@
   /* 속도감 스피드 라인 — 3D 캔버스와 UI 사이, 입력은 통과 */
   #speedLines { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   /* 고속 비네트: 가장자리를 어둡게 해 시야가 좁아지는 느낌 — opacity는 main.js가 속도 비례로 */
+  .droplet { position: fixed; z-index: 4; pointer-events: none; border-radius: 50%; opacity: 0;
+    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.85), rgba(190,230,255,.35) 45%, rgba(160,210,255,0) 70%);
+    animation: dropFade 1.9s ease-out forwards; }
+  @keyframes dropFade { 0% { opacity: 0; transform: scale(.4); } 10% { opacity: .95; transform: scale(1); } 100% { opacity: 0; transform: translateY(40px) scale(1.1); } }
+  .mist-flash { position: fixed; inset: 0; z-index: 3; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 40%, rgba(255,255,255,.85), rgba(235,245,255,.6) 60%, rgba(255,255,255,.4)),
+                linear-gradient(120deg, rgba(255,90,90,.18), rgba(255,241,90,.18), rgba(90,255,122,.18), rgba(90,180,255,.18), rgba(180,90,255,.18));
+    animation: mistFade 2s ease-out forwards; }
+  @keyframes mistFade { 0% { opacity: 0; } 12% { opacity: 1; } 100% { opacity: 0; } }
   #vignette { position: fixed; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 50% 55%, transparent 60%, rgba(10,6,24,.6) 100%); }
 
   #uiRoot, .ui-ghost {

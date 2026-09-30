@@ -69,6 +69,7 @@ const Game = {
     Promise.all([this.track.loadTrackMeshes(), this._loadCartMesh()])
       .then(() => {
         this._setupShadows();
+        this._setupSplash();
         StyleManager.apply(this); // 새로 로드된 glb 재질에 단계형 음영 적용
         // showStartPrompt가 스타트 바 DOM을 먼저 만들어야 InputController가 그 엘리먼트에 바인딩 가능
         UI.showStartPrompt(stageData.name, stageData.motif);
@@ -391,6 +392,8 @@ const Game = {
       this._jointAcc %= 6;
       AudioManager.playRailJoint(c.speed / c.maxSpeedMs);
     }
+    const sp = this.track.splash;
+    if (sp && !c.rollback && (this._prevT ?? c.t) < sp.t && c.t >= sp.t) this._triggerSplash();
     const markers = this.track.passMarkers || [];
     const prev = this._prevT ?? c.t;
     const lookAhead = 0.35 * c.speed * Cart.speedScale / this.track.lengthM; // 소리는 통과 0.35초 전부터 차오름
@@ -410,7 +413,77 @@ const Game = {
     SpeedLines.draw(ratio > 0 ? intensity : 0, Math.min(dt, 0.05));
     if (this._motionBlur) this._motionBlur.motionStrength = Math.max(0, ratio - 0.4) * 0.9;
     this._updateBoostFx(dt, ratio);
+    if (this.track && this.track.pondTexture && QualityManager.current !== 'low') this.track.pondTexture.vOffset -= dt * 0.05; // 물결 흐름
+    if (this._mistBoost > 0.01) { // 5단계 착수 물안개: 안개를 잠깐 짙게 했다가 원래 값으로
+      this._mistBoost *= Math.exp(-dt * 1.2);
+      if (!this._baseFog) this._baseFog = this.scene.fogDensity;
+      this.scene.fogDensity = this._baseFog * (1 + this._mistBoost * 6);
+    } else if (this._baseFog) { this.scene.fogDensity = this._baseFog; this._baseFog = null; }
     this.scene.render();
+  },
+
+  /** 물 착수 파티클 준비(스테이지 로드 시). 단계(level 1~3)가 오를수록 양·높이·종류 증가, low는 약 1/3로 축소 */
+  _setupSplash() {
+    (this._splashSystems || []).forEach(ps => ps.dispose());
+    this._splashSystems = [];
+    const sp = this.track && this.track.splash;
+    if (!sp) return;
+    const q = { low: 0.35, medium: 0.7, high: 1 }[QualityManager.current] || 0.7;
+    const lv = sp.level;
+    const tex = new BABYLON.DynamicTexture('dropTex', { width: 32, height: 32 }, this.scene, false);
+    const ctx = tex.getContext();
+    const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.5, 'rgba(220,240,255,.7)'); g.addColorStop(1, 'rgba(200,230,255,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 32, 32); tex.hasAlpha = true; tex.update();
+    const tan = new BABYLON.Vector3(sp.tangent.x, 0, sp.tangent.z).normalize();
+    const right = new BABYLON.Vector3(tan.z, 0, -tan.x);
+    const origin = new BABYLON.Vector3(sp.pos.x, 0.4, sp.pos.z);
+    const make = (name, count, cfg) => {
+      const ps = new BABYLON.ParticleSystem(name, Math.max(10, Math.round(count * q)), this.scene);
+      ps.particleTexture = tex;
+      ps.emitter = origin.clone();
+      ps.gravity = new BABYLON.Vector3(0, -9.8, 0);
+      ps.minLifeTime = cfg.life[0]; ps.maxLifeTime = cfg.life[1];
+      ps.minSize = cfg.size[0]; ps.maxSize = cfg.size[1];
+      ps.minEmitPower = 1; ps.maxEmitPower = 1;
+      ps.color1 = new BABYLON.Color4(1, 1, 1, 0.8); ps.color2 = new BABYLON.Color4(0.7, 0.88, 1, 0.65);
+      ps.colorDead = new BABYLON.Color4(0.8, 0.9, 1, 0);
+      ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
+      ps.emitRate = 0; ps.manualEmitCount = 0;
+      ps.startPositionFunction = (m, pos) => { pos.copyFrom(origin.add(tan.scale((Math.random() - 0.5) * 6))); };
+      ps.startDirectionFunction = cfg.dir;
+      if (cfg.rainbow) ['#ff5a5a', '#ffb13d', '#fff15a', '#5aff7a', '#5ab4ff', '#b45aff'].forEach((c, i, a) => {
+        const col = BABYLON.Color3.FromHexString(c); ps.addColorGradient(i / (a.length - 1), new BABYLON.Color4(col.r, col.g, col.b, 0.9));
+      });
+      ps.start();
+      this._splashSystems.push(ps);
+      return { ps, count: Math.round(count * q) };
+    };
+    const side = (power, upk) => (m, dir) => {
+      const sd = Math.random() < 0.5 ? -1 : 1; // 양옆으로 쏟아지는 물보라
+      dir.copyFrom(right.scale(sd * (0.5 + Math.random()) * power).add(new BABYLON.Vector3(0, (0.6 + Math.random()) * power * upk, 0)).add(tan.scale(Math.random() * power * 0.6)));
+    };
+    this._splashFx = { level: lv, bursts: [make('spray', [0, 160, 300, 480][lv], { life: [0.7, 1.4 + 0.3 * lv], size: [0.2, 0.45 + 0.2 * lv], dir: side(5 + 2.5 * lv, 0.8 + 0.3 * lv) })] };
+    if (lv >= 3) {
+      this._splashFx.bursts.push(make('column', 260, { life: [1.4, 2.4], size: [0.6, 1.5], dir: (m, dir) => dir.set((Math.random() - 0.5) * 3, 16 + Math.random() * 10, (Math.random() - 0.5) * 3) }));
+      this._splashFx.bursts.push(make('rainbow', 120, { life: [1.6, 2.8], size: [0.15, 0.35], rainbow: true, dir: (m, dir) => dir.set((Math.random() - 0.5) * 8, 6 + Math.random() * 8, (Math.random() - 0.5) * 8) }));
+    }
+    this._splashSystems.push({ dispose: () => tex.dispose() });
+  },
+
+  /** 착수 순간: 파티클 버스트 + 카메라 킥 + 소리, 4단계+ 화면 물방울, 5단계 물안개(안개 짙게 + 흰 막) */
+  _triggerSplash() {
+    const fx = this._splashFx;
+    if (!fx) return;
+    fx.bursts.forEach(b => { b.ps.manualEmitCount = b.count; });
+    if (this.camera) this.camera.kick(0.7 + 0.2 * fx.level);
+    AudioManager.playSplash(fx.level);
+    if (fx.level >= 2) UI.splashDroplets(fx.level === 3 ? 18 : 10);
+    if (fx.level >= 3) {
+      UI.flashMist();
+      this._mistBoost = 1;
+    }
+    window.dispatchEvent(new CustomEvent('splash', { detail: fx.level }));
   },
 
   /** 부스트 가속 중 방사형 블러(가속 세기 비례, 끝나면 부드럽게 해제) + 고속 비네트(전 프리셋, CSS) */

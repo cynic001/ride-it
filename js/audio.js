@@ -156,6 +156,22 @@ const AudioManager = {
     });
   },
 
+  /** 물 착수 "첨벙 + 쏴아" — 단계가 오를수록 크고 길게 */
+  playSplash(level = 1) {
+    if (!this._ready()) return;
+    const t0 = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.frequency.setValueAtTime(120, t0);
+    osc.frequency.exponentialRampToValueAtTime(40, t0 + 0.3);
+    g.gain.setValueAtTime(0.25 + 0.12 * level, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+    osc.connect(g).connect(this.masterGain);
+    osc.start(t0); osc.stop(t0 + 0.4);
+    this._whoosh(t0, 0.35, 1800, 700, 0.35 + 0.1 * level);       // 첨벙
+    this._whoosh(t0 + 0.05, 0.9 + 0.5 * level, 5000, 2500, 0.12 + 0.06 * level); // 쏴아(물보라)
+  },
+
   /** 체인 리프트 "딸깍" — 짧고 높은 금속 클릭 */
   playChainClick() {
     if (!this._ready()) return;

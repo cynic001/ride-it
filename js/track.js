@@ -32,6 +32,8 @@ const NATURE_PROPS = [
 ];
 // 트랙(레일·지지대) 수평거리 이만큼 안쪽은 비움 — 나무 반경(~3m)+인버티드 지지대 옆 오프셋(2.2m)+여유
 const NATURE_TRACK_CLEARANCE_M = 14;
+// 물 착수 연못 크기(m) — 트랙 방향 length × 옆 width, 수면 높이 level
+const POND = { length: 80, width: 56, level: 0.3 };
 // 스테이션 옆 지면 광장 — Coaster Kit 놀이공원 소품. [파일, 진행방향(m), 옆방향(m), 바라볼 방향('track'|'away')]
 const PARK_SCALE = 2.5;
 const PARK_LAYOUT = [
@@ -104,6 +106,17 @@ class Track {
       const tOf = k => (((k - 1) / n) % 1 + 1) % 1;
       this.rollbackZone = { mode: rb.mode, tValley: tOf(rb.cp - 1), tPeak: tOf(rb.cp) };
     }
+    // 물 착수 지점: splash.cp 제어점 근처(±0.05)에서 실제 곡선이 가장 낮은 곳(곡선 처짐까지 반영)
+    if (stageData.splash) {
+      const n = stageData.controlPoints.length;
+      const tc = (((stageData.splash.cp - 1) / n) % 1 + 1) % 1;
+      let best = null;
+      this.points.forEach((q, i) => {
+        const t = i / (this.points.length - 1);
+        if (Math.abs(t - tc) < 0.05 && (!best || q.y < best.pos.y)) best = { t, pos: q };
+      });
+      this.splash = { t: best.t, pos: best.pos, level: stageData.splash.level, tangent: this.getTangentAt(best.t) };
+    }
     this.liftZones = this._findLiftZones().filter(z => !this.rollbackZone || z.t1 < this.rollbackZone.tValley || z.t0 > this.rollbackZone.tPeak);
   }
 
@@ -123,7 +136,8 @@ class Track {
       const up = p.tangent.y > 0.15;
       if (up && st === null) st = k;
       if ((!up || k === S.length - 1) && st !== null) {
-        if ((k - st) * 2 >= 50) {
+        const mid = S[Math.floor((st + k) / 2)].t;
+        if ((k - st) * 2 >= 50 && !this.getSegmentAt(mid).airtimeZone) { // 에어타임 언덕(5단계 등)은 체인 리프트가 아님
           const t1 = p.t;
           const crestDrop = S.slice(k, k + 15).some(q => q.tangent.y < -0.3);
           zones.push({ t0: S[st].t, t1, crestDrop });
@@ -271,6 +285,7 @@ class Track {
         this._meshes.push(inst);
       });
 
+    this._placeWater();
     this._placeGateMarkers(railTopY, isHanging);
     this._placeRollbackMarkers(railTopY, isHanging);
     this._placeTrackside(railTopY, isHanging);
@@ -552,6 +567,46 @@ class Track {
     });
   }
 
+  /** 물 착수 연못 안인지(나무·소품이 물 위에 서지 않게) */
+  inPond(x, z) {
+    const sp = this.splash;
+    if (!sp) return false;
+    const f = new BABYLON.Vector3(sp.tangent.x, 0, sp.tangent.z).normalize();
+    const dx = x - sp.pos.x, dz = z - sp.pos.z;
+    const along = dx * f.x + dz * f.z, side = -dx * f.z + dz * f.x;
+    return Math.abs(along) < POND.length / 2 + 4 && Math.abs(side) < POND.width / 2 + 4;
+  }
+
+  /** 착수 지점 아래 연못 — 트랙 방향으로 긴 사각 수면. 물결은 텍스처 스크롤(main.js _render, low는 정지) */
+  _placeWater() {
+    const sp = this.splash;
+    if (!sp) return;
+    const scene = this.scene;
+    const pond = BABYLON.MeshBuilder.CreateGround('pond', { width: POND.width, height: POND.length }, scene);
+    pond.position.set(sp.pos.x, POND.level, sp.pos.z);
+    pond.rotation.y = Math.atan2(sp.tangent.x, sp.tangent.z);
+    const tex = new BABYLON.DynamicTexture('pondTex', { width: 128, height: 128 }, scene, true);
+    const ctx = tex.getContext();
+    ctx.fillStyle = '#2f86c9'; ctx.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 160; i++) {
+      ctx.fillStyle = `rgba(${Math.random() < 0.5 ? '255,255,255' : '20,70,140'},${(0.08 + Math.random() * 0.14).toFixed(2)})`;
+      const x = Math.random() * 128, y = Math.random() * 128, w = 6 + Math.random() * 18;
+      for (const [ox, oy] of [[0, 0], [-128, 0], [128, 0], [0, -128], [0, 128]]) { ctx.beginPath(); ctx.ellipse(x + ox, y + oy, w, w * 0.3, 0, 0, Math.PI * 2); ctx.fill(); }
+    }
+    tex.update();
+    tex.wrapU = tex.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
+    tex.uScale = 5; tex.vScale = 7;
+    const m = new BABYLON.StandardMaterial('pondMat', scene);
+    m.diffuseTexture = tex;
+    m.specularColor = new BABYLON.Color3(0.9, 0.95, 1);
+    m.specularPower = 64;
+    m.emissiveColor = new BABYLON.Color3(0.05, 0.18, 0.3);
+    pond.material = m;
+    pond.receiveShadows = true;
+    this.pondTexture = tex;
+    this._meshes.push(pond, m, tex);
+  }
+
   /** 트랙 수평거리 판정용 샘플 — 3m 간격이면 1680m 트랙도 560점 남짓이라 전수 비교해도 충분히 가벼움 */
   _minTrackDistXZ(x, z) {
     if (!this._xzSamples) this._xzSamples = this._sampleLoop(3).map(p => [p.pos.x, p.pos.z]);
@@ -594,6 +649,7 @@ class Track {
       if (d < NATURE_TRACK_CLEARANCE_M) continue;
       if (rand() > Math.min(1, 40 / d)) continue; // 트랙에서 멀어질수록 드문드문
       if (Math.hypot(x - station.x, z - station.z) < 40) continue; // 스테이션 옆 놀이공원 광장 자리
+      if (this.inPond(x, z)) continue;
 
       let pick = rand() * totalWeight, k = 0;
       while (pick > NATURE_PROPS[k].weight) pick -= NATURE_PROPS[k++].weight;
@@ -615,7 +671,7 @@ class Track {
       if (i === 0 || Math.hypot(pos.x - station.x, pos.z - station.z) < 40) return;
       const side = new BABYLON.Vector3(-tangent.z, 0, tangent.x).normalize().scale((i % 2 ? 1 : -1) * (6.5 + rand() * 2.5));
       const x = pos.x + side.x, z = pos.z + side.z;
-      if (this._minTrackDistXZ(x, z) < 6) return;
+      if (this._minTrackDistXZ(x, z) < 6 || this.inPond(x, z)) return;
       const { t, k } = trees[Math.floor(rand() * trees.length)];
       const inst = t.createInstance(`nearTree_${i}`);
       inst.position.set(x, 0, z);
@@ -642,7 +698,7 @@ class Track {
     PARK_LAYOUT.forEach(([file, along, lateral, facing], k) => {
       const x = origin.x + fwd.x * along + right.x * lateral * side;
       const z = origin.z + fwd.z * along + right.z * lateral * side;
-      if (this._minTrackDistXZ(x, z) < 4) return;
+      if (this._minTrackDistXZ(x, z) < 4 || this.inPond(x, z)) return;
       const inst = templates[file].createInstance(`park_${k}`);
       inst.position.set(x, 0, z);
       inst.scaling.setAll(PARK_SCALE);
