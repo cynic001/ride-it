@@ -5,10 +5,16 @@
  * + 레일/지지대/스테이션 glTF를 커브를 따라 인스턴싱 배치 (loadTrackMeshes)
  */
 
-const RAIL_FILES = {
-  standard: 'rail_standard.glb',
-  single: 'rail_single.glb',
-  hybrid: 'rail_hybrid.glb',
+// Kenney Coaster Kit(CC0) — 트랙 패밀리별 1m 반복 레일 타일 / 카트 / 지지대
+const KIT_DIR = 'assets/vendor/kenney-coaster-kit/';
+// 키트 원본은 레거시 자체 모델의 약 0.7배 크기(레일 폭 0.7m) — 기존 트랙 스케일(제어점 좌표·카메라 거리)에 맞추려 일괄 확대
+const KIT_SCALE = 1.5;
+const KIT_FAMILIES = {
+  mouse:    { rail: 'coaster-mouse-track.glb',    cart: 'coaster-train.glb',         pillar: 'support-small.glb' },
+  hanging:  { rail: 'coaster-hanging-track.glb',  cart: 'coaster-train-hanging.glb', pillar: 'support-small.glb' },
+  monorail: { rail: 'coaster-monorail-track.glb', cart: 'train-monorail.glb',        pillar: 'support-small.glb' },
+  steel:    { rail: 'coaster-steel-track.glb',    cart: 'coaster-train.glb',         pillar: 'support-large.glb' },
+  wood:     { rail: 'coaster-wood-track.glb',     cart: 'coaster-train-wooden.glb',  pillar: 'support-large.glb' },
 };
 
 // 지지대 배치 간격(m) — 레일 타이 간격과 무관하게 저사양 기기(SE2) 성능을 고려해 성긴 간격 사용
@@ -109,37 +115,68 @@ class Track {
     return myRoll;
   }
 
+  get family() {
+    return KIT_FAMILIES[this.stageData.railType] || KIT_FAMILIES.steel;
+  }
+
   /** 레일/지지대/스테이션 glTF 로드 후 커브를 따라 인스턴싱 배치 */
   async loadTrackMeshes() {
-    const railFile = RAIL_FILES[this.stageData.railType] || RAIL_FILES.standard;
-    const pillarFile = this.stageData.railType === 'hybrid' ? 'pillar_wood.glb' : 'pillar_steel.glb';
+    const fam = this.family;
+    const isHanging = this.stageData.railType === 'hanging';
 
-    const [railTemplate, pillarTemplate, stationTemplate] = await Promise.all([
-      this._loadTemplate(railFile),
-      this._loadTemplate(pillarFile),
-      this._loadTemplate('station_platform.glb'),
+    const [railTemplate, pillarTemplate, stationTemplate, armTemplate] = await Promise.all([
+      this._loadTemplate(fam.rail),
+      this._loadTemplate(fam.pillar),
+      this._loadTemplate('station.glb'),
+      isHanging ? this._loadTemplate('support-small-horizontal.glb') : null,
     ]);
 
-    this._instanceAlongCurve(railTemplate, this._railExtentZ(railTemplate), (inst, pos, tangent, t) => {
+    const railSpacing = this._extent(railTemplate).z * KIT_SCALE;
+    this._sampleLoop(railSpacing).forEach(({ pos, tangent, t }, k) => {
+      const inst = railTemplate.createInstance(`rail_${k}`);
+      inst.scaling.setAll(KIT_SCALE);
       inst.position.copyFrom(pos);
       inst.lookAt(pos.add(tangent), 0, 0, this.getBankRollAt(t));
+      this._meshes.push(inst);
     });
 
-    const pillarHeight = pillarTemplate.getBoundingInfo().boundingBox.maximum.y - pillarTemplate.getBoundingInfo().boundingBox.minimum.y;
-    const pillarBottomY = pillarTemplate.getBoundingInfo().boundingBox.minimum.y;
-    this._instanceAlongCurve(pillarTemplate, PILLAR_SPACING_M, (inst, pos) => {
+    // 지지대: 바닥(y=0)에서 레일 밑면까지. 인버티드(hanging)는 카트가 레일 아래에 매달려 지나가므로
+    // 기둥을 트랙 옆으로 비켜 세우고 위에서 가로 암으로 레일 상단을 붙잡는 형태(실제 인버티드 코스터 구조)
+    const pillarBB = this._extent(pillarTemplate);
+    const railTopY = this._extent(railTemplate).y * KIT_SCALE;
+    const HANGING_SIDE_OFFSET = 2.2;
+    this._sampleLoop(PILLAR_SPACING_M).forEach(({ pos, tangent }, k) => {
       if (pos.y < 0.5) return; // 지면 높이 근처는 지지대 불필요
-      const scale = pos.y / pillarHeight;
-      inst.scaling.y = scale;
-      inst.position.set(pos.x, -pillarBottomY * scale, pos.z);
+      const side = new BABYLON.Vector3(-tangent.z, 0, tangent.x).normalize();
+      const base = isHanging ? pos.add(side.scale(HANGING_SIDE_OFFSET)) : pos;
+      const topY = isHanging ? pos.y + railTopY : pos.y;
+      const inst = pillarTemplate.createInstance(`pillar_${k}`);
+      inst.scaling.set(KIT_SCALE, topY / pillarBB.y, KIT_SCALE);
+      inst.position.set(base.x, 0, base.z);
+      this._meshes.push(inst);
+
+      if (isHanging) {
+        const arm = armTemplate.createInstance(`pillarArm_${k}`);
+        const mid = pos.add(side.scale(HANGING_SIDE_OFFSET / 2));
+        arm.position.set(mid.x, topY, mid.z);
+        arm.lookAt(new BABYLON.Vector3(base.x, topY, base.z)); // 암의 긴 축(Z)이 기둥↔레일을 잇도록
+        arm.scaling.set(KIT_SCALE, KIT_SCALE, HANGING_SIDE_OFFSET / this._extent(armTemplate).z);
+        this._meshes.push(arm);
+      }
     });
 
-    const stationPos = this.getPositionAt(0);
-    const stationTangent = this.getTangentAt(0);
-    const station = stationTemplate.createInstance('station');
-    station.position.copyFrom(stationPos);
-    station.lookAt(stationPos.add(stationTangent));
-    this._meshes.push(station);
+    // 스테이션: 1.5m 플랫폼 타일을 출발점(t=0) 앞뒤로 이어 붙임 — 뱅킹 없이 수평 유지
+    const stationSpacing = this._extent(stationTemplate).z * KIT_SCALE;
+    const STATION_HALF_LEN = 4.5;
+    this._sampleLoop(stationSpacing)
+      .filter(({ s, L }) => s <= STATION_HALF_LEN || s >= L - STATION_HALF_LEN)
+      .forEach(({ pos, tangent }, k) => {
+        const inst = stationTemplate.createInstance(k === 0 ? 'station' : `station_${k}`);
+        inst.scaling.setAll(KIT_SCALE);
+        inst.position.copyFrom(pos);
+        inst.lookAt(pos.add(new BABYLON.Vector3(tangent.x, 0, tangent.z)));
+        this._meshes.push(inst);
+      });
 
     this._placeBackgroundProps();
   }
@@ -181,38 +218,48 @@ class Track {
     }
   }
 
-  /** 레일 인스턴스 1개가 커버하는 진행방향(Z) 길이 — 타일 간격으로 사용 */
-  _railExtentZ(railTemplate) {
-    const bb = railTemplate.getBoundingInfo().boundingBox;
-    return bb.maximum.z - bb.minimum.z;
+  /** 템플릿 메시의 로컬 바운딩박스 크기(x=폭, y=높이, z=진행방향 길이) — KIT_SCALE 적용 전 원본 값 */
+  _extent(mesh) {
+    const bb = mesh.getBoundingInfo().boundingBox;
+    return bb.maximum.subtract(bb.minimum);
   }
 
   /** glTF 로드 → 실제 지오메트리 메시(루트 다음 자식)를 템플릿으로 반환, 템플릿 자체는 비활성화 */
   async _loadTemplate(fileName) {
-    const result = await BABYLON.SceneLoader.ImportMeshAsync('', 'assets/models/', fileName, this.scene);
+    const result = await BABYLON.SceneLoader.ImportMeshAsync('', KIT_DIR, fileName, this.scene);
     result.meshes.forEach(m => this._meshes.push(m));
     const mesh = result.meshes[1]; // meshes[0]은 빈 __root__ 트랜스폼 노드
     mesh.setEnabled(false); // 인스턴스만 렌더, 템플릿 자체는 숨김
     return mesh;
   }
 
-  /** 커브를 따라 실측 호 길이(spacing)마다 template.createInstance()를 배치 (폐곡선이므로 마지막→첫 점 이음매도 포함) */
-  _instanceAlongCurve(template, spacing, placeFn) {
-    const pts = [...this.points, this.points[0]]; // 마지막 점 → 첫 점으로 돌아오는 구간까지 순회
-    let acc = 0;
+  /** 폐곡선을 실측 호 길이 spacing(m)마다 샘플링 — 마지막 점→첫 점 이음매 구간까지 포함.
+   * 반환: [{ pos, tangent, t, s(누적 호 길이), L(전체 길이) }] — 첫 샘플은 출발점(s=0) */
+  _sampleLoop(spacing) {
+    const pts = [...this.points, this.points[0]];
+    const samples = [];
+    let s = 0;
+    let next = 0;
     for (let i = 1; i < pts.length; i++) {
       const prev = pts[i - 1];
-      const curr = pts[i];
-      acc += BABYLON.Vector3.Distance(prev, curr);
-      if (acc >= spacing) {
-        const tangent = curr.subtract(prev).normalize();
-        const inst = template.createInstance(`${template.name}_${i}`);
-        const t = Math.min(1, i / (this.points.length - 1));
-        placeFn(inst, curr, tangent, t);
-        this._meshes.push(inst);
-        acc = 0;
+      const segLen = BABYLON.Vector3.Distance(prev, pts[i]);
+      if (segLen === 0) continue;
+      const tangent = pts[i].subtract(prev).scale(1 / segLen);
+      // 한 점 간격 안에 여러 타일이 들어갈 수 있으므로 점 사이를 선형 보간해 정확히 spacing마다 배치
+      while (next < s + segLen) {
+        const f = (next - s) / segLen;
+        samples.push({
+          pos: BABYLON.Vector3.Lerp(prev, pts[i], f),
+          tangent,
+          t: Math.min(1, (i - 1 + f) / (this.points.length - 1)),
+          s: next,
+        });
+        next += spacing;
       }
+      s += segLen;
     }
+    samples.forEach(p => { p.L = s; });
+    return samples;
   }
 
   /** 스테이지 재로드 시 이전 트랙의 레일/지지대/스테이션 리소스 정리 */

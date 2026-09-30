@@ -124,12 +124,14 @@ const Game = {
       this.cartMesh.dispose();
       this.cartMesh = null;
     }
-    const result = await BABYLON.SceneLoader.ImportMeshAsync('', 'assets/models/', 'cart.glb', this.scene);
+    // 트랙 패밀리(railType)에 맞는 Kenney 카트 — 레일과 같은 KIT_SCALE로 맞춰야 레일 폭과 바퀴가 일치
+    const result = await BABYLON.SceneLoader.ImportMeshAsync('', KIT_DIR, this.track.family.cart, this.scene);
     // meshes[0]("__root__")는 glTF 좌표계 변환용 미러링(scaling.z=-1)+180도 회전이 baked-in 되어 있어
     // lookAt()과 결합하면 급커브에서 시각적으로 틀어짐 — track.js의 레일/지지대/스테이션과 동일하게
     // 실제 지오메트리 메시(meshes[1])를 부모에서 분리해 깨끗한 트랜스폼으로 사용
     this.cartMesh = result.meshes[1];
     this.cartMesh.parent = null;
+    this.cartMesh.scaling.setAll(KIT_SCALE);
     this.cartMesh.setEnabled(true);
     result.meshes[0].dispose(); // 빈 __root__는 더 이상 필요 없음
     this._updateCartMesh();

@@ -6,7 +6,7 @@ description: Build, run, and drive the ride-it (떨어진다!!!) Babylon.js brow
 No bundler — `index.html` loads Babylon.js from a CDN and each
 `js/*.js` file via plain `<script>` tags. There is no build step and
 no app state beyond `window.Game`. Drive it with
-`.claude/skills/run-ride-it/driver.mjs`, a headless-Chromium
+`.Codex/skills/run-ride-it/driver.mjs`, a headless-Chromium
 (Playwright) script that serves the project root itself (Node's
 built-in `http`, no separate dev-server dependency), clicks through
 stage-select, and inspects `window.Game.track` / `window.Game.cart`
@@ -20,7 +20,7 @@ One-time, inside the skill directory (keeps Playwright out of the
 game's own `package.json` — it's driver tooling, not a game dependency):
 
 ```bash
-cd .claude/skills/run-ride-it
+cd .Codex/skills/run-ride-it
 npm install
 npx playwright install chromium
 ```
@@ -28,7 +28,7 @@ npx playwright install chromium
 ## Run (agent path)
 
 ```bash
-cd .claude/skills/run-ride-it
+cd .Codex/skills/run-ride-it
 node driver.mjs --stage=0 --pull=0.6 --shot=/tmp/ride-it-shots/stage0.png
 ```
 

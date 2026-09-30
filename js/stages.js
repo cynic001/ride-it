@@ -13,8 +13,9 @@
  * segment.gate: { type: 'boost'|'brake'|'finish', timingWindow: {start, end} } | null
  * segment.airtimeZone: boolean (해당 구간에서 손들기 입력 시 에어타임 보너스)
  *
- * railType: 'standard' | 'single' | 'hybrid' — track.js가 assets/models/rail_<type>.glb를 커브를 따라 인스턴싱 배치.
- *   지지대는 railType==='hybrid'면 pillar_wood.glb, 그 외엔 pillar_steel.glb 사용 (motif의 실제 소재 반영).
+ * railType: 'mouse' | 'hanging' | 'monorail' | 'steel' | 'wood' — Kenney Coaster Kit(CC0)의 트랙 패밀리.
+ *   track.js가 assets/vendor/kenney-coaster-kit/coaster-<type>-track.glb(1m 반복 타일)를 커브를 따라
+ *   인스턴싱 배치하고, 같은 패밀리에 맞는 카트(train)를 고른다 — 매핑은 track.js의 KIT_FAMILIES 참고.
  *
  * 모든 스테이지는 폐곡선(마지막 제어점이 첫 제어점과 가까운 위치·진행방향)으로 설계 — track.js가
  * Curve3.CreateCatmullRomSpline을 closed:true로 생성해 이음매 없이 순환.
@@ -26,7 +27,7 @@ const STAGES = [
     id: 1,
     name: '우방타워랜드',
     motif: '이월드 (구 우방타워랜드) — 입문용 완만한 트랙',
-    railType: 'standard',
+    railType: 'mouse',
     baseSpeedKmh: 45,
     trackLengthM: 480,
     // 폐곡선(스타디움형 오벌) — 좌측으로 나갔다가 원거리 턴을 돌아 우측으로 돌아옴. 5개 스테이지 중 가장 완만한 기복.
@@ -68,7 +69,7 @@ const STAGES = [
     id: 2,
     name: '도투락월드: 급류의 계곡',
     motif: '경주월드 파에톤 — 인버티드, 최고속도 72km/h, 길이 1148m, 360도 루프',
-    railType: 'standard',
+    railType: 'hanging',
     baseSpeedKmh: 72,
     trackLengthM: 1180,
     // 폐곡선 — 출발 직후 인버티드 루프, 이후 원거리 턴을 돌아 복귀. 스테이지1보다 기복/커브 밀도 상승.
@@ -123,7 +124,7 @@ const STAGES = [
     id: 3,
     name: '도투락월드: 외줄 타기',
     motif: '경주월드 스콜&하티 — 아시아 최초 싱글레일, 좌우 밸런스가 핵심',
-    railType: 'single',
+    railType: 'monorail',
     baseSpeedKmh: 80,
     trackLengthM: 960,
     // 폐곡선 — 좌우 연속 스윙(싱글레일 특유의 불안정감)을 원거리 턴 전후로 촘촘하게 배치, 스테이지2보다 커브 밀도 상승.
@@ -181,7 +182,7 @@ const STAGES = [
     id: 4,
     name: '도투락월드: 수직 강하',
     motif: '경주월드 드라켄 — 90도 수직 다이브, 최고높이 70m, 최고속도 104km/h',
-    railType: 'standard',
+    railType: 'steel',
     baseSpeedKmh: 104,
     trackLengthM: 1080,
     // 폐곡선 — 출발 직후 90도 다이브(핵심 기믹)를 그대로 유지, 이후 언덕/커브를 촘촘히 배치하고
@@ -237,7 +238,7 @@ const STAGES = [
     id: 5,
     name: '자연농원',
     motif: '에버랜드 (구 자연농원) T익스프레스 — 77도 낙하, 4.5G, 12회 무중력, 1.6km, 하이브리드 목재+스틸',
-    railType: 'hybrid',
+    railType: 'wood',
     baseSpeedKmh: 104,
     trackLengthM: 1680,
     // 폐곡선 — 5개 스테이지 중 가장 다이나믹: 77도 급낙하 이후 무중력 힐을 최대한 촘촘히 연속 배치하고,
