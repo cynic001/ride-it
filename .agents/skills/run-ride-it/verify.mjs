@@ -126,25 +126,36 @@ async function main() {
     }));
     const bgmOn = await rms();
     check('bgm audible after first gesture', bgmOn > 0.005, `rms=${bgmOn.toFixed(4)} state=${await page.evaluate(() => AudioManager.ctx && AudioManager.ctx.state)}`);
-    await page.locator('#audioBtn').click();
+    await page.locator('#settingsBtn').click();
+    await page.locator('[data-setting="audio"] [data-value="off"]').click();
     await sleep(400);
     const bgmOff = await rms();
     check('sound toggle mutes bgm', bgmOff < 0.001, `rms=${bgmOff.toFixed(5)}`);
-    await page.locator('#audioBtn').click();
+    await page.locator('[data-setting="audio"] [data-value="on"]').click();
+    await page.locator('#settingsCloseBtn').click();
     await sleep(300);
 
-    if (await page.locator('#creditsBtn').count()) {
-      await page.locator('#creditsBtn').click();
-      await page.waitForSelector('#creditsOverlay');
-      await sleep(400);
-      await shot('03_credits');
-      await page.locator('#creditsCloseBtn').click();
-      await sleep(300);
-    }
+    // 설정(톱니바퀴) → 크레딧
+    await page.locator('#settingsBtn').click();
+    await page.waitForSelector('#settingsOverlay');
+    await sleep(400);
+    await shot('03_settings');
+    await page.locator('#creditsBtn').click();
+    await page.waitForSelector('#creditsOverlay');
+    await sleep(400);
+    await shot('03b_credits');
+    await page.locator('#creditsCloseBtn').click();
+    await page.locator('#settingsCloseBtn').click();
+    await sleep(300);
 
     for (const s of STAGES) {
       const tag = `s${s + 1}`;
       await page.locator(`.stage-btn[data-index="${s}"]`).click();
+      await page.waitForSelector('#stageStartBtn');
+      await sleep(300);
+      if (s === STAGES[0]) await shot(`${tag}_00_detail`);
+      check(`${tag} detail screen (no auto start)`, await page.evaluate(() => !Game.track || !document.getElementById('startBar')));
+      await page.locator('#stageStartBtn').click();
       await sleep(150);
       if (await page.locator('#loadingOverlay').count()) await shot(`${tag}_0_loading`);
       await page.waitForSelector('#startBar', { timeout: 30000 });
@@ -292,6 +303,7 @@ async function main() {
       if (await page.locator('#titleScreen').count()) await page.locator('#titleScreen').click();
       await page.waitForSelector('.stage-btn', { timeout: 15000 });
       await page.locator('.stage-btn[data-index="0"]').click();
+      await page.locator('#stageStartBtn').click();
       const ok = await page.waitForSelector('#startBar', { timeout: 30000 }).then(() => true).catch(() => false);
       await sleep(800);
       await shot('11_offline_stage1');

@@ -154,12 +154,42 @@
   .badge { padding: 3px 8px; border-radius: 999px; font-size: 12px; background: #eef1f8; color: #5b6488; }
   .badge.clear { background: var(--green); color: #fff; }
   .badge.rank-badge { background: var(--navy); color: var(--yellow); font-size: 14px; min-width: 28px; text-align: center; }
-  .settings-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; max-width: 420px; margin-top: 4px; }
-  .pill {
-    display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 14px; border-radius: 999px;
-    background: var(--navy); color: #fff; font-size: 14px; box-shadow: 0 4px 0 #0a0e1f;
+  /* ── 공통 레이아웃 토큰: 상단 내비(좌 아이콘 · 가운데 제목/로고 · 우 아이콘), 아이콘 버튼 44px, 세그먼트 컨트롤 ── */
+  .top-nav {
+    width: 100%; max-width: 440px; display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 8px;
   }
-  .pill svg { width: 18px; height: 18px; color: var(--yellow); }
+  .top-nav .logo { justify-self: center; }
+  .top-title { justify-self: center; font-size: 20px; color: #fff; letter-spacing: 2px; -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; }
+  .icon-btn {
+    width: 44px; height: 44px; padding: 0; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+    background: var(--navy); color: var(--yellow); box-shadow: 0 4px 0 #0a0e1f;
+  }
+  .icon-btn svg { width: 22px; height: 22px; }
+  #uiRoot .icon-btn:active, #uiRoot .seg-btn:active { transform: translateY(3px); box-shadow: none; }
+  .stage-detail {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 14px 16px 20px; overflow-y: auto; color: #fff;
+  }
+  .detail-card { max-width: 440px; gap: 12px; }
+  .stage-num.big { width: 56px; height: 56px; font-size: 30px; border-radius: 16px; }
+  .detail-card h2 { font-size: 26px; }
+  .detail-motif { font-size: 14px; color: #4a5378; }
+  .detail-meta { display: flex; gap: 12px; align-items: center; font-size: 14px; color: #5b6488; }
+  .field { width: 100%; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+  .field-label { font-size: 13px; color: #5b6488; }
+  .field-desc { font-size: 12px !important; color: #5b6488 !important; line-height: 1.4 !important; }
+  .seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: #eef1f8; }
+  .seg-btn {
+    flex: 1; min-height: 44px; padding: 6px 4px; border-radius: 10px; font-size: 14px; background: transparent; color: #5b6488;
+  }
+  .seg-btn.on { background: var(--navy); color: var(--yellow); box-shadow: 0 3px 0 #0a0e1f; }
+  .actions.row { flex-direction: row; }
+  .actions.row .btn { flex: 1; }
+  .btn.big { min-height: 56px; font-size: 22px; letter-spacing: 2px; }
+  @media (min-width: 700px) { /* 태블릿/데스크톱: 카드가 과하게 늘어나지 않게 가운데 정렬 유지, 목록은 2열 */
+    .stage-list { max-width: 720px; display: grid; grid-template-columns: 1fr 1fr; }
+    .top-nav { max-width: 720px; }
+  }
 
   /* ── HUD ── .hud는 클릭을 통과시키고(캔버스가 밸런스/게이트 입력을 받음) 실제 버튼만 다시 살림 */
   #uiRoot .hud { position: relative; height: 100%; pointer-events: none; }

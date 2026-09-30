@@ -14,6 +14,23 @@ const LapsManager = {
 };
 window.LapsManager = LapsManager;
 
+// 조작 방식 — 'onehand'(기본: 하단 엄지 패드) / 'tilt'(기울기 밸런스 + 패드 탭/홀드) / 'twohand'(좌 ◀▶ + 우 BOOST/손 들기)
+const CONTROL_MODES = {
+  onehand: { label: '한손', desc: '하단 패드에서 좌우로 밀면 밸런스, 톡 = 부스트, 꾹 = 손 들기' },
+  tilt: { label: '한손 + 기울기', desc: '폰을 좌우로 기울여 밸런스, 패드 톡 = 부스트, 꾹 = 손 들기' },
+  twohand: { label: '양손', desc: '왼쪽 ◀ ▶ 로 밸런스, 오른쪽 BOOST 버튼과 손 들기 버튼' },
+};
+const ControlSettings = {
+  mode: CONTROL_MODES[localStorage.getItem('rc_control')] ? localStorage.getItem('rc_control') : 'onehand',
+  set(mode) {
+    if (!CONTROL_MODES[mode]) return;
+    this.mode = mode;
+    try { localStorage.setItem('rc_control', mode); } catch (e) { /* 무시 */ }
+  },
+};
+window.CONTROL_MODES = CONTROL_MODES;
+window.ControlSettings = ControlSettings;
+
 // 스테이지별 진행 저장 — { [stage.id]: { cleared, best, rank, plays } } (인덱스가 아닌 id 기준이라 순서가 바뀌어도 유지)
 const RANK_ORDER = 'CBAS';
 const ProgressManager = {
@@ -61,6 +78,8 @@ const ICONS = {
   info: svg('<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8.01"/>'),
   play: svg('<polygon points="7 4 20 12 7 20"/>', true),
   retry: svg('<polyline points="3 4 3 10 9 10"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L3 10"/>'),
+  gear: svg('<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
+  back: svg('<polyline points="15 5 8 12 15 19"/>'),
   list: svg('<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>'),
 };
 
@@ -189,11 +208,17 @@ const UI = {
     document.getElementById('titleScreen').addEventListener('click', onStart, { once: true });
   },
 
-  showStageSelect(stages, onSelect) {
+  /** 스테이지 선택 — 카드를 누르면 바로 시작하지 않고 상세 화면으로. onStart(i)는 상세의 START에서 호출 */
+  showStageSelect(stages, onStart) {
+    this._onStart = onStart;
     this._setScreen(`
       <div class="screen stage-select">
         ${MENU_BG}
-        ${LOGO(true)}
+        <div class="top-nav">
+          <button class="icon-btn" id="howtoBtn" aria-label="조작법">${ICONS.help}</button>
+          ${LOGO(true)}
+          <button class="icon-btn" id="settingsBtn" aria-label="설정">${ICONS.gear}</button>
+        </div>
         <div class="progress-summary">클리어 ${ProgressManager.clearedCount} / ${stages.length}</div>
         <div class="stage-list">
           ${stages.map((s, i) => `
@@ -208,28 +233,101 @@ const UI = {
             </button>
           `).join('')}
         </div>
-        <div class="settings-row">
-          <button class="pill" id="qualityBtn">${ICONS.sparkle}<span>그래픽 ${this._qualityLabel()}</span></button>
-          <button class="pill" id="lapsBtn">${ICONS.repeat}<span>${LapsManager.current}랩</span></button>
-          <button class="pill" id="audioBtn">${AudioManager.enabled ? ICONS.soundOn : ICONS.soundOff}<span>사운드 ${AudioManager.enabled ? 'ON' : 'OFF'}</span></button>
-          <button class="pill" id="howtoBtn">${ICONS.help}<span>조작법</span></button>
-          <button class="pill" id="creditsBtn">${ICONS.info}<span>크레딧</span></button>
-        </div>
       </div>
     `);
 
     this.root.querySelectorAll('.stage-btn').forEach(btn => {
-      btn.addEventListener('click', () => onSelect(Number(btn.dataset.index)));
+      btn.addEventListener('click', () => this.showStageDetail(Number(btn.dataset.index)));
     });
-
-    document.getElementById('qualityBtn').addEventListener('click', () => this._cycleQuality());
-    document.getElementById('lapsBtn').addEventListener('click', () => this._cycleLaps());
-    document.getElementById('audioBtn').addEventListener('click', () => this._cycleAudio());
     document.getElementById('howtoBtn').addEventListener('click', () => this.showHowTo());
-    document.getElementById('creditsBtn').addEventListener('click', () => this.showCredits());
+    document.getElementById('settingsBtn').addEventListener('click', () => this.showSettings());
 
-    // 최초 1회만 자동으로 조작법 안내 — 이후엔 위 버튼으로만 접근
+    // 최초 1회만 자동으로 조작법 안내 — 이후엔 ? 버튼으로만 접근
     if (!localStorage.getItem('rc_howto_seen')) this.showHowTo();
+  },
+
+  /** 스테이지 상세 — 모티브 설명, 최고 기록, 랩 수 선택, START */
+  showStageDetail(i) {
+    const s = STAGES[i];
+    const p = ProgressManager.get(s.id);
+    this._setScreen(`
+      <div class="screen stage-detail">
+        ${MENU_BG}
+        <div class="top-nav">
+          <button class="icon-btn" id="detailBackBtn" aria-label="뒤로">${ICONS.back}</button>
+          <span class="top-title">STAGE ${i + 1}</span>
+          <button class="icon-btn" id="settingsBtn" aria-label="설정">${ICONS.gear}</button>
+        </div>
+        <div class="card detail-card">
+          <span class="stage-num big">${i + 1}</span>
+          <h2>${s.name}</h2>
+          <p class="detail-motif">${s.motif}</p>
+          <div class="detail-meta"><span class="stars">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><span>최고 ${Math.round(s.baseSpeedKmh * 1.5)}km/h</span></div>
+          <div class="stats">
+            <div class="stat"><small>최고 랭크</small><b>${p ? p.rank : '-'}</b></div>
+            <div class="stat"><small>최고 점수</small><b>${p ? p.best.toLocaleString() : '-'}</b></div>
+            <div class="stat full"><small>플레이 ${p ? p.plays : 0}회</small></div>
+          </div>
+          <div class="field">
+            <span class="field-label">랩 수</span>
+            <div class="seg" id="lapSeg">
+              ${[1, 2, 3].map(n => `<button class="seg-btn${LapsManager.current === n ? ' on' : ''}" data-laps="${n}">${n}랩</button>`).join('')}
+            </div>
+          </div>
+          <div class="actions"><button id="stageStartBtn" class="btn primary wide big">${ICONS.play}START</button></div>
+        </div>
+      </div>
+    `);
+    document.getElementById('detailBackBtn').addEventListener('click', () => this.showStageSelect(STAGES, this._onStart));
+    document.getElementById('settingsBtn').addEventListener('click', () => this.showSettings());
+    this.root.querySelectorAll('#lapSeg .seg-btn').forEach(b => b.addEventListener('click', () => {
+      LapsManager.setLaps(Number(b.dataset.laps));
+      this.root.querySelectorAll('#lapSeg .seg-btn').forEach(x => x.classList.toggle('on', x === b));
+    }));
+    document.getElementById('stageStartBtn').addEventListener('click', () => {
+      // 기울기 모드는 iOS 권한 요청이 사용자 탭 안에서만 가능 — START 탭을 그 제스처로 사용
+      if (ControlSettings.mode === 'tilt' && window.InputController && InputController.requestTiltPermission) InputController.requestTiltPermission();
+      (this._onStart || (n => Game.loadStage(n)))(i);
+    });
+  },
+
+  /** 설정 — 그래픽 품질/스타일, 사운드, 조작 방식 + 조작법/크레딧 링크 */
+  showSettings() {
+    const seg = (key, options, current) => `<div class="seg" data-setting="${key}">${options.map(([v, l]) =>
+      `<button class="seg-btn${v === current ? ' on' : ''}" data-value="${v}">${l}</button>`).join('')}</div>`;
+    const el = this._modal('settingsOverlay', `
+      <h2>설정</h2>
+      <div class="field"><span class="field-label">그래픽 품질</span>
+        ${seg('quality', [['low', '낮음'], ['medium', '보통'], ['high', '높음']], QualityManager.current)}</div>
+      <div class="field"><span class="field-label">그래픽 스타일</span>
+        ${seg('style', Object.entries(STYLES).map(([k, v]) => [k, v.label]), StyleManager.current)}</div>
+      <div class="field"><span class="field-label">사운드</span>
+        ${seg('audio', [['on', '켜기'], ['off', '끄기']], AudioManager.enabled ? 'on' : 'off')}</div>
+      <div class="field"><span class="field-label">조작 방식</span>
+        ${seg('control', Object.entries(CONTROL_MODES).map(([k, v]) => [k, v.label]), ControlSettings.mode)}
+        <p class="field-desc" id="controlDesc">${CONTROL_MODES[ControlSettings.mode].desc}</p></div>
+      <div class="actions row">
+        <button id="settingsHowtoBtn" class="btn">${ICONS.help}조작법</button>
+        <button id="creditsBtn" class="btn">${ICONS.info}크레딧</button>
+      </div>
+      <div class="actions"><button id="settingsCloseBtn" class="btn primary wide">닫기</button></div>
+    `, { solid: true });
+    el.querySelectorAll('.seg').forEach(group => group.querySelectorAll('.seg-btn').forEach(b => b.addEventListener('click', () => {
+      const v = b.dataset.value;
+      group.querySelectorAll('.seg-btn').forEach(x => x.classList.toggle('on', x === b));
+      const key = group.dataset.setting;
+      if (key === 'quality') { QualityManager.setPreset(v); if (Game.scene) Game._applyQualitySettings(); }
+      else if (key === 'style') StyleManager.set(v);
+      else if (key === 'audio') AudioManager.setEnabled(v === 'on');
+      else if (key === 'control') {
+        ControlSettings.set(v);
+        document.getElementById('controlDesc').textContent = CONTROL_MODES[v].desc;
+        if (v === 'tilt' && window.InputController && InputController.requestTiltPermission) InputController.requestTiltPermission(); // 이 탭이 권한 요청 제스처
+      }
+    })));
+    document.getElementById('settingsHowtoBtn').addEventListener('click', () => this.showHowTo());
+    document.getElementById('creditsBtn').addEventListener('click', () => this.showCredits());
+    document.getElementById('settingsCloseBtn').addEventListener('click', () => el.remove());
   },
 
   /** 스테이지 카드 오른쪽 배지 — 클리어 시 최고 랭크 + 최고 점수, 미클리어는 NEW */
@@ -329,29 +427,6 @@ const UI = {
   hidePauseOverlay() {
     const el = document.getElementById('pauseOverlay');
     if (el) el.remove();
-  },
-
-  _cycleQuality() {
-    const order = ['low', 'medium', 'high'];
-    const next = order[(order.indexOf(QualityManager.current) + 1) % order.length];
-    QualityManager.setPreset(next);
-    const btn = document.getElementById('qualityBtn');
-    if (btn) btn.lastElementChild.textContent = `그래픽 ${this._qualityLabel()}`;
-  },
-
-  _cycleLaps() {
-    const order = [1, 2, 3];
-    const next = order[(order.indexOf(LapsManager.current) + 1) % order.length];
-    LapsManager.setLaps(next);
-    const btn = document.getElementById('lapsBtn');
-    if (btn) btn.lastElementChild.textContent = `${next}랩`;
-  },
-
-  _cycleAudio() {
-    const next = !AudioManager.enabled;
-    AudioManager.setEnabled(next);
-    const btn = document.getElementById('audioBtn');
-    if (btn) btn.innerHTML = `${next ? ICONS.soundOn : ICONS.soundOff}<span>사운드 ${next ? 'ON' : 'OFF'}</span>`;
   },
 
   showStartPrompt(name, motif) {
