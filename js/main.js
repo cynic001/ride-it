@@ -351,7 +351,8 @@ const Game = {
     this._updateCartMesh();
     UI.updateHUD(this.cart, this.track);
 
-    AudioManager.updateWind(this.cart.speed / this.cart.maxSpeedMs);
+    const diveNow = Math.max(0, -this.track.getTangentAt(this.cart.t).y - 0.2);
+    AudioManager.updateWind(this.cart.speed / this.cart.maxSpeedMs, Math.min(1, diveNow * 1.6));
     const currentSeg = this.track.getSegmentAt(this.cart.t);
     AudioManager.setAirtimeHold(currentSeg.airtimeZone && this.cart.airtimeHolding);
 

@@ -6,7 +6,10 @@
 
 const G = 9.8;
 const FRICTION_RETAIN_PER_SECOND = 0.975; // 평지·무입력 기준 초당 2.5% 감속 (dt 무관하게 Math.pow(., dt)로 적용)
-const MIN_SPEED = 2;          // 최소 속도 (m/s) — 완전 정지 방지
+const MIN_SPEED = 2;
+// 내리막 전용 중력 배율 — 떨어질 때 체감 가속을 키움(오르막은 실제 중력 그대로라 에너지 보존보다 조금 "빨라지는" 쪽으로만
+// 어긋남). 최고속도 상한(기본×1.5)이 그대로라 폭주하지 않음
+const DOWNHILL_GRAVITY = 1.5;          // 최소 속도 (m/s) — 완전 정지 방지
 // 부스트 = 일정 거리 동안 지속되는 가속(순간 배율 곱하기 대신). accel은 기본 속도 대비 초당 가속량, distance는 화면 진행 m.
 // Perfect는 길고 강하게, Good은 짧고 약하게, Miss는 없음 — 속도 상한(기본×1.5)은 그대로 적용
 const BOOST = { perfect: { accel: 0.6, distance: 80 }, good: { accel: 0.35, distance: 40 } };
@@ -146,7 +149,7 @@ class Cart {
     if (this._lastHeight !== null) {
       const dh = this._lastHeight - currentHeight; // 내려가면 양수
       // v² = v0² + 2g*dh (에너지 보존 — 마찰은 아래서 별도의 dt 독립적 감쇠로 적용)
-      const vSquared = this.speed * this.speed + 2 * G * dh;
+      const vSquared = this.speed * this.speed + 2 * G * (dh > 0 ? DOWNHILL_GRAVITY : 1) * dh;
       this.speed = Math.sqrt(Math.max(vSquared, MIN_SPEED * MIN_SPEED));
     }
     this._lastHeight = currentHeight;

@@ -104,10 +104,11 @@ const AudioManager = {
 
   /** main.js가 매 고정 스텝마다 속도 비율(현재 속도 ÷ 스테이지 최고속도 상한, 0~1)로 호출 — 0이면 무음.
    * 볼륨·밝기(로우패스)·피치(재생 속도)를 모두 비선형으로 키워 저속↔고속 차이가 확실히 들리게 */
-  updateWind(ratio) {
+  updateWind(ratio, dive = 0) {
     if (!this._ready() || !this._windGain) return;
     const t = this.ctx.currentTime;
-    const norm = Math.max(0, Math.min(1, ratio));
+    // 급하강(dive 0~1) 중엔 속도가 같아도 바람을 더 세고 밝게 — 떨어지는 순간이 확실히 들리게
+    const norm = Math.max(0, Math.min(1, ratio + dive * 0.35));
     this._windFilter.frequency.setTargetAtTime(300 + norm * norm * 7500, t, 0.08);
     this._windSource.playbackRate.setTargetAtTime(0.55 + norm * 1.25, t, 0.1); // 피치 0.55→1.8배
     this._windGain.gain.setTargetAtTime(norm > 0 ? 0.02 + Math.pow(norm, 1.4) * 0.45 : 0, t, 0.08);
