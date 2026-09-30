@@ -303,7 +303,8 @@ const UI = {
       <div class="field"><span class="field-label">그래픽 스타일</span>
         ${seg('style', Object.entries(STYLES).map(([k, v]) => [k, v.label]), StyleManager.current)}</div>
       <div class="field"><span class="field-label">사운드</span>
-        ${seg('audio', [['on', '켜기'], ['off', '끄기']], AudioManager.enabled ? 'on' : 'off')}</div>
+        ${seg('audio', [['on', '켜기'], ['off', '끄기']], AudioManager.enabled ? 'on' : 'off')}
+        <p class="field-desc">소리가 안 나면 아이폰 무음 모드를 꺼주세요</p></div>
       <div class="field"><span class="field-label">조작 방식</span>
         ${seg('control', Object.entries(CONTROL_MODES).map(([k, v]) => [k, v.label]), ControlSettings.mode)}
         <p class="field-desc" id="controlDesc">${CONTROL_MODES[ControlSettings.mode].desc}</p></div>

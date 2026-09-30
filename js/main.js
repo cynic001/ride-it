@@ -470,6 +470,9 @@ window.addEventListener('DOMContentLoaded', () => {
   UI.showTitle(() => UI.showStageSelect(STAGES, stageIndex => Game.loadStage(stageIndex)));
 });
 
-// iOS Safari 등 자동재생 제한 대응 — 페이지 전체에서 가장 먼저 발생하는 pointerdown(스테이지
-// 선택 탭 포함)에서 AudioContext를 생성/resume. capture+once로 특정 요소에 종속되지 않게 처리.
-window.addEventListener('pointerdown', () => AudioManager.unlock(), { capture: true, once: true });
+// iOS Safari 등 자동재생 제한 대응 — 사용자 제스처에서 AudioContext 생성/resume.
+// 한 번만 시도하면 iOS에서 첫 제스처가 오디오 허용으로 인정되지 않았거나(pointerdown) 백그라운드 복귀 후 멈춘 경우
+// 영영 소리가 안 남 — 컨텍스트가 돌고 있지 않은 동안은 모든 제스처에서 다시 시도(돌고 있으면 즉시 반환)
+['pointerdown', 'touchend', 'click', 'keydown'].forEach(type => window.addEventListener(type, () => {
+  if (!AudioManager.ctx || AudioManager.ctx.state !== 'running') AudioManager.unlock();
+}, { capture: true }));

@@ -9,7 +9,7 @@
  * 빌드 단계가 없어 배포마다 버전을 올리지 않아도 되도록 "내용 비교"로 새 버전을 감지함. CACHE 이름은 캐시 구조가
  * 바뀔 때만 올리면 됨(올리면 activate에서 이전 캐시 전부 삭제).
  */
-const CACHE = 'ride-it-v2';
+const CACHE = 'ride-it-v3';
 const CORE = [
   './',
   'index.html',
@@ -31,7 +31,7 @@ const CDN = [
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE)
-      .then(c => Promise.all([c.addAll(CORE), c.addAll(CDN.map(u => new Request(u, { mode: 'cors' })))]))
+      .then(c => Promise.all([c.addAll(CORE.map(u => new Request(u, { cache: 'reload' }))), c.addAll(CDN.map(u => new Request(u, { mode: 'cors' })))]))
       .then(() => self.skipWaiting())
   );
 });
@@ -69,7 +69,9 @@ self.addEventListener('fetch', e => {
 
   if (networkFirst) {
     e.respondWith(
-      fetch(req).then(res => put(req, res))
+      // cache:'no-cache' — GitHub Pages의 HTTP 캐시(max-age 600)를 거치지 않고 서버에 재확인(304면 가벼움). 안 하면
+      // 배포 직후 최대 10분 동안 옛 js가 돌 수 있었음
+      fetch(req, { cache: 'no-cache' }).then(res => put(req, res))
         .catch(() => caches.match(req).then(hit => hit || caches.match('index.html')))
     );
     return;

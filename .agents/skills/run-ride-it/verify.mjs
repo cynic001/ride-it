@@ -126,6 +126,13 @@ async function main() {
     }));
     const bgmOn = await rms();
     check('bgm audible after first gesture', bgmOn > 0.005, `rms=${bgmOn.toFixed(4)} state=${await page.evaluate(() => AudioManager.ctx && AudioManager.ctx.state)}`);
+    // 오디오가 멈춘 경우(iOS 백그라운드 복귀·전화 끼어들기 등) 다음 탭에서 다시 살아나야 함
+    await page.evaluate(() => AudioManager.ctx.suspend());
+    await sleep(100);
+    await page.mouse.click(10, 10);
+    await sleep(200);
+    const st = await page.evaluate(() => AudioManager.ctx.state);
+    check('audio re-unlocks on next tap after suspend', st === 'running', st);
     await page.locator('#settingsBtn').click();
     await page.locator('[data-setting="audio"] [data-value="off"]').click();
     await sleep(400);

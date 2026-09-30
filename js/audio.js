@@ -3,8 +3,9 @@
  * Web Audio API 순수 합성 기반 사운드 시스템 — 외부 오디오 라이브러리/샘플 없음
  * (기존 chaechae 게임들과 동일한 방식: OscillatorNode/BufferSource로 즉석 합성)
  *
- * iOS Safari 등 자동재생 제한 대응: AudioContext는 반드시 첫 사용자 제스처(pointerdown)
- * 안에서 생성/resume — main.js가 window 최상위 pointerdown(capture, once)에서 unlock() 호출.
+ * iOS Safari 등 자동재생 제한 대응: AudioContext는 사용자 제스처 안에서 생성/resume — main.js가 pointerdown/touchend/
+ * click/keydown 모두에서 unlock()을 부르고, 컨텍스트가 'running'이 아니면(첫 시도 실패·백그라운드 복귀·전화 등으로
+ * 'interrupted') 다음 제스처에서 계속 다시 시도. iOS 17+는 audioSession을 'playback'으로 두어 무음 스위치의 영향을 줄임.
  */
 const AudioManager = {
   ctx: null,
@@ -22,6 +23,8 @@ const AudioManager = {
     if (!this.ctx) {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return; // 미지원 브라우저는 조용히 무시(사운드 없이 정상 진행)
+      // iOS 17+ Safari: 기본(ambient) 세션은 무음 스위치를 따르므로 게임 소리가 꺼짐 → 미디어 재생 세션으로
+      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 미지원 */ }
       this.ctx = new Ctx();
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.value = this.enabled ? 1 : 0;
@@ -30,7 +33,17 @@ const AudioManager = {
       this._initAirtimeTone();
       this.startBgm();
     }
-    if (this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.ctx.state !== 'running') {
+      this.ctx.resume().catch(() => {});
+      // WebKit은 제스처 안에서 실제로 소리를 한 번 시작해야 잠금이 풀리는 경우가 있어 무음 1샘플 재생
+      try {
+        const b = this.ctx.createBuffer(1, 1, this.ctx.sampleRate);
+        const src = this.ctx.createBufferSource();
+        src.buffer = b;
+        src.connect(this.ctx.destination);
+        src.start(0);
+      } catch (e) { /* 무시 */ }
+    }
   },
 
   /** 스테이지 선택 화면의 사운드 토글 버튼 — QualityManager.setPreset과 동일한 저장 패턴 */
@@ -341,7 +354,7 @@ window.addEventListener('cart-launched', () => AudioManager.setBgmMode('ride'));
 document.addEventListener('visibilitychange', () => {
   if (!AudioManager.ctx) return;
   if (document.hidden) AudioManager.ctx.suspend();
-  else AudioManager.ctx.resume();
+  else AudioManager.ctx.resume().catch(() => {}); // 제스처 없이 실패하면 다음 탭에서 unlock()이 다시 시도
 });
 
 window.AudioManager = AudioManager;
