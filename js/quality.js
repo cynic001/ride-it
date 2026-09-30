@@ -9,27 +9,24 @@ const QUALITY_PRESETS = {
     shadows: 'none',
     cameraShake: false,
     textureResolution: 512,
-    postProcessing: [],
-    skyGradient: false,   // low는 단색 하늘 유지(스카이돔 메시+텍스처 생략)
-    backgroundPropCount: 0,
+    postProcessing: ['fxaa'], // low는 FXAA만(HDR 파이프라인·톤매핑·bloom 생략)
+    backgroundPropCount: 40,  // Nature Kit 나무/바위/풀 인스턴스 수 — 인스턴싱이라 드로우콜은 종류 수만큼만 늘어남
   },
   medium: {
     particleCount: 30,
     shadows: 'baked',
     cameraShake: true,
     textureResolution: 1024,
-    postProcessing: ['fxaa'],
-    skyGradient: true,
-    backgroundPropCount: 12,
+    postProcessing: ['fxaa', 'aces', 'bloom'],
+    backgroundPropCount: 120,
   },
   high: {
     particleCount: 60,
     shadows: 'realtime',
     cameraShake: true,
     textureResolution: 2048,
-    postProcessing: ['fxaa', 'bloom'],
-    skyGradient: true,
-    backgroundPropCount: 24,
+    postProcessing: ['fxaa', 'aces', 'bloom'],
+    backgroundPropCount: 220,
   },
 };
 

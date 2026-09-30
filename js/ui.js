@@ -41,10 +41,13 @@ const UI = {
             </button>
           `).join('')}
         </div>
-        <button class="quality-toggle" id="qualityBtn">그래픽: ${QualityManager.current}</button>
-        <button class="quality-toggle" id="lapsBtn">턴 반복: ${LapsManager.current}랩</button>
-        <button class="quality-toggle" id="audioBtn">사운드: ${AudioManager.enabled ? 'ON' : 'OFF'}</button>
-        <button class="quality-toggle" id="howtoBtn">조작법</button>
+        <div class="settings-row">
+          <button class="quality-toggle" id="qualityBtn">그래픽: ${QualityManager.current}</button>
+          <button class="quality-toggle" id="lapsBtn">턴 반복: ${LapsManager.current}랩</button>
+          <button class="quality-toggle" id="audioBtn">사운드: ${AudioManager.enabled ? 'ON' : 'OFF'}</button>
+          <button class="quality-toggle" id="howtoBtn">조작법</button>
+          <button class="quality-toggle" id="creditsBtn">크레딧</button>
+        </div>
       </div>
     `;
 
@@ -56,6 +59,7 @@ const UI = {
     document.getElementById('lapsBtn').addEventListener('click', () => this._cycleLaps());
     document.getElementById('audioBtn').addEventListener('click', () => this._cycleAudio());
     document.getElementById('howtoBtn').addEventListener('click', () => this.showHowTo());
+    document.getElementById('creditsBtn').addEventListener('click', () => this.showCredits());
 
     // 최초 1회만 자동으로 조작법 안내 — 이후엔 위 버튼으로만 접근
     if (!localStorage.getItem('rc_howto_seen')) this.showHowTo();
@@ -81,6 +85,25 @@ const UI = {
       localStorage.setItem('rc_howto_seen', '1');
       if (onClose) onClose();
     });
+  },
+
+  /** 서드파티 에셋 표기 — Kenney/Poly Haven 모두 CC0라 의무는 없지만 감사 표기 */
+  showCredits() {
+    const el = document.createElement('div');
+    el.className = 'screen modal-overlay';
+    el.id = 'creditsOverlay';
+    el.innerHTML = `
+      <h2>크레딧</h2>
+      <div class="credits-list">
+        <p><strong>떨어진다!!! RIDE IT</strong><br>chaechae studio</p>
+        <p><strong>3D 모델</strong><br>Coaster Kit · Nature Kit — <a href="https://kenney.nl" target="_blank" rel="noopener">Kenney.nl</a> (CC0)</p>
+        <p><strong>하늘 HDRI</strong><br>Kloofendal 43d Clear (Pure Sky) — Greg Zaal, <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a> (CC0)</p>
+        <p><strong>엔진</strong><br>Babylon.js</p>
+      </div>
+      <button id="creditsCloseBtn" class="primary">닫기</button>
+    `;
+    this.root.appendChild(el);
+    document.getElementById('creditsCloseBtn').addEventListener('click', () => el.remove());
   },
 
   showLoadingOverlay() {

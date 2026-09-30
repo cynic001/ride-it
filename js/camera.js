@@ -14,6 +14,8 @@ class CoasterCamera {
     this.camera = new BABYLON.UniversalCamera('coasterCam', new BABYLON.Vector3(0, 10, -20), scene);
     this.camera.minZ = 0.1;
     this.camera.attachControl(canvas, false); // 카트가 주도, 사용자 자유시점 없음
+    this.camera.maxZ = 1500;
+    scene.activeCamera = this.camera; // 스테이지 재로드 시 새 카메라가 확실히 활성화되도록
 
     this.mode = CAMERA_MODES.THIRD_PERSON;
     this.locked = true; // 스타트 구간에는 토글 잠금
@@ -22,6 +24,11 @@ class CoasterCamera {
     this._transitionT = 1; // 1이면 전환 완료 상태
     this._fromPos = this.camera.position.clone();
     this._toPos = this.camera.position.clone();
+  }
+
+  dispose() {
+    this.camera.detachControl();
+    this.camera.dispose();
   }
 
   unlockToggle() {

@@ -49,7 +49,10 @@
   .stage-select {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     height: 100%; gap: 16px; color: #fff; background: var(--navy-soft);
+    overflow-y: auto; padding: 24px 0; /* SE2(667px)에서도 설정 버튼까지 닿도록 넘치면 스크롤 */
   }
+  .settings-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 90%; max-width: 420px; }
+  .settings-row .quality-toggle { margin-top: 0; padding: 8px 14px; }
   .stage-select h1 { font-size: 30px; margin-bottom: 8px; color: var(--yellow); text-shadow: 0 2px 0 rgba(0,0,0,0.35); }
   .stage-list { display: flex; flex-direction: column; gap: 10px; width: 85%; max-width: 400px; }
   .stage-btn {
@@ -149,6 +152,10 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .howto-list { display: flex; flex-direction: column; gap: 10px; text-align: left; max-width: 320px; }
   .howto-list p { font-size: 14px; }
+  #creditsOverlay { background: var(--navy); }
+  .credits-list { display: flex; flex-direction: column; gap: 14px; max-width: 320px; }
+  .credits-list p { font-size: 14px; line-height: 1.5; }
+  .credits-list a { color: var(--yellow); }
 
   .rotate-warning {
     display: none; position: fixed; inset: 0; z-index: 9999;

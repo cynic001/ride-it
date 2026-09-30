@@ -16,7 +16,10 @@ const Game = {
   cartMesh: null,
   camera: null,
   input: null,
-  _skyMesh: null,
+  sun: null,
+  _ground: null,
+  _pipeline: null,
+  _shadowGen: null,
 
   currentStageIndex: 0,
   accumulator: 0,
@@ -27,15 +30,8 @@ const Game = {
     this.canvas = document.getElementById('renderCanvas');
     this.engine = new BABYLON.Engine(this.canvas, true, { stencil: true }, true);
     this.scene = new BABYLON.Scene(this.engine);
-    this.scene.clearColor = new BABYLON.Color3(0.53, 0.8, 0.92);
-
     QualityManager.detectInitialPreset(this.engine);
-
-    // 태양광 역할의 방향광 하나 추가 — 실시간 그림자 대신 기존 버텍스 컬러 AO 음영 유지, 방향성만 더함
-    const hemi = new BABYLON.HemisphericLight('light', new BABYLON.Vector3(0, 1, 0), this.scene);
-    hemi.intensity = 0.55;
-    const sun = new BABYLON.DirectionalLight('sun', new BABYLON.Vector3(-0.5, -1, 0.3), this.scene);
-    sun.intensity = 0.7;
+    this._createEnvironment();
 
     this._applyQualitySettings();
 
@@ -61,12 +57,15 @@ const Game = {
     const stageMultiplier = stageData.baseSpeedKmh / 45; // 1단계(45km/h) 대비 배율로 정규화
 
     this.cart = new Cart(this.track, stageMultiplier, LapsManager.current);
+    if (this.camera) this.camera.dispose(); // 이전 스테이지 카메라가 activeCamera로 남아 빈 하늘만 보이던 문제 방지
     this.camera = new CoasterCamera(this.scene, this.canvas);
+    this._setupPipeline();
 
     // 레일/지지대/스테이션 + 카트 glb 로딩 동안 스피너 표시 — 끝나야 스타트 바 화면으로 전환
     UI.showLoadingOverlay();
     Promise.all([this.track.loadTrackMeshes(), this._loadCartMesh()])
       .then(() => {
+        this._setupShadows();
         // showStartPrompt가 스타트 바 DOM을 먼저 만들어야 InputController가 그 엘리먼트에 바인딩 가능
         UI.showStartPrompt(stageData.name, stageData.motif);
         this.input = new InputController(this.canvas, this.cart, this.camera, UI.startBarEl);
@@ -132,6 +131,13 @@ const Game = {
     this.cartMesh = result.meshes[1];
     this.cartMesh.parent = null;
     this.cartMesh.scaling.setAll(KIT_SCALE);
+    // 카트 도장면 광택 — Kenney 기본값(거친 무광)보다 반사를 살려 IBL 하늘이 비치게
+    const cartMat = this.cartMesh.material;
+    if (cartMat && 'roughness' in cartMat) {
+      cartMat.metallic = 0.15;
+      cartMat.roughness = 0.22;
+      cartMat.clearCoat.isEnabled = QualityManager.current === 'high';
+    }
     this.cartMesh.setEnabled(true);
     result.meshes[0].dispose(); // 빈 __root__는 더 이상 필요 없음
     this._updateCartMesh();
@@ -149,43 +155,116 @@ const Game = {
     this.cartMesh.lookAt(pos.add(tangent), 0, 0, roll);
   },
 
+  /** Poly Haven 맑은 하늘 HDRI(프리필터드 .env) → IBL + 스카이박스, 태양광, 잔디 바닥, 옅은 안개.
+   * 품질과 무관한 공통 씬 요소 — 프리셋별로 달라지는 그림자/포스트프로세싱은 _applyQualitySettings */
+  _createEnvironment() {
+    const scene = this.scene;
+    scene.clearColor = new BABYLON.Color4(0.72, 0.84, 0.95, 1); // HDRI 로드 전/틈 노출 시 폴백 = 지평선 색
+
+    const env = BABYLON.CubeTexture.CreateFromPrefilteredData('assets/vendor/polyhaven/sky_256.env', scene);
+    scene.environmentTexture = env;
+    scene.environmentIntensity = 0.9;
+    const sky = scene.createDefaultSkybox(env, true, 1000, 0, false);
+    sky.infiniteDistance = true;
+    sky.applyFog = false; // 안개는 지형/소품에만 — 하늘까지 덮으면 뿌옇게 바랜 느낌
+
+    // 태양: HDRI 이름대로 고도 약 43도 — 방향만 맞추고 세기는 IBL과 합쳐 과노출 안 되게
+    this.sun = new BABYLON.DirectionalLight('sun', new BABYLON.Vector3(-0.55, -0.68, 0.48).normalize(), scene);
+    this.sun.intensity = 2.2;
+    this.sun.shadowMinZ = 1;
+
+    const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: 1600, height: 1600 }, scene);
+    ground.position.y = -0.02; // 지지대 밑면(y=0)과 z-fighting 방지
+    const groundMat = new BABYLON.PBRMaterial('groundMat', scene);
+    groundMat.albedoTexture = this._makeGrassTexture();
+    groundMat.albedoTexture.uScale = groundMat.albedoTexture.vScale = 160;
+    groundMat.metallic = 0;
+    groundMat.roughness = 1;
+    groundMat.environmentIntensity = 0.6; // 넓은 면이 하늘빛 반사로 떠 보이지 않게
+    ground.material = groundMat;
+    ground.receiveShadows = true;
+    ground.isPickable = false;
+    this._ground = ground;
+
+    scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+    scene.fogDensity = 0.0017;
+    scene.fogColor = new BABYLON.Color3(0.74, 0.85, 0.96);
+  },
+
+  /** 잔디 바닥용 256px 절차적 텍스처(명도 얼룩) — 이미지 파일 없이 타일링 반복감만 깨줌 */
+  _makeGrassTexture() {
+    const tex = new BABYLON.DynamicTexture('grassTex', { width: 256, height: 256 }, this.scene, true);
+    const ctx = tex.getContext();
+    ctx.fillStyle = '#5a9a3c';
+    ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 900; i++) {
+      const l = 30 + Math.random() * 18;
+      ctx.fillStyle = `hsla(${95 + Math.random() * 20}, 45%, ${l}%, 0.35)`;
+      const x = Math.random() * 256, y = Math.random() * 256, r = 2 + Math.random() * 7;
+      // 경계에서 이어지도록 가장자리 근처 얼룩은 반대편에도 복제(타일 이음매 방지)
+      for (const [ox, oy] of [[0, 0], [-256, 0], [256, 0], [0, -256], [0, 256]]) {
+        ctx.beginPath();
+        ctx.arc(x + ox, y + oy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    tex.update();
+    tex.wrapU = tex.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
+    tex.anisotropicFilteringLevel = 4;
+    return tex;
+  },
+
   _applyQualitySettings() {
     const settings = QualityManager.settings;
     this.engine.setHardwareScalingLevel(settings.textureResolution < 1024 ? 1.5 : 1);
-    this._createSky();
-    // TODO: 파티클 수, 그림자, 포스트프로세싱은 실제 에셋/이펙트 구현 시 settings 참조해 적용
+    this._setupPipeline();
+    this._setupShadows();
   },
 
-  /** 그래디언트 스카이돔(위=짙은 하늘, 아래=밝은 지평선) — low 프리셋은 기존 단색 하늘 유지 */
-  _createSky() {
-    if (this._skyMesh) {
-      this._skyMesh.dispose();
-      this._skyMesh = null;
+  /** DefaultRenderingPipeline — low는 FXAA만(LDR), medium/high는 HDR + ACES 톤매핑 + 약한 bloom.
+   * 카메라가 스테이지마다 새로 만들어지므로 loadStage에서도 다시 호출해 새 카메라에 붙인다. */
+  _setupPipeline() {
+    if (this._pipeline) {
+      this._pipeline.dispose();
+      this._pipeline = null;
     }
-    this.scene.clearColor = new BABYLON.Color3(0.53, 0.8, 0.92); // 스카이돔 바깥/틈 노출 시 폴백 색상
+    if (!this.camera) return;
+    const pp = QualityManager.settings.postProcessing;
+    const hdr = pp.includes('bloom') || pp.includes('aces');
+    const pipeline = new BABYLON.DefaultRenderingPipeline('pp', hdr, this.scene, [this.camera.camera]);
+    pipeline.fxaaEnabled = pp.includes('fxaa');
+    pipeline.imageProcessingEnabled = pp.includes('aces');
+    if (pp.includes('aces')) {
+      pipeline.imageProcessing.toneMappingEnabled = true;
+      pipeline.imageProcessing.toneMappingType = BABYLON.ImageProcessingConfiguration.TONEMAPPING_ACES;
+      pipeline.imageProcessing.exposure = 1.15;
+      pipeline.imageProcessing.contrast = 1.1;
+    }
+    pipeline.bloomEnabled = pp.includes('bloom');
+    if (pipeline.bloomEnabled) {
+      pipeline.bloomThreshold = 0.85;
+      pipeline.bloomWeight = 0.25;
+      pipeline.bloomKernel = 48;
+      pipeline.bloomScale = 0.5;
+    }
+    this._pipeline = pipeline;
+  },
 
-    if (!QualityManager.settings.skyGradient) return;
-
-    const skyTexture = new BABYLON.DynamicTexture('skyGradientTex', { width: 4, height: 512 }, this.scene, false);
-    const ctx = skyTexture.getContext();
-    const grad = ctx.createLinearGradient(0, 0, 0, 512);
-    grad.addColorStop(0, '#1b3a6b');
-    grad.addColorStop(0.55, '#5fa8d3');
-    grad.addColorStop(1, '#d9f2ff');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 4, 512);
-    skyTexture.update();
-
-    const sky = BABYLON.MeshBuilder.CreateSphere('skyDome', { diameter: 900, segments: 12 }, this.scene);
-    const mat = new BABYLON.StandardMaterial('skyDomeMat', this.scene);
-    mat.emissiveTexture = skyTexture;
-    mat.diffuseColor = BABYLON.Color3.Black();
-    mat.specularColor = BABYLON.Color3.Black();
-    mat.backFaceCulling = false; // 카메라가 구 안쪽에 있으므로 안쪽 면을 렌더
-    mat.disableLighting = true;
-    sky.material = mat;
-    sky.infiniteDistance = true; // 카메라가 움직여도 항상 카메라 중심에 고정
-    this._skyMesh = sky;
+  /** 실시간 그림자는 high 프리셋에서만 — 카트/레일/지지대/소품이 캐스터, 바닥이 리시버 */
+  _setupShadows() {
+    if (this._shadowGen) {
+      this._shadowGen.dispose();
+      this._shadowGen = null;
+    }
+    if (QualityManager.settings.shadows !== 'realtime' || !this.track) return;
+    const gen = new BABYLON.ShadowGenerator(2048, this.sun);
+    gen.usePercentageCloserFiltering = true;
+    gen.filteringQuality = BABYLON.ShadowGenerator.QUALITY_MEDIUM;
+    gen.bias = 0.002;
+    this.track.shadowCasters().forEach(m => gen.addShadowCaster(m, false));
+    if (this.cartMesh) gen.addShadowCaster(this.cartMesh, false);
+    this.sun.autoUpdateExtends = true;
+    this._shadowGen = gen;
   },
 
   _loop() {
@@ -207,7 +286,12 @@ const Game = {
   },
 
   _fixedUpdate(dt) {
-    if (!this.cart || !this.cart.launched) return;
+    if (!this.cart) return;
+    if (!this.cart.launched) {
+      // 발사 전에도 카메라는 스타트 지점 3인칭 위치로 따라가야 함 — 안 하면 초기 좌표(0,10,-20)에서 엉뚱한 곳을 봄
+      this.camera.update(this.track, this.cart, dt);
+      return;
+    }
 
     this.cart.update(dt);
     this.camera.update(this.track, this.cart, dt);

@@ -17,6 +17,48 @@ const KIT_FAMILIES = {
   wood:     { rail: 'coaster-wood-track.glb',     cart: 'coaster-train-wooden.glb',  pillar: 'support-large.glb' },
 };
 
+// Kenney Nature Kit(CC0) — 트랙 주변 원경 소품. scale은 키트 원본(나무 약 1.5~1.9) 대비 배율 범위, weight는 등장 비율
+const NATURE_DIR = 'assets/vendor/kenney-nature-kit/';
+const NATURE_PROPS = [
+  { file: 'tree_pineTallA.glb',  scale: [5, 7.5], weight: 3 },
+  { file: 'tree_pineTallB.glb',  scale: [5, 7.5], weight: 3 },
+  { file: 'tree_pineTallC.glb',  scale: [5, 7.5], weight: 2 },
+  { file: 'tree_pineRoundA.glb', scale: [5, 7],   weight: 2 },
+  { file: 'rock_largeA.glb',     scale: [4, 8],   weight: 1 },
+  { file: 'rock_largeB.glb',     scale: [4, 8],   weight: 1 },
+  { file: 'rock_smallA.glb',     scale: [4, 7],   weight: 1 },
+  { file: 'grass_large.glb',     scale: [6, 9],   weight: 3 },
+  { file: 'plant_bushSmall.glb', scale: [7, 10],  weight: 2 },
+];
+// 트랙(레일·지지대) 수평거리 이만큼 안쪽은 비움 — 나무 반경(~3m)+인버티드 지지대 옆 오프셋(2.2m)+여유
+const NATURE_TRACK_CLEARANCE_M = 14;
+// 스테이션 옆 지면 광장 — Coaster Kit 놀이공원 소품. [파일, 진행방향(m), 옆방향(m), 바라볼 방향('track'|'away')]
+const PARK_SCALE = 2.5;
+const PARK_LAYOUT = [
+  ['park-entrance.glb',     0,  30, 'track'],
+  ['stall-food.glb',       -9,  20, 'track'],
+  ['stall-drinks.glb',     -4,  21, 'track'],
+  ['stall-information.glb', 4,  21, 'track'],
+  ['stall-toilets.glb',     9,  20, 'track'],
+  ['bench.glb',            -7,  13, 'away'],
+  ['bench.glb',             7,  13, 'away'],
+  ['trash.glb',             0,  13, 'track'],
+  ['ride-entrance.glb',    -3,   9, 'track'],
+  ['ride-exit.glb',         3,   9, 'track'],
+];
+
+/** 스테이지마다 같은 배치가 나오도록 시드 고정 PRNG(mulberry32) — Math.random()이면 재도전마다 숲 모양이 바뀜 */
+function seededRandom(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // 지지대 배치 간격(m) — 레일 타이 간격과 무관하게 저사양 기기(SE2) 성능을 고려해 성긴 간격 사용
 const PILLAR_SPACING_M = 8;
 
@@ -131,6 +173,11 @@ class Track {
       isHanging ? this._loadTemplate('support-small-horizontal.glb') : null,
     ]);
 
+    // 재질: 스틸 계열 레일/지지대는 금속, 목재 트랙은 원래 무광 유지 (Kenney 기본값은 전부 비금속·거친 면)
+    const isWood = this.stageData.railType === 'wood';
+    this._tuneMaterial(railTemplate, isWood ? { metallic: 0.1, roughness: 0.7 } : { metallic: 0.8, roughness: 0.3 });
+    this._tuneMaterial(pillarTemplate, isWood ? { metallic: 0, roughness: 0.85 } : { metallic: 0.6, roughness: 0.45 });
+
     const railSpacing = this._extent(railTemplate).z * KIT_SCALE;
     this._sampleLoop(railSpacing).forEach(({ pos, tangent, t }, k) => {
       const inst = railTemplate.createInstance(`rail_${k}`);
@@ -178,44 +225,106 @@ class Track {
         this._meshes.push(inst);
       });
 
-    this._placeBackgroundProps();
+    await Promise.all([this._placeNatureProps(), this._placeParkProps()]);
   }
 
-  /** 저비용 배경 나무 실루엣(원기둥 몸통+원뿔 수관 조합, 별도 모델링 없이 절차적 생성)을
-   * 트랙 주변 지면 근처에 인스턴싱 배치 — 그래픽 프리셋의 backgroundPropCount로 개수 차등
-   * (low는 0개로 생략). Track.dispose()가 관리하도록 this._meshes에 편입. */
-  _placeBackgroundProps() {
+  /** PBR 재질의 금속성/거칠기 조정 — 템플릿의 재질을 바꾸면 인스턴스 전체에 반영 */
+  _tuneMaterial(mesh, { metallic, roughness }) {
+    const mats = mesh.material instanceof BABYLON.MultiMaterial ? mesh.material.subMaterials : [mesh.material];
+    mats.forEach(mat => {
+      if (!mat || !('metallic' in mat)) return;
+      mat.metallic = metallic;
+      mat.roughness = roughness;
+    });
+  }
+
+  /** high 프리셋 그림자 캐스터 — 레일/지지대/스테이션/소품 인스턴스(풀·덤불은 그림자 효과 대비 비용이 커서 제외) */
+  shadowCasters() {
+    return this._meshes.filter(m => m instanceof BABYLON.InstancedMesh && !/^(grass|plant)/.test(m.name));
+  }
+
+  /** 트랙 수평거리 판정용 샘플 — 3m 간격이면 1680m 트랙도 560점 남짓이라 전수 비교해도 충분히 가벼움 */
+  _minTrackDistXZ(x, z) {
+    if (!this._xzSamples) this._xzSamples = this._sampleLoop(3).map(p => [p.pos.x, p.pos.z]);
+    let best = Infinity;
+    for (const [px, pz] of this._xzSamples) {
+      const d = (px - x) * (px - x) + (pz - z) * (pz - z);
+      if (d < best) best = d;
+    }
+    return Math.sqrt(best);
+  }
+
+  /** Kenney Nature Kit 나무/바위/풀을 트랙 바깥쪽에 흩뿌림 — 트랙 가까이(NATURE_TRACK_CLEARANCE_M)는 비우고
+   * 멀수록 밀도가 옅어지게. 개수는 그래픽 프리셋 backgroundPropCount, 배치는 스테이지 id 시드로 고정 */
+  async _placeNatureProps() {
     const count = QualityManager.settings.backgroundPropCount;
     if (count <= 0) return;
+    const templates = await Promise.all(NATURE_PROPS.map(p => this._loadTemplate(p.file, NATURE_DIR)));
+    // 키트 원본 잎 색(leafsDark)은 청록색 스타일(풀 재질 grass도 동일) — 잔디 바닥 초록과 어울리지 않아 숲 초록으로 교체(선형 색공간 값)
+    templates.forEach(t => (t.material.subMaterials || [t.material]).forEach(m => {
+      if (!m) return;
+      if (/^leafs/.test(m.name)) m.albedoColor = new BABYLON.Color3(0.07, 0.26, 0.08);
+      else if (/^grass/.test(m.name)) m.albedoColor = new BABYLON.Color3(0.12, 0.36, 0.07);
+    }));
+    const totalWeight = NATURE_PROPS.reduce((a, p) => a + p.weight, 0);
+    const rand = seededRandom(this.stageData.id * 7919);
 
-    const trunk = BABYLON.MeshBuilder.CreateCylinder('propTrunk', { height: 4, diameterTop: 0.6, diameterBottom: 0.9 }, this.scene);
-    trunk.position.y = 2;
-    const canopy = BABYLON.MeshBuilder.CreateCylinder('propCanopy', { height: 5, diameterTop: 0, diameterBottom: 4, tessellation: 6 }, this.scene);
-    canopy.position.y = 6;
-    const treeTemplate = BABYLON.Mesh.MergeMeshes([trunk, canopy], true);
-    treeTemplate.name = 'BackgroundTree';
-    const mat = new BABYLON.StandardMaterial('propMat', this.scene);
-    mat.diffuseColor = new BABYLON.Color3(0.25, 0.42, 0.22);
-    mat.specularColor = BABYLON.Color3.Black();
-    treeTemplate.material = mat;
-    treeTemplate.setEnabled(false);
-    this._meshes.push(treeTemplate);
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const p of this.points) {
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
+    }
+    const MARGIN = 140;
+    const station = this.getPositionAt(0);
 
-    const pts = this.points;
-    const step = Math.max(1, Math.floor(pts.length / count));
     let placed = 0;
-    for (let i = 0; i < pts.length && placed < count; i += step) {
-      const p = pts[i];
-      const tangent = this.getTangentAt(i / (pts.length - 1));
-      const side = placed % 2 === 0 ? 1 : -1;
-      const perp = new BABYLON.Vector3(-tangent.z, 0, tangent.x).normalize().scale(18 * side);
-      const inst = treeTemplate.createInstance(`tree_${i}`);
-      inst.position.set(p.x + perp.x, 0, p.z + perp.z);
-      const scale = 0.8 + Math.random() * 0.6;
-      inst.scaling.set(scale, scale, scale);
+    for (let attempt = 0; attempt < count * 12 && placed < count; attempt++) {
+      const x = minX - MARGIN + rand() * (maxX - minX + MARGIN * 2);
+      const z = minZ - MARGIN + rand() * (maxZ - minZ + MARGIN * 2);
+      const d = this._minTrackDistXZ(x, z);
+      if (d < NATURE_TRACK_CLEARANCE_M) continue;
+      if (rand() > Math.min(1, 40 / d)) continue; // 트랙에서 멀어질수록 드문드문
+      if (Math.hypot(x - station.x, z - station.z) < 40) continue; // 스테이션 옆 놀이공원 광장 자리
+
+      let pick = rand() * totalWeight, k = 0;
+      while (pick > NATURE_PROPS[k].weight) pick -= NATURE_PROPS[k++].weight;
+      const [s0, s1] = NATURE_PROPS[k].scale;
+      const inst = templates[k].createInstance(`${NATURE_PROPS[k].file.split('.')[0]}_${placed}`);
+      inst.position.set(x, 0, z);
+      inst.rotation.y = rand() * Math.PI * 2;
+      inst.scaling.setAll(s0 + rand() * (s1 - s0));
       this._meshes.push(inst);
       placed++;
     }
+  }
+
+  /** 스테이션(t=0) 옆 지면에 놀이공원 소품 광장 — 트랙이 위로 지나가는 쪽을 피해 좌/우 중 빈 쪽을 고르고,
+   * 개별 소품도 다른 트랙 구간 지지대와 겹치면(수평 4m 이내) 생략 */
+  async _placeParkProps() {
+    const files = [...new Set(PARK_LAYOUT.map(l => l[0]))];
+    const templates = Object.fromEntries(await Promise.all(files.map(async f => [f, await this._loadTemplate(f)])));
+
+    const origin = this.getPositionAt(0);
+    const t0 = this.getTangentAt(0);
+    const fwd = new BABYLON.Vector3(t0.x, 0, t0.z).normalize();
+    const right = new BABYLON.Vector3(fwd.z, 0, -fwd.x);
+    const freeScore = sign => PARK_LAYOUT.reduce((n, [, a, l]) =>
+      n + (this._minTrackDistXZ(origin.x + fwd.x * a + right.x * l * sign, origin.z + fwd.z * a + right.z * l * sign) > 4 ? 1 : 0), 0);
+    const side = freeScore(1) >= freeScore(-1) ? 1 : -1;
+
+    PARK_LAYOUT.forEach(([file, along, lateral, facing], k) => {
+      const x = origin.x + fwd.x * along + right.x * lateral * side;
+      const z = origin.z + fwd.z * along + right.z * lateral * side;
+      if (this._minTrackDistXZ(x, z) < 4) return;
+      const inst = templates[file].createInstance(`park_${k}`);
+      inst.position.set(x, 0, z);
+      inst.scaling.setAll(PARK_SCALE);
+      // Kenney 소품 정면은 -Z — lookAt은 +Z를 목표로 돌리므로 정면이 향할 반대 방향을 목표로 준다
+      const toTrack = right.scale(-side);
+      const front = facing === 'track' ? toTrack : toTrack.negate();
+      inst.lookAt(inst.position.subtract(front));
+      this._meshes.push(inst);
+    });
   }
 
   /** 템플릿 메시의 로컬 바운딩박스 크기(x=폭, y=높이, z=진행방향 길이) — KIT_SCALE 적용 전 원본 값 */
@@ -224,12 +333,23 @@ class Track {
     return bb.maximum.subtract(bb.minimum);
   }
 
-  /** glTF 로드 → 실제 지오메트리 메시(루트 다음 자식)를 템플릿으로 반환, 템플릿 자체는 비활성화 */
-  async _loadTemplate(fileName) {
-    const result = await BABYLON.SceneLoader.ImportMeshAsync('', KIT_DIR, fileName, this.scene);
+  /** glTF 로드 → 실제 지오메트리 메시를 템플릿으로 반환, 템플릿 자체는 비활성화.
+   * Nature Kit처럼 재질별로 프리미티브가 나뉜 모델은 멀티머티리얼 단일 메시로 병합해 인스턴싱 가능하게 함 */
+  async _loadTemplate(fileName, dir = KIT_DIR) {
+    const result = await BABYLON.SceneLoader.ImportMeshAsync('', dir, fileName, this.scene);
     result.meshes.forEach(m => this._meshes.push(m));
-    const mesh = result.meshes[1]; // meshes[0]은 빈 __root__ 트랜스폼 노드
+    const geo = result.meshes.filter(m => m.getTotalVertices() > 0);
+    let mesh = geo[0];
+    if (geo.length > 1) {
+      mesh = BABYLON.Mesh.MergeMeshes(geo, false, true, undefined, false, true);
+      mesh.name = fileName;
+      this._meshes.push(mesh);
+      geo.forEach(m => m.setEnabled(false));
+    }
     mesh.setEnabled(false); // 인스턴스만 렌더, 템플릿 자체는 숨김
+    // Kenney glb는 metallicFactor를 생략 → glTF 기본값 1(완전 금속)로 읽혀 하늘빛만 반사해 파랗게 보임.
+    // 기본은 비금속 무광으로 두고, 금속이어야 하는 레일/지지대만 loadTrackMeshes에서 다시 지정
+    this._tuneMaterial(mesh, { metallic: 0, roughness: 0.85 });
     return mesh;
   }
 
