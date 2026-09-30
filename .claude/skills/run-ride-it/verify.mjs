@@ -248,11 +248,11 @@ async function main() {
       }));
       console.log(`[verify] ${tag} frame`, JSON.stringify(dc));
 
+      const viewBefore = await page.evaluate(() => Game.camera.mode);
       await page.locator('#cameraToggleBtn').click();
       await sleep(900);
-      await shot(`${tag}_3_ride_1st`);
-      check(`${tag} camera toggle`, await page.evaluate(() => Game.camera.mode === 'first'));
-      await page.locator('#cameraToggleBtn').click();
+      await shot(`${tag}_3_ride_toggled`);
+      check(`${tag} camera button switches view temporarily`, await page.evaluate(v => Game.camera.mode !== v, viewBefore), `${viewBefore} → toggled`);
 
       await page.locator('#pauseBtn').click();
       await sleep(350);

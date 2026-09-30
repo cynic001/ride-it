@@ -300,6 +300,9 @@ const UI = {
       <h2>설정</h2>
       <div class="field"><span class="field-label">그래픽</span>
         <button class="btn wide graphics-open" id="graphicsBtn">${ICONS.sparkle}<span id="graphicsSummary">${this._graphicsSummary()}</span></button></div>
+      <div class="field"><span class="field-label">시점</span>
+        ${seg('view', [['third', '3인칭'], ['first', '1인칭']], ViewSettings.mode)}
+        <p class="field-desc" id="viewDesc">${this._viewDesc(ViewSettings.mode)}</p></div>
       <div class="field"><span class="field-label">사운드</span>
         ${seg('audio', [['on', '켜기'], ['off', '끄기']], AudioManager.enabled ? 'on' : 'off')}
         <p class="field-desc">소리가 안 나면 아이폰 무음 모드를 꺼주세요</p></div>
@@ -316,7 +319,8 @@ const UI = {
       const v = b.dataset.value;
       group.querySelectorAll('.seg-btn').forEach(x => x.classList.toggle('on', x === b));
       const key = group.dataset.setting;
-      if (key === 'audio') AudioManager.setEnabled(v === 'on');
+      if (key === 'view') { ViewSettings.set(v); document.getElementById('viewDesc').textContent = this._viewDesc(v); }
+      else if (key === 'audio') AudioManager.setEnabled(v === 'on');
       else if (key === 'control') {
         ControlSettings.set(v);
         document.getElementById('controlDesc').textContent = CONTROL_MODES[v].desc;
@@ -365,6 +369,10 @@ const UI = {
       localStorage.setItem('rc_howto_seen', '1');
       if (onClose) onClose();
     });
+  },
+
+  _viewDesc(m) {
+    return m === 'first' ? '발사하면 카트 좌석 시점으로 — 계속 1인칭' : '기본 — 부스트·급하강 구간에서는 자동으로 1인칭이 됐다가 돌아와요';
   },
 
   _graphicsSummary() {
