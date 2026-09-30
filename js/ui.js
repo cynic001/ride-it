@@ -344,14 +344,22 @@ const UI = {
 
   showHowTo(onClose) {
     const item = (ico, title, desc) => `<div class="howto-item"><span class="ico">${ico}</span><span><b>${title}</b><span>${desc}</span></span></div>`;
+    const mode = ControlSettings.mode;
+    const drive = {
+      onehand: item(ICONS.swipe, '한손 모드(현재)', '하단 패드를 좌우로 밀면 밸런스 · 톡 = 부스트 · 꾹 = 손 들기'),
+      tilt: item(ICONS.swipe, '한손 + 기울기(현재)', '폰을 좌우로 기울여 밸런스 · 패드 톡 = 부스트 · 꾹 = 손 들기'),
+      twohand: item(ICONS.swipe, '양손 모드(현재)', '왼쪽 ◀ ▶ = 밸런스 · 오른쪽 BOOST = 부스트 · 손 들기 버튼 = 에어타임'),
+    }[mode];
     const el = this._modal('howtoOverlay', `
       <h2>조작법</h2>
       <div class="howto-list">
-        ${item(ICONS.arrowRight, '스타트 바', '바 안의 손잡이를 끌었다가 휙 놓으면 출발! 빠르게 놓을수록 세게')}
-        ${item(ICONS.swipe, '좌우 밸런스', '커브에서 화면 아래쪽을 좌우로 밀어 노란 구간에 맞추기')}
-        ${item(ICONS.tap, '게이트 탭', '게이트가 초록색일 때 화면 위쪽을 탭 (부스트/브레이크/피니쉬)')}
-        ${item(ICONS.hand, '에어타임 홀드', '무중력 구간에서 화면을 길게 눌러 손 들기 — 보너스 점수')}
+        ${item(ICONS.arrowUp, '출발', '하단 바를 아래로 당겼다가 위로 휙 밀어 올리기 — 많이 당기고 빨리 올릴수록 세게')}
+        ${drive}
+        ${item(ICONS.tap, '부스트 게이트', '링을 지나는 순간 부스트 — 게이지 가운데 초록일 때 Perfect, 오래 세게 가속')}
+        ${item(ICONS.hand, '손 들기', '무중력 구간에서 누르고 있으면 에어타임 보너스')}
+        ${item(ICONS.sparkle, '키보드', '출발 ↓ 누르고 있다가 ↑ · 주행 ← → 밸런스, ↑ 부스트, Space 손 들기')}
       </div>
+      <p class="field-desc">조작 방식(한손 / 한손+기울기 / 양손)은 설정(톱니바퀴)에서 바꿀 수 있어요.</p>
       <div class="actions"><button id="howtoCloseBtn" class="btn primary wide">알겠어요!</button></div>
     `, { solid: true });
     document.getElementById('howtoCloseBtn').addEventListener('click', () => {
