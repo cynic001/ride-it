@@ -88,7 +88,8 @@ class CoasterCamera {
   toggleMode() {
     if (this.locked) return;
     this.forceMode = null;
-    this._manualTarget = this._blendLin >= 0.5 ? 0 : 1;
+    // 지금 향하고 있는 시점의 반대로 — 전환 도중(섞인 비율 기준)에 누르면 같은 시점을 고르는 경우가 있었음
+    this._manualTarget = (this._lastTarget ?? (this._blendLin >= 0.5 ? 1 : 0)) ? 0 : 1;
     this._manualUntil = this._clock + MANUAL_VIEW_SEC;
   }
 
@@ -149,6 +150,7 @@ class CoasterCamera {
 
     // ── 시점 blend ──
     const target = this._desiredBlend(cart, tangent);
+    this._lastTarget = target;
     const step = dt / VIEW_BLEND_SEC;
     this._blendLin = target > this._blendLin ? Math.min(target, this._blendLin + step) : Math.max(target, this._blendLin - step);
     const w = this._blendLin * this._blendLin * (3 - 2 * this._blendLin); // smoothstep
