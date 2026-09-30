@@ -435,6 +435,15 @@ const UI = {
     document.getElementById('creditsCloseBtn').addEventListener('click', () => el.remove());
   },
 
+  /** 피니쉬 아치 통과 큰 표시 — "LAP 2/3" / "FINAL LAP" / "FINISH!" */
+  showLapBanner(text, big) {
+    const el = document.createElement('div');
+    el.className = `lap-banner${big ? ' big' : ''}`;
+    el.textContent = text;
+    (this.root || document.body).appendChild(el);
+    setTimeout(() => el.remove(), 1800);
+  },
+
   /** 화면 물방울(4·5단계 착수) — 가벼운 DOM 원 몇 개가 번졌다 사라짐 */
   splashDroplets(n) {
     for (let i = 0; i < n; i++) {

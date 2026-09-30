@@ -371,6 +371,13 @@ class Track {
       return m;
     };
     const templates = [build('lamp', 0), build('flag', 0), build('flag', 1)];
+    // 3인칭 카메라 경로(camera.js와 같은 오프셋, 스프링 전 목표점) — 급커브에선 카메라가 커브 바깥으로 크게 돌아
+    // 트랙 옆 기둥에 붙음(실측 0.26m) → 경로에서 1.3m 안에 드는 기둥은 생략
+    const camPath = this._sampleLoop(2).map(({ pos, tangent, t }) => {
+      const lean = this.getSegmentAt(t).requiredLean || 0;
+      return pos.add(tangent.scale(-(isHanging ? 8 + lean * 4 : 6.2 + lean * 4))).add(new BABYLON.Vector3(0, isHanging ? -1.1 - lean : 2.0 + lean * 2.5, 0));
+    });
+    const nearCam = p => camPath.some(c => BABYLON.Vector3.DistanceSquared(c, p) < 1.3 * 1.3);
     const base = isHanging ? 0 : railTopY;
     const station = this.getPositionAt(0);
     this._sampleLoop(7).forEach(({ pos, tangent, t }, i) => {
@@ -381,7 +388,9 @@ class Track {
       right.normalize();
       const side = i % 2 ? 1 : -1;
       const inst = templates[i % 4 === 0 ? 0 : 1 + (i >> 2) % 2].createInstance(`ts_${i}`);
-      inst.position = pos.add(right.scale(1.7 * side)).add(new BABYLON.Vector3(0, base, 0));
+      const at = pos.add(right.scale(2.0 * side)).add(new BABYLON.Vector3(0, base, 0)); // 2.0m(1.7m는 커브에서 카메라와 0.26m까지 접근)
+      if (nearCam(at) || nearCam(at.add(new BABYLON.Vector3(0, 1.2, 0)))) { inst.dispose(); return; }
+      inst.position = at;
       inst.lookAt(inst.position.add(tangent), 0, 0, roll);
       this._meshes.push(inst);
     });
@@ -471,6 +480,56 @@ class Track {
     this._meshes.push(m, stripe);
   }
 
+  /** 피니쉬 게이트 아치 — 피니쉬 판정 기준점(t)에 트랙을 가로지르는 테마 색 기둥+빔 + 체크무늬 배너.
+   * 이 지점이 랩 기준점(main.js가 통과 시 LAP/FINAL LAP/FINISH 표시). 빔은 레일 위 4.3m(3인칭 카메라 2m보다 충분히 높게),
+   * 인버티드는 레일 위 1.4m(카트·카메라는 레일 아래). 기둥은 옆 지지대(2.2m)보다 바깥 */
+  _placeFinishArch(t, railTopY, isHanging) {
+    const scene = this.scene;
+    this.finishT = t;
+    const pos = this.getPositionAt(t), tan = this.getTangentAt(t);
+    const f = new BABYLON.Vector3(tan.x, 0, tan.z).normalize();
+    const right = new BABYLON.Vector3(f.z, 0, -f.x);
+    const HALF = isHanging ? 3.4 : 3.0;
+    const beamY = pos.y + (isHanging ? 1.4 : railTopY + 4.3);
+    const theme = BABYLON.Color3.FromHexString(this.stageData.theme || '#ffb80d');
+    const mat = new BABYLON.StandardMaterial('archMat', scene);
+    mat.diffuseColor = theme; mat.emissiveColor = theme.scale(0.35); mat.specularColor = BABYLON.Color3.Black();
+    const parts = [];
+    [-1, 1].forEach(sd => {
+      const post = BABYLON.MeshBuilder.CreateBox('archPost', { width: 0.5, depth: 0.5, height: beamY + 0.4 }, scene);
+      const p = pos.add(right.scale(HALF * sd));
+      post.position.set(p.x, (beamY + 0.4) / 2, p.z);
+      post.lookAt(new BABYLON.Vector3(p.x + f.x, post.position.y, p.z + f.z));
+      parts.push(post);
+      const cap = BABYLON.MeshBuilder.CreateSphere('archCap', { diameter: 0.9, segments: 8 }, scene);
+      cap.position.set(p.x, beamY + 0.75, p.z);
+      parts.push(cap);
+    });
+    const beam = BABYLON.MeshBuilder.CreateBox('archBeam', { width: HALF * 2 + 0.6, depth: 0.5, height: 0.6 }, scene);
+    beam.position.set(pos.x, beamY + 0.1, pos.z);
+    beam.lookAt(new BABYLON.Vector3(pos.x + f.x, beam.position.y, pos.z + f.z));
+    parts.push(beam);
+    const arch = BABYLON.Mesh.MergeMeshes(parts, true, true);
+    arch.name = 'finishArch';
+    arch.material = mat;
+    // 체크무늬 배너(양면) — 통과 시 흔들림(main.js)
+    const tex = new BABYLON.DynamicTexture('checkerTex', { width: 256, height: 64 }, scene, true);
+    const ctx = tex.getContext();
+    for (let i = 0; i < 16; i++) for (let j = 0; j < 4; j++) { ctx.fillStyle = (i + j) % 2 ? '#141a33' : '#ffffff'; ctx.fillRect(i * 16, j * 16, 16, 16); }
+    tex.update();
+    const bm = new BABYLON.StandardMaterial('bannerMat', scene);
+    bm.diffuseTexture = tex; bm.emissiveColor = new BABYLON.Color3(0.45, 0.45, 0.45); bm.backFaceCulling = false; bm.specularColor = BABYLON.Color3.Black();
+    const banner = BABYLON.MeshBuilder.CreatePlane('finishBanner', { width: HALF * 2 - 0.6, height: 0.8 }, scene);
+    banner.material = bm;
+    banner.setPivotPoint(new BABYLON.Vector3(0, 0.4, 0)); // 위쪽 모서리를 축으로 흔들림
+    banner.position.set(pos.x, beamY - 0.6, pos.z);
+    banner.lookAt(new BABYLON.Vector3(pos.x + f.x, banner.position.y, pos.z + f.z));
+    this.finishBanner = banner;
+    this._bannerBaseRotX = banner.rotation.x;
+    this._meshes.push(arch, mat, banner, bm, tex);
+    this.passMarkers.push({ t, kind: 'tunnel' });
+  }
+
   /** 게이트 중심(cart.js와 같은 기준점)의 진행률 목록 — 표시물과 판정이 같은 지점을 가리키도록 */
   gateCenters() {
     return this.segmentRanges.filter(s => s.gate).map(s => {
@@ -523,12 +582,12 @@ class Track {
     this.passMarkers = [];
     this.gateCenters().forEach(({ t, type }, g) => {
       const pos = this.getPositionAt(t), tan = this.getTangentAt(t);
-      const r = (type === 'finish' ? finishRing : ring).createInstance(`gateRing_${g}`);
+      if (type === 'finish') { this._placeFinishArch(t, railTopY, isHanging); return; } // 피니쉬는 링 대신 아치(8번)
+      const r = ring.createInstance(`gateRing_${g}`);
       r.position = pos.add(new BABYLON.Vector3(0, isHanging ? -0.5 : 1.0, 0));
       r.lookAt(r.position.add(tan));
       this._meshes.push(r);
       this.passMarkers.push({ t, kind: 'ring' });
-      if (type === 'finish') return;
       for (let d = -20; d <= 40; d += 3) {
         const tt = wrap(t + d / L);
         const p = this.getPositionAt(tt), tn = this.getTangentAt(tt);

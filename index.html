@@ -43,6 +43,11 @@
   /* 속도감 스피드 라인 — 3D 캔버스와 UI 사이, 입력은 통과 */
   #speedLines { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   /* 고속 비네트: 가장자리를 어둡게 해 시야가 좁아지는 느낌 — opacity는 main.js가 속도 비례로 */
+  .lap-banner { position: absolute; left: 0; right: 0; top: 34%; text-align: center; pointer-events: none; z-index: 6;
+    font-size: 44px; color: #fff; letter-spacing: 2px; -webkit-text-stroke: 7px var(--navy); paint-order: stroke fill;
+    animation: lapPop 1.8s var(--ease-pop) forwards; }
+  .lap-banner.big { font-size: 54px; color: var(--yellow); }
+  @keyframes lapPop { 0% { opacity: 0; transform: scale(.3) rotate(-6deg); } 18% { opacity: 1; transform: scale(1.12) rotate(2deg); } 30% { transform: scale(1) rotate(0); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-30px); } }
   .droplet { position: fixed; z-index: 4; pointer-events: none; border-radius: 50%; opacity: 0;
     background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.85), rgba(190,230,255,.35) 45%, rgba(160,210,255,0) 70%);
     animation: dropFade 1.9s ease-out forwards; }

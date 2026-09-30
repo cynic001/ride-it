@@ -156,6 +156,12 @@ const AudioManager = {
     });
   },
 
+  /** 피니쉬 아치 통과 종소리 — 랩은 2음, 완주(FINISH)는 4음 상승 */
+  playLapChime(finish) {
+    const notes = finish ? [784, 988, 1175, 1568] : [880, 1175];
+    notes.forEach((f, i) => setTimeout(() => this._blip({ freq: f, duration: 0.3, type: 'triangle', peak: 0.2 }), i * 110));
+  },
+
   /** 물 착수 "첨벙 + 쏴아" — 단계가 오를수록 크고 길게 */
   playSplash(level = 1) {
     if (!this._ready()) return;

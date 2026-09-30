@@ -392,6 +392,16 @@ const Game = {
       this._jointAcc %= 6;
       AudioManager.playRailJoint(c.speed / c.maxSpeedMs);
     }
+    // 피니쉬 아치 통과 = 랩 기준점: LAP n/N · FINAL LAP · FINISH! 표시 + 배너 흔들림 + 효과음
+    const ft = this.track.finishT;
+    if (ft !== undefined && !c.rollback && (this._prevT ?? c.t) < ft && c.t >= ft) {
+      const next = c.currentLap + 1;
+      const label = c.currentLap >= c.totalLaps ? 'FINISH!' : next === c.totalLaps ? 'FINAL LAP' : `LAP ${next}/${c.totalLaps}`;
+      UI.showLapBanner(label, label === 'FINISH!' || label === 'FINAL LAP');
+      this._bannerSwing = 1;
+      AudioManager.playLapChime(label === 'FINISH!');
+      window.dispatchEvent(new CustomEvent('lap-pass', { detail: label }));
+    }
     const sp = this.track.splash;
     if (sp && !c.rollback && (this._prevT ?? c.t) < sp.t && c.t >= sp.t) this._triggerSplash();
     const markers = this.track.passMarkers || [];
@@ -413,6 +423,11 @@ const Game = {
     SpeedLines.draw(ratio > 0 ? intensity : 0, Math.min(dt, 0.05));
     if (this._motionBlur) this._motionBlur.motionStrength = Math.max(0, ratio - 0.4) * 0.9;
     this._updateBoostFx(dt, ratio);
+    if (this._bannerSwing > 0.01 && this.track && this.track.finishBanner) { // 통과 순간 배너가 펄럭이다 잦아듦
+      this._bannerSwing *= Math.exp(-dt * 1.5);
+      this._bannerClock = (this._bannerClock || 0) + dt;
+      this.track.finishBanner.rotation.x = this.track._bannerBaseRotX + Math.sin(this._bannerClock * 14) * 0.6 * this._bannerSwing;
+    }
     if (this.track && this.track.pondTexture && QualityManager.current !== 'low') this.track.pondTexture.vOffset -= dt * 0.05; // 물결 흐름
     if (this._mistBoost > 0.01) { // 5단계 착수 물안개: 안개를 잠깐 짙게 했다가 원래 값으로
       this._mistBoost *= Math.exp(-dt * 1.2);
