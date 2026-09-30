@@ -24,6 +24,7 @@ const RUNS = Number(args.runs ?? 30);
 const LAPS = Number(args.laps ?? 1);
 const NOCAP = !!args.nocap; // 비교용: 속도 상한 해제
 const SCALE = args.scale ? Number(args.scale) : null; // 게임 속도 배율 실험
+const HOLD0 = !!args.hold0; // 실험: 정상 멈칫 끄기
 
 const server = http.createServer((req, res) => {
   const f = path.join(ROOT, decodeURIComponent(req.url.split('?')[0]));
@@ -35,10 +36,12 @@ const page = await browser.newPage();
 page.on('pageerror', e => console.error('PAGEERROR', e.message));
 page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE', m.text()); });
 await page.goto('http://localhost:8132/index.html', { waitUntil: 'domcontentloaded', timeout: 90000 });
+if (HOLD0) await page.addInitScript(() => { window.__simOverrides = () => { CHAIN_LIFT.crestHold = 0; }; });
 await page.waitForFunction(() => window.STAGES && window.Track && window.Cart && window.Game && Game.scene, null, { timeout: 90000 });
 
 const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE }) => {
   if (SCALE) Cart.speedScale = SCALE;
+  if (window.__simOverrides) window.__simOverrides(); // 실험용 상수 덮어쓰기(--hold0 등)
   window.dispatchEvent = () => true; // 시뮬 중 오디오/UI 이벤트 무시
   const rng = seed => () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const gauss = r => Math.sqrt(-2 * Math.log(r() || 1e-9)) * Math.cos(2 * Math.PI * r());
@@ -50,7 +53,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE }) => {
     cart.launch(model === 'perfect' ? 1 : 0.7, 1);
     let time = 0, stag = 0, segKey = null, plan = null;
     const events = [...tr.gateCenters().map(g => g.t), ...tr.segmentRanges.filter(s => s.requiredLean > 0).map(s => s.tStart)].sort((a, b) => a - b);
-    const hits = []; let prevT = 0;
+    const hits = []; let prevT = 0; let climb = 0;
     const gatePlans = {};
     while (!cart.isFinished && time < 900) {
       const seg = tr.getSegmentAt(cart.t);
@@ -78,6 +81,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE }) => {
       time += 1 / 60;
       if (cart.currentLap === 1) { for (const e of events) if (prevT < e && cart.t >= e) hits.push(time); prevT = cart.t; }
       if (cart.speed <= 2.05) stag += 1 / 60;
+      if (tr.getTangentAt(cart.t).y > 0.12) climb += 1 / 60; // 오르막 체류 시간
     }
     const judgeMax = (sd.segments.filter(g => g.gate).length * 300 + sd.segments.filter(g => g.requiredLean > 0).length * 100) * LAPS;
     const gTotal = sd.segments.filter(g => g.gate).length * LAPS;
@@ -86,19 +90,22 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE }) => {
     gc.miss += gTotal - cart._gateResults.length; // 안 누른/범위 밖 게이트도 Miss로 집계
     let minGap = Infinity;
     for (let k = 1; k < hits.length; k++) minGap = Math.min(minGap, hits[k] - hits[k - 1]);
-    return { minGap, gc, gTotal, jr: (cart.scoreBreakdown.gate + cart.scoreBreakdown.balance) / judgeMax, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, airDist: cart.airtimeDistance, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
+    return { climb, minGap, gc, gTotal, jr: (cart.scoreBreakdown.gate + cart.scoreBreakdown.balance) / judgeMax, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, airDist: cart.airtimeDistance, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
   }
 
   return STAGES.map((sd, i) => {
     const tr = new Track(sd, Game.scene);
+    // 긴 오르막 목록(경사 > 0.15가 30m 이상 이어지는 구간) — 체인 리프트 후보
+    const climbs = []; { const S = tr._sampleLoop(2); let st = null;
+      S.forEach((p, k) => { const up = p.tangent.y > 0.15; if (up && st === null) st = k; if ((!up || k === S.length - 1) && st !== null) { const len = (k - st) * 2; if (len >= 30) climbs.push({ t0: +S[st].t.toFixed(3), t1: +p.t.toFixed(3), len, rise: +(p.pos.y - S[st].pos.y).toFixed(1) }); st = null; } }); }
     const perfect = play(sd, tr, 'perfect', 1);
     const avgRuns = Array.from({ length: RUNS }, (_, k) => play(sd, tr, 'average', 1000 + k));
     tr.dispose();
     const mean = f => avgRuns.reduce((a, x) => a + f(x), 0) / RUNS;
     const round = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Math.round(v)]));
     return {
-      stage: i + 1,
-      perfect: { minEventGapSec: +perfect.minGap.toFixed(2), gatePGM: [perfect.gc.perfect, perfect.gc.good, perfect.gc.miss], judgeRatio: +perfect.jr.toFixed(2), lowRatio: +perfect.low.toFixed(3), assistRatio: +perfect.assist.toFixed(3), airDist: Math.round(perfect.airDist), score: Math.round(perfect.score), bd: round(perfect.bd), timeSec: +perfect.time.toFixed(1), stagSec: +perfect.stag.toFixed(1), vmaxKmh: Math.round(perfect.vmax), capKmh: Math.round(perfect.cap), maxCombo: perfect.maxCombo },
+      stage: i + 1, climbs,
+      perfect: { climbSec: +perfect.climb.toFixed(1), minEventGapSec: +perfect.minGap.toFixed(2), gatePGM: [perfect.gc.perfect, perfect.gc.good, perfect.gc.miss], judgeRatio: +perfect.jr.toFixed(2), lowRatio: +perfect.low.toFixed(3), assistRatio: +perfect.assist.toFixed(3), airDist: Math.round(perfect.airDist), score: Math.round(perfect.score), bd: round(perfect.bd), timeSec: +perfect.time.toFixed(1), stagSec: +perfect.stag.toFixed(1), vmaxKmh: Math.round(perfect.vmax), capKmh: Math.round(perfect.cap), maxCombo: perfect.maxCombo },
       average: {
         score: Math.round(mean(x => x.score)),
         min: Math.round(Math.min(...avgRuns.map(x => x.score))),
@@ -111,6 +118,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE }) => {
         ratioMax: +(Math.max(...avgRuns.map(x => x.score)) / perfect.score).toFixed(2),
         bd: round({ gate: mean(x => x.bd.gate), balance: mean(x => x.bd.balance), airtime: mean(x => x.bd.airtime), comboBonus: mean(x => x.bd.comboBonus), finishBonus: mean(x => x.bd.finishBonus) }),
         lowRatio: +mean(x => x.low).toFixed(3), lowRatioMax: +Math.max(...avgRuns.map(x => x.low)).toFixed(3), assistRatio: +mean(x => x.assist).toFixed(3), overPerfect: avgRuns.filter(x => x.score > perfect.score).length,
+        climbSec: +mean(x => x.climb).toFixed(1),
         timeSec: +mean(x => x.time).toFixed(1), stagSec: +mean(x => x.stag).toFixed(1), maxStagSec: +Math.max(...avgRuns.map(x => x.stag)).toFixed(1), vmaxKmh: Math.round(mean(x => x.vmax)),
       },
     };

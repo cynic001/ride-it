@@ -507,6 +507,7 @@ const UI = {
           </div>
         </div>
         <div class="judge" id="judgeToast"></div>
+        <div class="lift-hint" id="liftHint">체인 리프트 · 꾹 눌러 손 들기 보너스!</div>
         <div class="guide gate" id="gateGuide">
           <div class="guide-label" id="gateGuideLabel"></div>
           <div class="guide-bar"><div class="guide-zone" id="gateZone"></div><div class="guide-zone perfect" id="gatePerfect"></div><div class="guide-center"></div><div class="guide-marker" id="gateMarker"></div></div>
@@ -538,7 +539,7 @@ const UI = {
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
       balance: $('balanceGuide'), balanceZone: $('balanceZone'), balanceMarker: $('balanceMarker'),
       gate: $('gateGuide'), gateLabel: $('gateGuideLabel'), gateZone: $('gateZone'), gatePerfect: $('gatePerfect'), gateMarker: $('gateMarker'),
-      judge: $('judgeToast'), padLean: $('padLeanMark'), lastCombo: 0,
+      judge: $('judgeToast'), padLean: $('padLeanMark'), liftHint: $('liftHint'), lastCombo: 0,
     };
 
     $('cameraToggleBtn').addEventListener('click', () => {
@@ -691,6 +692,7 @@ const UI = {
         h.gate.classList.remove('on');
       }
     }
+    if (h.liftHint) h.liftHint.classList.toggle('on', cart.launched && (cart.onChainLift || cart._crestHold > 0));
     if (h.padLean) h.padLean.style.left = `${((Math.max(-1, Math.min(1, cart.leanInput)) + 1) * 50).toFixed(1)}%`; // 패드 기울기 표시
     h.cameraBtn.disabled = !cart.launched;
     h.pauseBtn.disabled = !cart.launched;

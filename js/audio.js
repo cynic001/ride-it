@@ -156,6 +156,12 @@ const AudioManager = {
     });
   },
 
+  /** 체인 리프트 "딸깍" — 짧고 높은 금속 클릭 */
+  playChainClick() {
+    if (!this._ready()) return;
+    this._blip({ freq: 2200, freqEnd: 1600, duration: 0.025, type: 'square', peak: 0.05 });
+  },
+
   /** 근처 구조물(터널/게이트 링)을 스치는 "휙" — 높은 음에서 낮은 음으로 떨어지는 도플러풍 바람 */
   playPassBy(strength = 1) {
     if (!this._ready()) return;

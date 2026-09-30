@@ -377,6 +377,11 @@ const Game = {
   /** 레일 이음새 "덜컹"(6m마다, 속도 비례 음량) + 터널/게이트 링 통과 "휙" */
   _updateRideSounds() {
     const c = this.cart;
+    // 체인 리프트: 초당 약 12회 딸깍(멈칫하는 동안은 느리게) — 리프트를 벗어나면 멈춤
+    if (c.onChainLift || c._crestHold > 0) {
+      this._chainAcc = (this._chainAcc || 0) + (c._crestHold > 0 ? 1 / 60 * 0.4 : 1 / 60);
+      if (this._chainAcc >= 1 / 12) { this._chainAcc = 0; AudioManager.playChainClick(); }
+    }
     this._jointAcc = (this._jointAcc || 0) + (c._stepDistance || 0);
     if (this._jointAcc >= 6) {
       this._jointAcc %= 6;

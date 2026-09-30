@@ -23,6 +23,8 @@ const BALANCE_MISS_RETAIN_PER_SECOND = 0.97;
 const ASSIST = { trigger: 0.6, target: 0.85, release: 0.78, tau: 0.5 };
 // 최고속도 상한 = 스테이지 기본 속도 × 이 배율 — 부스트 연속 성공 시 배율이 누적되어 1500km/h 넘게 폭주하던 문제 방지
 const MAX_SPEED_FACTOR = 1.5;
+// 체인 리프트(긴 오르막): 기본 속도의 이 비율 이상으로 끌어올림 — 오르막이 지루하지 않게. 정상 직전 낙하가 있으면 잠깐 멈칫
+const CHAIN_LIFT = { speed: 1.2, crestHold: 0.45, crestSpeed: 0.28 };
 
 // 점수 체계 — 모든 획득 점수에 콤보 배율(콤보 10마다 +0.1, 최대 2배) 적용, 피니쉬 배율은 마지막에 총점에 곱함
 const SCORE = {
@@ -82,6 +84,8 @@ class Cart {
     this.boostRemaining = 0;  // 남은 가속 거리(m)
     this.boostAccel = 0;      // 가속량(m/s²) — 연출(방사형 블러 등)이 세기로 사용
     this.boostTime = 0;
+    this.onChainLift = false;
+    this._crestHold = 0;
   }
 
   /** 현재 콤보 배율: 콤보 10마다 +0.1배, 최대 2배 */
@@ -96,6 +100,26 @@ class Cart {
     this.scoreBreakdown[source] += base;
     this.scoreBreakdown.comboBonus += base * (m - 1);
     this.score += base * m;
+  }
+
+  /** 체인 리프트 중엔 최소 속도 보장, 끝(정상)에서 바로 급낙하가 이어지면 0.45초 멈칫 후 놓아줌 */
+  _updateChainLift(dt) {
+    const z = this.track.liftZoneAt(this.t);
+    this.onChainLift = !!z && !this.rollback;
+    if (this._crestHold > 0) {
+      this._crestHold -= dt;
+      this.speed = Math.min(this.speed, this.baseSpeedMs * CHAIN_LIFT.crestSpeed);
+      return;
+    }
+    if (!this.onChainLift) return;
+    this.speed = Math.max(this.speed, this.baseSpeedMs * CHAIN_LIFT.speed);
+    const L = this.track.lengthM;
+    if (z.crestDrop && !this._crested?.[z.t0] && (z.t1 - this.t) * L < 3) {
+      (this._crested = this._crested || {})[z.t0] = this.currentLap; // 랩마다 1회
+      this._crestHold = CHAIN_LIFT.crestHold;
+      window.dispatchEvent(new CustomEvent('lift-crest'));
+    }
+    if (this._crested && this._crested[z.t0] && this._crested[z.t0] !== this.currentLap && (z.t1 - this.t) * L > 5) delete this._crested[z.t0];
   }
 
   /** 부스터 타이어: 기본 속도의 60% 아래로 떨어지면 부드럽게(지수 접근) 85%까지 끌어올림 — 중력보다 우선 */
@@ -163,6 +187,7 @@ class Cart {
       this.boostTime += dt;
       if (this.boostRemaining <= 0) { this.boostRemaining = 0; this.boostAccel = 0; }
     }
+    this._updateChainLift(dt);
     this._updateAssist(dt);
     this._capSpeed();
 
@@ -221,7 +246,8 @@ class Cart {
 
     // 에어타임(손들기) 보너스
     // 에어타임(손들기) 보너스 — 홀드한 채 달린 거리 기준(시간 기준이면 느리게 갈수록 점수가 쌓이는 역전이 생김)
-    if (seg.airtimeZone && this.airtimeHolding) {
+    // 체인 리프트에서도 손 들기 보너스(오르막 볼거리)
+    if ((seg.airtimeZone || this.onChainLift) && this.airtimeHolding) {
       this._addScore('airtime', SCORE.airtimePerMeter * this._stepDistance);
       this.airtimeDistance += this._stepDistance;
     }

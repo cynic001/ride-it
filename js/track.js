@@ -96,6 +96,32 @@ class Track {
     }));
 
     this._meshes = []; // 로드된 템플릿+인스턴스 전체 — dispose()에서 일괄 정리
+    this.liftZones = this._findLiftZones();
+  }
+
+  /** 체인 리프트: 경사 > 0.15가 50m 이상 이어지는 긴 오르막(5단계 에어타임 언덕처럼 짧은 언덕은 제외).
+   * crestDrop = 끝난 직후 30m 안에 급한 내리막이 있으면 true(정상 직전 멈칫 연출 대상) */
+  _findLiftZones() {
+    const S = this._sampleLoop(2);
+    const zones = [];
+    let st = null;
+    S.forEach((p, k) => {
+      const up = p.tangent.y > 0.15;
+      if (up && st === null) st = k;
+      if ((!up || k === S.length - 1) && st !== null) {
+        if ((k - st) * 2 >= 50) {
+          const t1 = p.t;
+          const crestDrop = S.slice(k, k + 15).some(q => q.tangent.y < -0.3);
+          zones.push({ t0: S[st].t, t1, crestDrop });
+        }
+        st = null;
+      }
+    });
+    return zones;
+  }
+
+  liftZoneAt(t) {
+    return this.liftZones.find(z => t >= z.t0 && t <= z.t1) || null;
   }
 
   /** 진행률 t(0~1)에 해당하는 월드 좌표 반환 */

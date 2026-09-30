@@ -274,6 +274,9 @@
   #uiRoot .ctl-btn.pressed { transform: translateY(4px) scale(.96); box-shadow: 0 1px 0 #b8c2dc; filter: brightness(1.08); }
   .twohand .key-hint { align-self: center; }
 
+  .lift-hint { position: absolute; left: 0; right: 0; top: 40%; text-align: center; font-size: 17px; color: #bfe9ff; opacity: 0; transition: opacity .3s ease;
+    -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; pointer-events: none; }
+  .lift-hint.on { opacity: 1; animation: pulse 1.2s ease-in-out infinite; }
   /* 판정 토스트(게이트 탭 결과) */
   .judge { position: absolute; top: 30%; left: 0; right: 0; text-align: center; pointer-events: none; font-size: 40px;
     -webkit-text-stroke: 6px var(--navy); paint-order: stroke fill; opacity: 0; }
