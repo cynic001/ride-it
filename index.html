@@ -262,7 +262,7 @@
   .twohand .key-hint { align-self: center; }
 
   /* 판정 토스트(게이트 탭 결과) */
-  .judge { position: absolute; top: 24%; left: 0; right: 0; text-align: center; pointer-events: none; font-size: 40px;
+  .judge { position: absolute; top: 30%; left: 0; right: 0; text-align: center; pointer-events: none; font-size: 40px;
     -webkit-text-stroke: 6px var(--navy); paint-order: stroke fill; opacity: 0; }
   .judge.show { animation: judgePop .7s var(--ease-pop) forwards; }
   @keyframes judgePop { 0% { opacity: 0; transform: scale(.4); } 25% { opacity: 1; transform: scale(1.1); } 70% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: translateY(-20px); } }
@@ -276,7 +276,7 @@
   .guide-zone { position: absolute; top: 0; bottom: 0; background: rgba(255,184,13,.85); }
   .guide-marker { position: absolute; top: -3px; width: 8px; height: 16px; margin-left: -4px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 2px var(--navy); }
   .guide.balance { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); } /* 엄지 패드(150px) 바로 위 */
-  .guide.gate { top: 16%; }
+  .guide.gate { top: calc(150px + env(safe-area-inset-top, 0px)); } /* 상단 버튼 줄(92~136px) 아래 */
   .guide-zone.perfect { background: var(--green); }
   .guide-center { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: rgba(20,26,51,.7); }
   .guide.gate.ready .guide-bar { border-color: var(--green); box-shadow: 0 0 10px rgba(61,220,132,.8); }

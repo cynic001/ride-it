@@ -7,10 +7,9 @@
 const G = 9.8;
 const FRICTION_RETAIN_PER_SECOND = 0.975; // 평지·무입력 기준 초당 2.5% 감속 (dt 무관하게 Math.pow(., dt)로 적용)
 const MIN_SPEED = 2;          // 최소 속도 (m/s) — 완전 정지 방지
-// boost 게이트 배율 — 실측 시뮬레이션(에너지보존식 기준) 결과 기존 1.25/1.1로는 하강 후 복귀
-// 오르막(특히 스테이지 후반 리프트 구간)에서 속도가 MIN_SPEED까지 떨어져 수십 초씩 정체하는
-// 현상을 확인, 리프트힐 체인모터 같은 "동력 보충" 역할을 하도록 상향 조정
-const BOOST_MULTIPLIER = { perfect: 2.2, good: 1.6 };
+// 부스트 = 일정 거리 동안 지속되는 가속(순간 배율 곱하기 대신). accel은 기본 속도 대비 초당 가속량, distance는 화면 진행 m.
+// Perfect는 길고 강하게, Good은 짧고 약하게, Miss는 없음 — 속도 상한(기본×1.5)은 그대로 적용
+const BOOST = { perfect: { accel: 0.6, distance: 80 }, good: { accel: 0.35, distance: 40 } };
 // 게임용 속도 과장 — 물리 속도(=HUD 표시, 실제 모티브 km/h 범위)는 그대로 두고, 트랙 위 진행만 이 배율로 빠르게.
 // 1.3~1.5 중 1.4: 1.5는 5단계 급하강에서 게이트 판정창이 0.2초 아래로 좁아져 과함, 1.3은 1단계가 여전히 느긋함
 const GAME_SPEED_SCALE = 1.4;
@@ -76,6 +75,9 @@ class Cart {
     this.scoreBreakdown = { gate: 0, balance: 0, airtime: 0, comboBonus: 0, finishBonus: 0 };
     this._curve = null;        // 진행 중인 커브 세그먼트 { key, inWindow, total }
     this._resolvedGates = new Set(); // 게이트당(랩별) 판정 1회 — 연타로 점수/부스트를 반복 획득하는 것 방지
+    this.boostRemaining = 0;  // 남은 가속 거리(m)
+    this.boostAccel = 0;      // 가속량(m/s²) — 연출(방사형 블러 등)이 세기로 사용
+    this.boostTime = 0;
   }
 
   /** 현재 콤보 배율: 콤보 10마다 +0.1배, 최대 2배 */
@@ -151,6 +153,12 @@ class Cart {
     // 마찰: 오르막/내리막에서는 위 에너지항이 지배적이라 체감이 작고, 평지에서만 초당 감쇠율이 뚜렷이 느껴짐
     this.speed *= Math.pow(FRICTION_RETAIN_PER_SECOND, dt);
     this.speed = Math.max(this.speed, MIN_SPEED);
+    if (this.boostRemaining > 0) {
+      this.speed += this.boostAccel * dt;
+      this.boostRemaining -= this._stepDistance || 0;
+      this.boostTime += dt;
+      if (this.boostRemaining <= 0) { this.boostRemaining = 0; this.boostAccel = 0; }
+    }
     this._updateAssist(dt);
     this._capSpeed();
 
@@ -268,14 +276,12 @@ class Cart {
   }
 
   _applyGateResult(gateType, result) {
-    if (gateType === 'boost') {
-      if (result === 'perfect') this.speed *= BOOST_MULTIPLIER.perfect;
-      else if (result === 'good') this.speed *= BOOST_MULTIPLIER.good;
-    } else if (gateType === 'brake') {
-      if (result === 'perfect') this.speed *= 0.9;
-      else if (result === 'miss') this.speed *= 0.6; // 이탈 위험 연출
+    if (gateType === 'boost' && BOOST[result]) {
+      // 더 센 부스트가 이미 걸려 있으면 약한 판정으로 덮어쓰지 않음
+      const b = BOOST[result];
+      const accel = b.accel * this.baseSpeedMs;
+      if (accel >= this.boostAccel || this.boostRemaining <= 0) { this.boostAccel = accel; this.boostRemaining = b.distance; }
     }
-    this._capSpeed();
 
     if (result === 'perfect') this.combo += 3;
     else if (result === 'miss') this.combo = 0;

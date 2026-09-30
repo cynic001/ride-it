@@ -231,7 +231,77 @@ class Track {
         this._meshes.push(inst);
       });
 
+    this._placeGateMarkers(railTopY, isHanging);
     await Promise.all([this._placeNatureProps(), this._placeParkProps()]);
+  }
+
+  /** 게이트 중심(cart.js와 같은 기준점)의 진행률 목록 — 표시물과 판정이 같은 지점을 가리키도록 */
+  gateCenters() {
+    return this.segmentRanges.filter(s => s.gate).map(s => {
+      const w = s.gate.timingWindow;
+      return { t: s.tStart + (s.tEnd - s.tStart) * (w.start + w.end) / 2, type: s.gate.type };
+    });
+  }
+
+  /** 가속 구간 표시: 게이트 중심에 빛나는 링(카트가 통과), 중심 앞 20m ~ 뒤 40m 레일 위 화살표 띠(이미시브, 조명 무관).
+   * 진행률 ↔ 거리는 cart.js와 같은 모델(t × lengthM)로 환산 */
+  _placeGateMarkers(railTopY, isHanging) {
+    const scene = this.scene;
+    const tex = new BABYLON.DynamicTexture('chevronTex', { width: 128, height: 128 }, scene, true);
+    const ctx = tex.getContext();
+    ctx.clearRect(0, 0, 128, 128);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); // 위(진행 방향)를 가리키는 굵은 화살 꺾쇠
+    ctx.moveTo(64, 14); ctx.lineTo(118, 70); ctx.lineTo(96, 92); ctx.lineTo(64, 60); ctx.lineTo(32, 92); ctx.lineTo(10, 70);
+    ctx.closePath(); ctx.fill();
+    tex.hasAlpha = true;
+    tex.update();
+    const mk = (name, color) => {
+      const m = new BABYLON.StandardMaterial(name, scene);
+      m.diffuseTexture = tex; m.opacityTexture = tex; m.emissiveColor = color;
+      m.disableLighting = true; m.backFaceCulling = false;
+      return m;
+    };
+    const chevron = BABYLON.MeshBuilder.CreatePlane('gateChevron', { width: 1.3, height: 1.0 }, scene);
+    chevron.rotation.x = Math.PI / 2; // 레일 위에 눕히고 화살표 끝이 +Z(진행 방향)를 향하게
+    chevron.bakeCurrentTransformIntoVertices();
+    chevron.material = mk('chevronMat', new BABYLON.Color3(1, 0.78, 0.1));
+    chevron.setEnabled(false);
+    const ring = BABYLON.MeshBuilder.CreateTorus('gateRing', { diameter: 5.6, thickness: 0.28, tessellation: 32 }, scene);
+    ring.rotation.x = Math.PI / 2; // 링 면이 진행 방향(Z)에 수직
+    ring.bakeCurrentTransformIntoVertices();
+    const ringMat = new BABYLON.StandardMaterial('gateRingMat', scene);
+    ringMat.emissiveColor = new BABYLON.Color3(1, 0.72, 0.05);
+    ringMat.disableLighting = true;
+    ring.material = ringMat;
+    ring.setEnabled(false);
+    const finishRing = ring.clone('finishRing');
+    finishRing.material = ringMat.clone('finishRingMat');
+    finishRing.material.emissiveColor = new BABYLON.Color3(0.25, 1, 0.55);
+    finishRing.setEnabled(false);
+    this._meshes.push(chevron, ring, finishRing, chevron.material, ringMat, finishRing.material, tex);
+
+    const L = this.lengthM;
+    const wrap = t => ((t % 1) + 1) % 1;
+    const up = isHanging ? -0.08 : railTopY + 0.04;
+    this.passMarkers = [];
+    this.gateCenters().forEach(({ t, type }, g) => {
+      const pos = this.getPositionAt(t), tan = this.getTangentAt(t);
+      const r = (type === 'finish' ? finishRing : ring).createInstance(`gateRing_${g}`);
+      r.position = pos.add(new BABYLON.Vector3(0, isHanging ? -0.5 : 1.0, 0));
+      r.lookAt(r.position.add(tan));
+      this._meshes.push(r);
+      this.passMarkers.push({ t, kind: 'ring' });
+      if (type === 'finish') return;
+      for (let d = -20; d <= 40; d += 3) {
+        const tt = wrap(t + d / L);
+        const p = this.getPositionAt(tt), tn = this.getTangentAt(tt);
+        const c = chevron.createInstance(`gateChevron_${g}_${d}`);
+        c.position = p.add(new BABYLON.Vector3(0, up, 0));
+        c.lookAt(c.position.add(tn), 0, 0, this.getBankRollAt(tt));
+        this._meshes.push(c);
+      }
+    });
   }
 
   /** PBR 재질의 금속성/거칠기 조정 — 템플릿의 재질을 바꾸면 인스턴스 전체에 반영 */

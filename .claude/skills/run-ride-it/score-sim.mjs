@@ -31,7 +31,8 @@ const server = http.createServer((req, res) => {
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
-page.on('pageerror', e => console.log('PAGEERROR', e.message));
+page.on('pageerror', e => console.error('PAGEERROR', e.message));
+page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE', m.text()); });
 await page.goto('http://localhost:8132/index.html', { waitUntil: 'domcontentloaded', timeout: 90000 });
 await page.waitForFunction(() => window.STAGES && window.Track && window.Cart && window.Game && Game.scene, null, { timeout: 90000 });
 

@@ -110,7 +110,7 @@ const LOGO = (small = false) => `
 
 const GATE_GUIDE_RANGE = 0.5; // 게이트 가이드 막대 한쪽 끝 = ±0.5초
 const JUDGE_LABEL = { perfect: 'PERFECT!', good: 'GOOD', miss: 'MISS' };
-const GATE_LABEL = { boost: '부스트 게이트', brake: '브레이크 게이트', finish: '피니쉬!' };
+const GATE_LABEL = { boost: '부스트 게이트', finish: '피니쉬!' };
 
 /** 스피드 라인 — 화면 중앙은 비우고 가장자리에서 바깥으로 흐르는 선(만화식 집중선). 2D 캔버스 1장, CSS 픽셀 해상도라
  * DPR 3 기기에서도 부담 없음. 개수는 그래픽 프리셋(speedLineCount)으로 차등 */

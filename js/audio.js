@@ -159,8 +159,6 @@ const AudioManager = {
       setTimeout(() => this._blip({ freq: 1050, duration: 0.15, type: 'triangle', peak }), 90);
     } else if (type === 'boost') {
       this._blip({ freq: 260, freqEnd: 520, duration: 0.18, type: 'sawtooth', peak });
-    } else if (type === 'brake') {
-      this._blip({ freq: 320, freqEnd: 120, duration: 0.2, type: 'square', peak });
     }
   },
 

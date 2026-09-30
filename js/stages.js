@@ -10,7 +10,7 @@
  * segment.curveDirection: 'left' | 'right' | null   (밸런스 판정용)
  * segment.requiredLean: 0~1  (판정에 필요한 기울기 강도, 0=밸런스 불필요)
  * segment.leanWindow: 판정 허용 오차 (작을수록 어려움)
- * segment.gate: { type: 'boost'|'brake'|'finish', timingWindow: {start, end} } | null
+ * segment.gate: { type: 'boost'|'finish', timingWindow: {start, end} } | null — 브레이크 게이트는 없앰(버튼 하나에 기능 하나)
  *   timingWindow는 이제 "게이트 위치"만 정함 — 판정 기준점 = 세그먼트 내 (start+end)/2 지점. 판정 자체는 실제 시간(초)
  *   기준으로 stage.gateTiming의 ±perfect/±good 초 이내인지로 결정(cart.js resolveGate) — 속도가 바뀌어도 난이도 일정
  * gateTiming: { perfect, good } (초) — 스테이지가 올라갈수록 조금씩 엄격하게
@@ -233,7 +233,7 @@ const STAGES = [
         gate: null, airtimeZone: false },
       // 핵심 기믹: 90도 낙하 직전 손들기(에어타임) 판정 — 각도가 클수록 판정창이 좁음
       { type: 'drop',      curveDirection: null,   requiredLean: 0,    leanWindow: 0,
-        gate: { type: 'brake', timingWindow: { start: 0.55, end: 0.65 } },  // 판정창 좁음 (dropAngle=90 반영)
+        gate: { type: 'boost', timingWindow: { start: 0.55, end: 0.65 } },  // (5번 개편: 브레이크 → 부스트 통일, 급하강 가속)
         dropAngle: 90, airtimeZone: true },
       { type: 'curve',    curveDirection: 'left',  requiredLean: 0.5,  leanWindow: 0.3,
         gate: null, airtimeZone: false },
@@ -308,7 +308,7 @@ const STAGES = [
     // 힐/구간을 담당하는지 검증 완료 — 개발기록.md 참고.
     segments: [
       { type: 'drop',      curveDirection: null,   requiredLean: 0,    leanWindow: 0,           // CP1~2: 진짜 77도 급낙하
-        gate: { type: 'brake', timingWindow: { start: 0.5, end: 0.6 } }, dropAngle: 77, airtimeZone: true },
+        gate: { type: 'boost', timingWindow: { start: 0.5, end: 0.6 } }, dropAngle: 77, airtimeZone: true }, // (브레이크 → 부스트 통일)
       { type: 'curve',     curveDirection: 'right', requiredLean: 0.6,  leanWindow: 0.24,        // 에어타임1
         gate: null, airtimeZone: true },
       { type: 'curve',     curveDirection: 'left',  requiredLean: 0.62, leanWindow: 0.23,        // 에어타임2
