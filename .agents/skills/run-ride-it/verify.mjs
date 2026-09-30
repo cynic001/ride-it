@@ -162,20 +162,31 @@ async function main() {
       await sleep(800);
       await shot(`${tag}_1_start`);
 
-      // 스타트 바: 핸들을 잡고 오른쪽으로 끌다가 빠르게 놓기(플릭)
+      // 스타트 바: 핸들을 잡고 아래로 당겼다가 위로 빠르게 밀어 올리기(손을 떼기 전에 발사돼야 함)
       const h = await page.locator('#startBarHandle').boundingBox();
       const x0 = h.x + h.width / 2, y0 = h.y + h.height / 2;
+      if (s === STAGES[0]) {
+        // 위로 밀지 않고 떼면 발사 취소
+        await page.mouse.move(x0, y0); await page.mouse.down();
+        for (let i = 1; i <= 6; i++) { await page.mouse.move(x0, y0 + i * 12); await sleep(30); }
+        await page.mouse.up(); await sleep(200);
+        check(`${tag} release without push-up cancels`, await page.evaluate(() => !Game.cart.launched));
+      }
       await page.mouse.move(x0, y0);
       await page.mouse.down();
-      for (let i = 1; i <= 12; i++) { await page.mouse.move(x0 + i * 13, y0); await sleep(16); }
+      for (let i = 1; i <= 12; i++) { await page.mouse.move(x0, y0 + i * 12); await sleep(16); }
+      if (s === STAGES[0]) { await sleep(100); await shot(`${tag}_1b_pulling`); }
+      for (let i = 1; i <= 5; i++) { await page.mouse.move(x0, y0 + 144 - i * 24); await sleep(8); }
+      const launchedBeforeRelease = await page.evaluate(() => Game.cart.launched);
       await page.mouse.up();
+      check(`${tag} launch fires on flick-up (before release)`, launchedBeforeRelease);
       await sleep(100);
       const launched = await page.evaluate(() => Game.cart.launched);
       check(`${tag} launch via start bar`, launched);
       if (s === STAGES[0]) check(`${tag} bgm ride mode after launch`, await page.evaluate(() => AudioManager._bgmMode === 'ride'));
       // 최고속도 상한: 속도를 강제로 올려도 기본 속도×1.5에서 멈추고 HUD 속도계가 강조되어야 함
       await page.evaluate(() => { Game.cart.speed = 999; });
-      await sleep(120);
+      await sleep(400); // 첫 스테이지는 셰이더 컴파일로 프레임이 한 번 길게 멈출 수 있어 여유
       const cap = await page.evaluate(() => ({ kmh: Game.cart.speed * 3.6, cap: Game.cart.maxSpeedMs * 3.6, capped: document.getElementById('speedo').classList.contains('capped') }));
       check(`${tag} speed cap`, cap.kmh <= cap.cap + 0.01 && cap.capped, `${cap.kmh.toFixed(1)}/${cap.cap.toFixed(1)}km/h highlight=${cap.capped}`);
       // 부스터 타이어: 기본 속도 30%로 떨어뜨리면 1.5초 안에 보조 추진이 걸려 60% 이상으로 복귀해야 함

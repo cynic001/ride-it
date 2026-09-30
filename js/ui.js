@@ -68,6 +68,7 @@ const ICONS = {
   soundOn: svg('<path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a8.5 8.5 0 0 1 0 12"/>'),
   soundOff: svg('<path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><line x1="16" y1="9" x2="21" y2="14"/><line x1="21" y1="9" x2="16" y2="14"/>'),
   camera: svg('<path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/>'),
+  arrowUp: svg('<line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/>'),
   arrowRight: svg('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/>'),
   swipe: svg('<polyline points="7 8 3 12 7 16"/><polyline points="17 8 21 12 17 16"/><line x1="3" y1="12" x2="21" y2="12"/>'),
   tap: svg('<circle cx="12" cy="9" r="3"/><path d="M12 12v8"/><path d="M6.5 5.5a8 8 0 0 1 11 0"/>'),
@@ -457,11 +458,13 @@ const UI = {
           <div class="guide-bar"><div class="guide-zone" id="balanceZone"></div><div class="guide-marker" id="balanceMarker"></div></div>
         </div>
         <div class="start-bar" id="startBar">
-          <div class="start-bar-label">당겨서 출발!</div>
+          <div class="start-bar-label" id="startBarLabel">아래로 당겼다가<br>위로 밀어 올려!</div>
           <div class="start-bar-track">
             <div class="start-bar-fill" id="startBarFill"></div>
-            <div class="start-bar-handle" id="startBarHandle">${ICONS.arrowRight}</div>
+            <div class="start-bar-handle" id="startBarHandle">${ICONS.arrowUp}</div>
           </div>
+          <div class="start-power"><div class="start-power-fill" id="startPowerFill"></div></div>
+          <div class="key-hint">키보드: ↓ 누르고 있기 · ↑ 발사</div>
         </div>
         <div class="hud-controls">
           <button class="hud-icon-btn" id="soundToggleBtn" aria-label="사운드 켜기/끄기">${AudioManager.enabled ? ICONS.soundOn : ICONS.soundOff}</button>
@@ -495,12 +498,21 @@ const UI = {
     const fill = $('startBarFill');
     const handle = $('startBarHandle');
 
+    const power = $('startPowerFill');
+    const label = $('startBarLabel');
     this._pullProgressHandler = e => {
-      const strength = Math.max(0, Math.min(1, e.detail));
-      const travel = Math.max(0, track.clientWidth - handle.clientWidth - 8); // 8 = track 내부 좌우 패딩(4px*2)
-      const offset = travel * strength;
-      handle.style.transform = `translateX(${offset}px)`;
-      fill.style.width = `${4 + offset + handle.clientWidth / 2}px`;
+      const { strength, handle: h, cancelled } = e.detail;
+      const travel = Math.max(0, track.clientHeight - handle.clientHeight - 8); // 8 = track 내부 위아래 패딩(4px*2)
+      const offset = travel * Math.max(0, Math.min(1, h));
+      handle.style.transform = `translateY(${offset}px)`;
+      fill.style.height = `${4 + offset + handle.clientHeight / 2}px`;
+      power.style.width = `${Math.round(strength * 100)}%`;
+      power.classList.toggle('max', strength >= 0.98);
+      if (cancelled) { // 위로 밀지 않고 뗌 → 바 복귀 + 안내 흔들기
+        label.classList.remove('nudge');
+        void label.offsetWidth;
+        label.classList.add('nudge');
+      }
     };
     // 발사 성공 시: 힌트 텍스트만 사라지는 게 아니라 스타트 바 UI 자체를 화면에서 치우고 HUD로 전환
     this._launchedHandler = () => {

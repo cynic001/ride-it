@@ -33,12 +33,20 @@ class CoasterCamera {
     this._impulse = 0;   // 순간 흔들림(m), 지수 감쇠
     this._fovKick = 0;   // 순간 FOV 확대(rad), 지수 감쇠
     this._prevTangentY = 0;
+    this._push = 0;      // 발사/부스트 순간 카메라가 뒤로 밀리는 거리(m), 지수 감쇠 — 스프링이 따라붙으며 "튀어나가는" 느낌
+  }
+
+  /** 발사 순간: 강한 FOV 킥 + 카메라가 뒤로 밀렸다가 따라붙음 */
+  launchPush(strength = 1) {
+    this.kick(1.1 * strength + 0.3);
+    this._push = Math.max(this._push, 3 + 4 * strength);
   }
 
   /** 부스트 성공/급하강 진입 등 "쾅" 순간 — strength 0~1 */
   kick(strength = 1) {
     this._impulse = Math.max(this._impulse, 0.35 * strength);
     this._fovKick = Math.max(this._fovKick, 0.3 * strength);
+    this._push = Math.max(this._push, 1.8 * strength);
   }
 
   dispose() {
@@ -79,7 +87,7 @@ class CoasterCamera {
       const behind = tangent.scale(-(isHanging ? 10 + bankFactor * 5 : 8 + bankFactor * 6));
       // 인버티드는 카트 높이(레일 아래) 뒤쪽에서 — 레일 바로 위/안이면 레일 상자가 화면을 통째로 가림
       const up = new BABYLON.Vector3(0, isHanging ? -1.1 - bankFactor : 3 + bankFactor * 4, 0);
-      targetPos = cartPos.add(behind).add(up);
+      targetPos = cartPos.add(behind).add(up).add(tangent.scale(-this._push));
       // 카트 자체가 아니라 카트 앞쪽 약간 위를 바라봄 — 화면이 땅으로 기울지 않고 하늘/진행 방향이 더 보이는 구도
       targetLookAt = cartPos.add(tangent.scale(5)).add(new BABYLON.Vector3(0, isHanging ? -0.8 : 1.2, 0));
       targetFov = 0.74 + speedRatio * 0.46; // 속도감: 가속 시 앞으로 빨려드는 느낌(0.74→1.20rad)
@@ -103,6 +111,9 @@ class CoasterCamera {
     if (this._transitionT < 1) {
       this._transitionT = Math.min(1, this._transitionT + dt / 0.25); // 0.25초 전환
       this._pos = BABYLON.Vector3.Lerp(this._pos, targetPos, this._transitionT);
+    } else if (!cart.launched) {
+      // 스타트 화면: 카메라 완전 고정(스프링 수렴 중 미끄러지는 움직임도 없게) — 당기는 조작에 집중
+      this._pos = targetPos;
     } else if (first) {
       // 1인칭은 탑승자 시점이라 카트에 고정 — 스프링을 두면 100km/h 이상에서 목표보다 2m 넘게 뒤처져 카트 몸체가 화면을 가림
       this._pos = targetPos;
@@ -118,6 +129,7 @@ class CoasterCamera {
     this._time += dt;
     this._impulse *= Math.exp(-dt * 6);
     this._fovKick *= Math.exp(-dt * 5);
+    this._push *= Math.exp(-dt * 3);
     const amp = (cart.launched ? SHAKE.speed * speedRatio * speedRatio + SHAKE.curve * (seg.requiredLean || 0) * speedRatio : 0)
       + this._impulse;
     const k = amp * (first ? SHAKE.firstPersonScale : 1);

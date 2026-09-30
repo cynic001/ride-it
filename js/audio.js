@@ -64,8 +64,10 @@ const AudioManager = {
   // ── 1) 스타트 flick 발사음 — 당김 강도/릴리스 속도에 비례한 피치·볼륨 ──────
   playLaunch(pullStrength, flickMultiplier) {
     const freq = 140 + pullStrength * 260;
-    const peak = 0.15 + Math.min(1, flickMultiplier / 1.6) * 0.15;
+    const k = Math.min(1, flickMultiplier / 1.6);
+    const peak = 0.15 + k * 0.15;
     this._blip({ freq, freqEnd: freq * 1.8, duration: 0.35, type: 'sawtooth', peak });
+    this.playBoostHit(0.6 + 0.5 * pullStrength * k); // 캐터펄트처럼 "쿵" + 바람 — 튀어나가는 느낌
   },
 
   // ── 2) 주행 중 바람 소리 — 필터링된 화이트노이즈, 속도에 비례해 밝기/볼륨 갱신 ──

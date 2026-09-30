@@ -3,18 +3,22 @@
  * Pointer Events API로 마우스/터치 통합 처리
  *
  * 입력 레이어 분리 (SE2 등 작은 화면에서 겹치지 않도록 영역 분리):
- *  - 스타트 전: 전용 "스타트 바" DOM 엘리먼트 안에서만 드래그 인식 = 당기기(pull),
- *    릴리스 순간의 속도(flick) = 발사 세기 (캔버스 전체 드래그는 더 이상 스타트에 반응하지 않음)
+ *  - 스타트 전: 화면 하단 중앙 "스타트 바" DOM 안에서만 — 아래로 당겨(pull, 힘 게이지) 위로 빠르게 밀어 올리면 발사.
+ *    힘 = 당긴 거리 × 밀어 올린 속도(flick). 위로 밀지 않고 손을 떼면 발사 취소(바가 제자리로). 키보드: ↓ 누르고 있기 = 충전, ↑ = 발사
  *  - 주행 중 화면 하단: 좌우 스와이프/드래그 = 밸런스 (leanInput)
  *  - 주행 중 화면 상단/중앙: 탭 = 게이트 판정 (부스트/브레이크/피니쉬)
  *  - 길게 누르기(주행 중, 위치 무관): 손들기 = 에어타임 홀드
  *  - 별도 UI 버튼: 카메라 토글 (락 해제 후)
  */
 
-const FLICK_WINDOW_MS = 100;       // release 직전 이 구간의 이동만으로 속도 계산
-const REFERENCE_FLICK_VELOCITY = 1.2; // px/ms — 이 이상이면 최대 flick 배율로 취급
-const MIN_FLICK_MULTIPLIER = 0.3;  // 느리게 놓았을 때(거의 정지 상태로 릴리스) 배율
-const MAX_FLICK_MULTIPLIER = 1.6;  // 빠르게 확 채듯 놓았을 때 배율
+const FLICK_WINDOW_MS = 100;       // 발사 판정 직전 이 구간의 이동만으로 속도 계산
+const REFERENCE_FLICK_VELOCITY = 1.5; // px/ms — 이 이상 빠르게 밀어 올리면 최대 flick 배율
+const MIN_FLICK_MULTIPLIER = 0.6;  // 천천히 밀어 올렸을 때 배율
+const MAX_FLICK_MULTIPLIER = 1.6;  // 확 튕겨 올렸을 때 배율
+const LAUNCH_UP_DISTANCE = 28;     // 최저점에서 이만큼(px) 위로 올라오면서
+const LAUNCH_UP_VELOCITY = 0.35;   // 이 속도(px/ms) 이상이면 즉시 발사(손을 뗄 필요 없음)
+const KEY_CHARGE_SECONDS = 0.8;    // 키보드 ↓를 이만큼 누르면 최대 충전
+const KEY_FLICK_MULTIPLIER = 1.25; // 키보드 발사 flick(속도 정보가 없어 고정)
 
 class InputController {
   /** @param {HTMLElement} startBarElement - 스타트 전 드래그를 받는 전용 DOM(ui.js가 렌더) */
@@ -30,7 +34,9 @@ class InputController {
     this._holdTimer = null;
 
     this._balanceZoneRatio = 0.5; // 화면 하단 50% = 밸런스 입력 영역
-    this.maxPullDistance = 150;   // px, 이 이상 당기면 최대 파워
+    this.maxPullDistance = 140;   // px, 이 이상 아래로 당기면 최대 파워
+    this._pull = 0;               // 현재 당긴 강도 0~1(터치/키보드 공용)
+    this._lowestY = 0;
     this._moveSamples = [];       // pull 중 {x,y,t} 샘플 — release 시 flick 속도 계산용
 
     this._bindEvents();
@@ -57,6 +63,10 @@ class InputController {
       this.startBar.addEventListener('pointercancel', e => this._onPullUp(e), opt);
     }
 
+    // 키보드 스타트: ↓ 누르고 있기 = 충전, ↑ = 발사
+    window.addEventListener('keydown', e => this._onStartKey(e, true), opt);
+    window.addEventListener('keyup', e => this._onStartKey(e, false), opt);
+
     // 발사 후: 캔버스 전체에서 밸런스/게이트/손들기
     this.canvas.addEventListener('pointerdown', e => this._onDriveDown(e), opt);
     this.canvas.addEventListener('pointermove', e => this._onDriveMove(e), opt);
@@ -74,36 +84,97 @@ class InputController {
 
   _onPullDown(e) {
     if (this.state !== 'idle') return;
+    e.preventDefault();
     try { this.startBar.setPointerCapture(e.pointerId); } catch (err) { /* iOS Safari 대응 */ }
     this.state = 'pulling';
     this._dragStart = { x: e.clientX, y: e.clientY };
-    this._dragCurrent = { x: e.clientX, y: e.clientY };
-    this._moveSamples = [{ x: e.clientX, y: e.clientY, t: performance.now() }];
+    this._lowestY = e.clientY;
+    this._pull = 0;
+    this._moveSamples = [{ y: e.clientY, t: performance.now() }];
   }
 
   _onPullMove(e) {
     if (this.state !== 'pulling') return;
-    this._dragCurrent = { x: e.clientX, y: e.clientY };
+    e.preventDefault();
     const now = performance.now();
-    this._moveSamples.push({ x: e.clientX, y: e.clientY, t: now });
-    const cutoff = now - FLICK_WINDOW_MS * 1.5; // 윈도우보다 넉넉히 여유를 둬서 정확한 보간 기준점 확보
+    this._moveSamples.push({ y: e.clientY, t: now });
+    const cutoff = now - FLICK_WINDOW_MS * 1.5;
     while (this._moveSamples.length > 1 && this._moveSamples[0].t < cutoff) this._moveSamples.shift();
-    // ui.js가 스타트 바 핸들/게이지 비주얼을 갱신하도록 통지
-    window.dispatchEvent(new CustomEvent('pull-progress', { detail: this.getPullStrength() }));
+
+    if (e.clientY > this._lowestY) this._lowestY = e.clientY; // 아래로 당기는 중 — 가장 깊이 당긴 지점 기록
+    this._pull = Math.max(0, Math.min(1, (this._lowestY - this._dragStart.y) / this.maxPullDistance));
+    const rise = this._lowestY - e.clientY; // 최저점에서 다시 올라온 거리
+    const upV = this._upVelocity();
+    if (this._pull > 0.05 && rise >= LAUNCH_UP_DISTANCE && upV >= LAUNCH_UP_VELOCITY) {
+      this._launch(this._pull, this._flickFromVelocity(upV));
+      return;
+    }
+    // ui.js 게이지: 당긴 강도 + 올라오는 중인 핸들 위치(아래로 당긴 만큼 내려가 있음)
+    const shown = Math.max(0, (e.clientY - this._dragStart.y) / this.maxPullDistance);
+    window.dispatchEvent(new CustomEvent('pull-progress', { detail: { strength: this._pull, handle: Math.min(1, shown) } }));
   }
 
-  _onPullUp(e) {
+  _onPullUp() {
     if (this.state !== 'pulling') return;
-    const strength = this.getPullStrength();
-    const flickMultiplier = this._computeFlickMultiplier(e);
+    // 위로 밀어 올리지 않고 뗀 경우: 마지막 순간 위로 빠르게 움직이고 있었다면 발사, 아니면 취소(바 복귀 + 안내)
+    const upV = this._upVelocity();
+    if (this._pull > 0.05 && upV >= LAUNCH_UP_VELOCITY) {
+      this._launch(this._pull, this._flickFromVelocity(upV));
+      return;
+    }
+    this.state = 'idle';
+    this._pull = 0;
+    window.dispatchEvent(new CustomEvent('pull-progress', { detail: { strength: 0, handle: 0, cancelled: true } }));
+  }
+
+  /** 발사 직전 FLICK_WINDOW_MS 구간의 위쪽 이동 속도(px/ms, 위로 = 양수) */
+  _upVelocity() {
+    const s = this._moveSamples;
+    if (s.length < 2) return 0;
+    const last = s[s.length - 1];
+    let ref = s[0];
+    for (const p of s) { if (p.t >= last.t - FLICK_WINDOW_MS) { ref = p; break; } }
+    return (ref.y - last.y) / Math.max(1, last.t - ref.t);
+  }
+
+  _flickFromVelocity(v) {
+    const ratio = Math.min(1, v / REFERENCE_FLICK_VELOCITY);
+    return MIN_FLICK_MULTIPLIER + (MAX_FLICK_MULTIPLIER - MIN_FLICK_MULTIPLIER) * ratio;
+  }
+
+  _onStartKey(e, down) {
+    if (this.state === 'launched') return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (down && !this._keyCharging) {
+        this._keyCharging = true;
+        const t0 = performance.now();
+        const tick = () => {
+          if (!this._keyCharging || this.state === 'launched') return;
+          this._pull = Math.min(1, (performance.now() - t0) / 1000 / KEY_CHARGE_SECONDS);
+          window.dispatchEvent(new CustomEvent('pull-progress', { detail: { strength: this._pull, handle: this._pull } }));
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      } else if (!down) {
+        this._keyCharging = false;
+      }
+    } else if (e.key === 'ArrowUp' && down) {
+      e.preventDefault();
+      this._keyCharging = false;
+      if (this._pull > 0.05) this._launch(this._pull, KEY_FLICK_MULTIPLIER);
+    }
+  }
+
+  _launch(strength, flickMultiplier) {
     this.cart.launch(strength, flickMultiplier);
     AudioManager.playLaunch(strength, flickMultiplier);
     this.state = 'launched';
+    this._keyCharging = false;
     this._dragStart = null;
-    this._dragCurrent = null;
     this._moveSamples = [];
-    // ui.js가 스타트 바 → HUD 화면 전환을 트리거하도록 통지
-    window.dispatchEvent(new CustomEvent('cart-launched'));
+    // ui.js(스타트 바 → HUD 전환)·main.js(발사 연출)가 받음
+    window.dispatchEvent(new CustomEvent('cart-launched', { detail: { strength, flickMultiplier } }));
   }
 
   _onDriveDown(e) {
@@ -140,32 +211,6 @@ class InputController {
     this.cart.airtimeHolding = false;
     this._dragStart = null;
     // 밸런스 입력은 손을 떼면 서서히 중립으로 복귀 (main.js 루프에서 decay 처리 가능)
-  }
-
-  /** release 직전 FLICK_WINDOW_MS 구간의 이동 거리/시간으로 release 속도를 구해 0.3~1.6 배율로 정규화 */
-  _computeFlickMultiplier(e) {
-    const now = performance.now();
-    const windowStart = now - FLICK_WINDOW_MS;
-    let ref = this._moveSamples[0];
-    for (const s of this._moveSamples) {
-      if (s.t >= windowStart) { ref = s; break; }
-    }
-    const dx = e.clientX - ref.x;
-    const dy = e.clientY - ref.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const dtMs = Math.max(1, now - ref.t); // 0 나눗셈 방지
-    const velocity = dist / dtMs; // px/ms
-    const ratio = Math.min(1, velocity / REFERENCE_FLICK_VELOCITY);
-    return MIN_FLICK_MULTIPLIER + (MAX_FLICK_MULTIPLIER - MIN_FLICK_MULTIPLIER) * ratio;
-  }
-
-  /** 0~1 정규화된 당김 강도 (스타트 바 비주얼 피드백에도 사용) */
-  getPullStrength() {
-    if (!this._dragStart || !this._dragCurrent) return 0;
-    const dx = this._dragCurrent.x - this._dragStart.x;
-    const dy = this._dragCurrent.y - this._dragStart.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    return Math.min(1, dist / this.maxPullDistance);
   }
 
   _resolveGateTap() {

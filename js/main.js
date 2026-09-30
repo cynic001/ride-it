@@ -376,6 +376,12 @@ window.addEventListener('gate-result', e => {
   }
 });
 window.addEventListener('booster-assist', () => Game._onBoostMoment(0.45));
+// 발사 순간 연출: 카메라 밀림+FOV 킥, 스피드 라인 버스트 (발사음은 input.js가 AudioManager.playLaunch)
+window.addEventListener('cart-launched', e => {
+  const k = e.detail ? e.detail.strength : 1;
+  if (Game.camera) Game.camera.launchPush(k);
+  Game._lineBurst = Math.max(Game._lineBurst || 0, 0.6 + 0.4 * k);
+});
 
 // PWA 오프라인 캐싱 — file://이나 미지원 브라우저는 조용히 건너뜀(게임 동작과 무관)
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {

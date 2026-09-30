@@ -245,36 +245,40 @@
   .guide-center { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: rgba(20,26,51,.7); }
   .guide.gate.ready .guide-bar { border-color: var(--green); box-shadow: 0 0 10px rgba(61,220,132,.8); }
 
+  /* 스타트 바: 엄지가 닿는 하단 중앙 세로 레일 — 아래로 당겨 충전, 위로 튕겨 발사 */
   .start-bar {
-    position: absolute; bottom: 22%; left: 50%; transform: translateX(-50%);
-    display: flex; flex-direction: column; align-items: center; gap: 10px;
-    pointer-events: auto; touch-action: none; /* 이 안에서만 드래그를 받고 브라우저 제스처는 차단 */
-    transition: opacity .3s ease, transform .3s ease;
+    position: absolute; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    pointer-events: auto; touch-action: none; /* 이 안에서만 드래그를 받고 브라우저 제스처(스크롤/바운스)는 차단 */
+    padding: 8px 24px; transition: opacity .3s ease, transform .3s ease;
   }
-  .start-bar.launched { opacity: 0; transform: translateX(-50%) translateY(16px); pointer-events: none; }
-  .start-bar-label { color: #fff; font-size: 18px; -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; }
+  .start-bar.launched { opacity: 0; transform: translateX(-50%) translateY(-24px); pointer-events: none; }
+  .start-bar-label { color: #fff; font-size: 17px; text-align: center; line-height: 1.25; -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; }
+  .start-bar-label.nudge { animation: nudgeX .4s ease; }
+  @keyframes nudgeX { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
   .start-bar-track {
-    position: relative; width: 240px; height: 60px; border-radius: 30px;
+    position: relative; width: 64px; height: 200px; border-radius: 32px;
     background: rgba(20,26,51,.55); border: 3px solid #fff; box-shadow: 0 6px 16px rgba(0,0,0,.25);
   }
-  .start-bar-track::after { /* 당기는 방향 힌트 화살표 */
-    content: '›››'; position: absolute; right: 18px; top: 50%; transform: translateY(-52%); color: rgba(255,255,255,.55);
-    font-size: 26px; letter-spacing: 2px; animation: nudge 1s ease-in-out infinite;
-  }
-  @keyframes nudge { 50% { transform: translate(6px, -52%); } }
-  .start-bar-fill { position: absolute; top: 4px; left: 4px; height: calc(100% - 8px); width: 0; border-radius: 26px; background: var(--yellow); }
+  .start-bar-fill { position: absolute; top: 4px; left: 4px; right: 4px; height: 0; border-radius: 26px; background: linear-gradient(180deg, var(--yellow), #ff7a3d); }
   .start-bar-handle {
-    position: absolute; top: 4px; left: 4px; width: 46px; height: 46px; border-radius: 50%;
+    position: absolute; top: 4px; left: 4px; width: 50px; height: 50px; border-radius: 50%;
     background: var(--yellow); color: var(--navy); display: flex; align-items: center; justify-content: center;
     box-shadow: 0 3px 0 var(--yellow-deep), 0 4px 10px rgba(0,0,0,.35); z-index: 1;
   }
-  .start-bar-handle svg { width: 24px; height: 24px; }
+  .start-bar-handle svg { width: 26px; height: 26px; }
+  .start-power { width: 140px; height: 10px; border-radius: 999px; background: rgba(20,26,51,.6); border: 2px solid #fff; overflow: hidden; }
+  .start-power-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--yellow), #ff5a4e); }
+  .start-power-fill.max { animation: pulse .4s ease-in-out infinite; }
+  .key-hint { display: none; font-size: 12px; color: #fff; -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; }
+  @media (hover: hover) and (pointer: fine) { .key-hint { display: block; } } /* 데스크톱에서만 키 안내 */
+  /* 일시정지/사운드/카메라: 엄지 패드·스타트 바와 겹치지 않게 화면 위쪽(콤보 배지 아래) */
   .hud-controls {
-    position: absolute; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); right: 14px;
-    display: flex; align-items: center; gap: 10px; pointer-events: auto;
+    position: absolute; top: calc(92px + env(safe-area-inset-top, 0px)); right: 12px;
+    display: flex; align-items: center; gap: 8px; pointer-events: auto;
   }
   .hud-icon-btn {
-    width: 46px; height: 46px; padding: 0; border-radius: 50%; background: #fff; color: var(--navy);
+    width: 44px; height: 44px; padding: 0; border-radius: 50%; background: #fff; color: var(--navy);
     display: flex; align-items: center; justify-content: center; pointer-events: auto;
     box-shadow: 0 4px 0 #b8c2dc, 0 6px 12px rgba(0,0,0,.25);
   }
