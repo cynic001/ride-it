@@ -26,7 +26,8 @@ const TAP_MAX_SECONDS = 0.12;      // 이보다 짧게 누르고 떼면 "톡"(�
 const TAP_MAX_MOVE = 14;           // px — 이보다 많이 움직이면 탭이 아니라 밀기(밸런스)
 const PAD_FULL_LEAN_PX = 90;       // 패드에서 이만큼 밀면 최대 기울기
 const TILT = { deadzone: 3, full: 22, fallbackSec: 1.2 }; // 도(°) — 데드존 이하 무시, full°에서 최대 기울기
-const LEAN_FOLLOW = { direct: 18, ramp: 7 }; // leanInput 추종 속도(1/초): 패드/기울기는 즉각, 버튼/키는 누르는 동안 서서히
+const LEAN_FOLLOW = { direct: 18 }; // 패드/기울기 leanInput 추종 속도(1/초) — 거의 즉시
+const LEAN_RAMP_SEC = 0.3; // 버튼(◀▶)/키보드(← →): 누르고 있으면 이 시간에 걸쳐 0→1.0, 떼면 같은 속도로 0 — 톡톡 눌러 중간 값 가능
 
 class InputController {
   /** @param {HTMLElement} startBarElement - 스타트 전 드래그를 받는 전용 DOM(ui.js가 렌더) */
@@ -307,10 +308,19 @@ class InputController {
     if (this.state !== 'launched') return;
     if (this.mode === 'tilt') this._updateTilt();
     const keyLean = (this._keys.has('ArrowRight') ? 1 : 0) - (this._keys.has('ArrowLeft') ? 1 : 0);
-    let target = this._leanTarget, rate = this._leanRate;
-    if (keyLean || this._btnLean) { target = keyLean || this._btnLean; rate = LEAN_FOLLOW.ramp; }
-    else if (this.mode === 'twohand') { target = 0; rate = LEAN_FOLLOW.ramp; }
-    this.cart.leanInput += (target - this.cart.leanInput) * (1 - Math.exp(-dt * rate));
+    const held = keyLean || this._btnLean;
+    const padActive = this._leanPointer !== null && this._leanPointer !== undefined;
+    // 버튼/키: 일정 속도(1/LEAN_RAMP_SEC)로 선형 램프 — 누르면 0.3초에 1.0, 떼면 0.3초에 0(패드를 잡고 있지 않을 때)
+    if (held || this.mode === 'twohand' || (this._rampOn && !padActive && this.mode !== 'tilt')) {
+      const goal = held || 0;
+      const stepAmt = dt / LEAN_RAMP_SEC;
+      const cur = this.cart.leanInput;
+      this.cart.leanInput = goal > cur ? Math.min(goal, cur + stepAmt) : Math.max(goal, cur - stepAmt);
+      this._rampOn = held !== 0 || Math.abs(this.cart.leanInput) > 1e-3;
+      if (!this._rampOn) this._leanTarget = 0;
+    } else {
+      this.cart.leanInput += (this._leanTarget - this.cart.leanInput) * (1 - Math.exp(-dt * this._leanRate));
+    }
     this._syncHold();
   }
 

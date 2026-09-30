@@ -553,7 +553,7 @@ const UI = {
         </div>
         <div class="guide balance" id="balanceGuide">
           <div class="guide-label">밸런스!</div>
-          <div class="guide-bar"><div class="guide-zone" id="balanceZone"></div><div class="guide-marker" id="balanceMarker"></div></div>
+          <div class="guide-bar"><div class="guide-zone ok" id="balanceZone"></div><div class="guide-zone perfect" id="balancePerfect"></div><div class="guide-minline" id="balanceMin"></div><div class="guide-center"></div><div class="guide-marker" id="balanceMarker"></div></div>
         </div>
         <div class="start-bar" id="startBar">
           <div class="start-bar-label" id="startBarLabel">아래로 당겼다가<br>위로 밀어 올려!</div>
@@ -576,7 +576,7 @@ const UI = {
     this._hud = {
       speed: $('speedLabel'), speedo: $('speedo'), comboMult: $('comboMult'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'),
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
-      balance: $('balanceGuide'), balanceZone: $('balanceZone'), balanceMarker: $('balanceMarker'),
+      balance: $('balanceGuide'), balanceZone: $('balanceZone'), balancePerfect: $('balancePerfect'), balanceMin: $('balanceMin'), balanceMarker: $('balanceMarker'),
       gate: $('gateGuide'), gateLabel: $('gateGuideLabel'), gateZone: $('gateZone'), gatePerfect: $('gatePerfect'), gateMarker: $('gateMarker'),
       judge: $('judgeToast'), padLean: $('padLeanMark'), liftHint: $('liftHint'),
       rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
@@ -651,6 +651,16 @@ const UI = {
     window.addEventListener('pull-progress', this._pullProgressHandler);
     window.addEventListener('cart-launched', this._launchedHandler);
     window.addEventListener('gate-result', this._gateHandler);
+    if (this._balPerfectHandler) window.removeEventListener('balance-perfect', this._balPerfectHandler);
+    this._balPerfectHandler = () => {
+      if (!this._hud) return;
+      const j = this._hud.judge;
+      j.textContent = '밸런스 PERFECT!';
+      j.className = 'judge';
+      void j.offsetWidth;
+      j.className = 'judge show perfect small';
+    };
+    window.addEventListener('balance-perfect', this._balPerfectHandler);
   },
 
   /** 주행 조작 DOM — 조작 방식별. 발사 전에는 숨겨 두고(스타트 바가 하단 중앙 사용) cart-launched에서 표시 */
@@ -704,10 +714,18 @@ const UI = {
       // 밸런스 가이드: 목표 기울기 ±leanWindow를 노란 구간으로, 현재 입력을 흰 마커로 (−1~1 → 0~100%)
       const seg = track.getSegmentAt(cart.t);
       const pct = v => (Math.max(-1, Math.min(1, v)) + 1) * 50;
-      if (cart.launched && !cart.rollback && seg.requiredLean > 0) { // 뒤로 떨어지는 동안은 판정 없음 → 가이드도 숨김
-        const target = seg.curveDirection === 'left' ? -seg.requiredLean : seg.requiredLean;
-        h.balanceZone.style.left = `${pct(target - seg.leanWindow).toFixed(1)}%`;
-        h.balanceZone.style.right = `${(100 - pct(target + seg.leanWindow)).toFixed(1)}%`;
+      if (cart.launched && !cart.rollback && seg.requiredLean > 0) {
+        // 성공 구간 = 커브 방향 최소 기울기~끝(연한 노랑), Perfect 범위 = 목표 ±perfectRange(초록), 최소 기울기 선
+        const dir = seg.curveDirection === 'left' ? -1 : 1;
+        const rule = cart.balanceRule;
+        const minLean = Math.min(rule.minLean, seg.requiredLean);
+        const a = pct(dir * minLean), b = pct(dir * 1);
+        h.balanceZone.style.left = `${Math.min(a, b).toFixed(1)}%`;
+        h.balanceZone.style.right = `${(100 - Math.max(a, b)).toFixed(1)}%`;
+        const p0 = pct(dir * (seg.requiredLean - rule.perfectRange)), p1 = pct(dir * (seg.requiredLean + rule.perfectRange));
+        h.balancePerfect.style.left = `${Math.min(p0, p1).toFixed(1)}%`;
+        h.balancePerfect.style.right = `${(100 - Math.max(p0, p1)).toFixed(1)}%`;
+        h.balanceMin.style.left = `${a.toFixed(1)}%`;
         h.balanceMarker.style.left = `${pct(cart.leanInput).toFixed(1)}%`;
         h.balance.classList.add('on');
       } else {
@@ -792,6 +810,7 @@ const UI = {
             ${[
               ['게이트', bd.gate],
               [`밸런스 (커브 ${sum.curvesCleared}/${sum.curveCount})`, bd.balance],
+              [`밸런스 Perfect ×${cart.balancePerfects}`, bd.balancePerfect],
               ['에어타임', bd.airtime],
               ['콤보 보너스', bd.comboBonus],
               ...(bd.finishBonus > 0 ? [['피니쉬 보너스', bd.finishBonus]] : []),

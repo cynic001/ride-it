@@ -8,7 +8,8 @@
  *
  * segment.type: 'straight' | 'curve' | 'drop' | 'loop'
  * segment.curveDirection: 'left' | 'right' | null   (밸런스 판정용)
- * segment.requiredLean: 0~1  (판정에 필요한 기울기 강도, 0=밸런스 불필요)
+ * segment.requiredLean: 0~1  (목표 기울기 = Perfect 기준점, 0=밸런스 불필요)
+ * segment.leanWindow: (12번 이후 판정에 쓰지 않음 — 스테이지 balance.minLean/perfectRange로 대체, 데이터는 기록용으로 유지)
  * segment.leanWindow: 판정 허용 오차 (작을수록 어려움)
  * segment.gate: { type: 'boost'|'finish', timingWindow: {start, end} } | null — 브레이크 게이트는 없앰(버튼 하나에 기능 하나)
  *   timingWindow는 이제 "게이트 위치"만 정함 — 판정 기준점 = 세그먼트 내 (start+end)/2 지점. 판정 자체는 실제 시간(초)
@@ -47,6 +48,8 @@ const STAGES = [
     // 뒤로 떨어지기(6번): cp = 언덕 꼭대기 제어점 인덱스(골짜기는 cp-1). auto = 뒤로 미끄러진 뒤 부스터가 자동 발사(입문)
     rollback: { cp: 9, mode: 'auto' },
     theme: '#ff5a4e', // 피니쉬 게이트 아치 등 스테이지 테마 색(8번)
+    // 밸런스 판정(12번): 커브 방향으로 minLean 이상이면 성공(과하게 기울여도 성공), 목표 ±perfectRange 유지면 Perfect
+    balance: { minLean: 0.12, perfectRange: 0.22 },
     controlPoints: [
       { x: 0,   y: 10,  z: 0 },    // 출발(스테이션)
       { x: -10, y: 9,   z: 30 },
@@ -91,6 +94,8 @@ const STAGES = [
     trackLengthM: 1180,
     // 폐곡선 — 출발 직후 인버티드 루프, 이후 원거리 턴을 돌아 복귀. 스테이지1보다 기복/커브 밀도 상승.
     theme: '#23b5a5', // 피니쉬 게이트 아치 등 스테이지 테마 색(8번)
+    // 밸런스 판정(12번): 커브 방향으로 minLean 이상이면 성공(과하게 기울여도 성공), 목표 ±perfectRange 유지면 Perfect
+    balance: { minLean: 0.18, perfectRange: 0.18 },
     controlPoints: [
       { x: 0,   y: 15, z: 0 },     // 출발(스테이션)
       { x: -12, y: 14, z: 45 },
@@ -150,6 +155,8 @@ const STAGES = [
     // 물 착수(7번): cp = 수면 위를 스치는 골짜기 제어점, level 1~3 = 물보라 연출 단계(단계가 오를수록 화려하게)
     splash: { cp: 2, level: 1 },
     theme: '#8b5cf6', // 피니쉬 게이트 아치 등 스테이지 테마 색(8번)
+    // 밸런스 판정(12번): 커브 방향으로 minLean 이상이면 성공(과하게 기울여도 성공), 목표 ±perfectRange 유지면 Perfect
+    balance: { minLean: 0.35, perfectRange: 0.1 },
     controlPoints: [
       { x: 0,   y: 18, z: 0 },     // 출발(스테이션)
       { x: 15.6, y: 16, z: 45.5 },    // ← 실제 출발점(t=0): Babylon 폐곡선 CatmullRom은 두 번째 제어점에서 시작
@@ -215,6 +222,8 @@ const STAGES = [
     // 물 착수(7번): cp = 수면 위를 스치는 골짜기 제어점, level 1~3 = 물보라 연출 단계(단계가 오를수록 화려하게)
     splash: { cp: 3, level: 2 },
     theme: '#2f6fd6', // 피니쉬 게이트 아치 등 스테이지 테마 색(8번)
+    // 밸런스 판정(12번): 커브 방향으로 minLean 이상이면 성공(과하게 기울여도 성공), 목표 ±perfectRange 유지면 Perfect
+    balance: { minLean: 0.22, perfectRange: 0.15 },
     controlPoints: [
       { x: 0,   y: 70, z: 0 },     // 최고높이 70m 리프트 힐 정상(스테이션)
       { x: 0,   y: 70, z: 23.4 },    // 정상에서 잠시 정지 (다이브 직전 긴장감 연출)
@@ -284,6 +293,8 @@ const STAGES = [
     // 물 착수(7번): cp = 수면 위를 스치는 골짜기 제어점, level 1~3 = 물보라 연출 단계(단계가 오를수록 화려하게)
     splash: { cp: 2, level: 3 },
     theme: '#ff9f1c', // 피니쉬 게이트 아치 등 스테이지 테마 색(8번)
+    // 밸런스 판정(12번): 커브 방향으로 minLean 이상이면 성공(과하게 기울여도 성공), 목표 ±perfectRange 유지면 Perfect
+    balance: { minLean: 0.25, perfectRange: 0.14 },
     controlPoints: [
       { x: 0,   y: 56, z: 0 },     // 최고높이 56m(스테이션)
       { x: 0,   y: 56, z: 25 },    // 리프트 정상 — 여기서 바로 급낙하 시작 (진짜 77도 드롭 크레스트)

@@ -25,21 +25,22 @@ const LAPS = Number(args.laps ?? 1);
 const NOCAP = !!args.nocap; // 비교용: 속도 상한 해제
 const SCALE = args.scale ? Number(args.scale) : null; // 게임 속도 배율 실험
 const HOLD0 = !!args.hold0; // 실험: 정상 멈칫 끄기
+const DEVICE = args.device || 'pad'; // 밸런스 입력 모델: pad | tilt | button | keyboard
 
 const server = http.createServer((req, res) => {
   const f = path.join(ROOT, decodeURIComponent(req.url.split('?')[0]));
   fs.readFile(f, (e, d) => { if (e) { res.writeHead(404); res.end(); } else { res.writeHead(200, { 'Content-Type': f.endsWith('.js') ? 'text/javascript' : 'text/html' }); res.end(d); } });
-}).listen(8132);
+}).listen(Number(args.port ?? 8132));
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
 page.on('pageerror', e => console.error('PAGEERROR', e.message));
 page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE', m.text()); });
-await page.goto('http://localhost:8132/index.html', { waitUntil: 'domcontentloaded', timeout: 90000 });
+await page.goto(`http://localhost:${Number(args.port ?? 8132)}/index.html`, { waitUntil: 'domcontentloaded', timeout: 90000 });
 if (HOLD0) await page.addInitScript(() => { window.__simOverrides = () => { CHAIN_LIFT.crestHold = 0; }; });
 await page.waitForFunction(() => window.STAGES && window.Track && window.Cart && window.Game && Game.scene, null, { timeout: 90000 });
 
-const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE }) => {
+const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
   if (SCALE) Cart.speedScale = SCALE;
   if (window.__simOverrides) window.__simOverrides(); // 실험용 상수 덮어쓰기(--hold0 등)
   window.dispatchEvent = () => true; // 시뮬 중 오디오/UI 이벤트 무시
@@ -66,6 +67,8 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE }) => {
         plan = model === 'perfect'
           ? { good: true, hold: seg.airtimeZone }
           : { good: r() < 0.75, hold: seg.airtimeZone && r() < 0.6 };
+        plan.modulate = model === 'perfect' || r() < 0.2; // 버튼/키: 톡톡 눌러 목표 근처를 맞추는 커브 비율
+        plan.pressOn = true; plan.pressUntil = 0;
       }
       // 게이트 탭: 게이트마다(키 단위) 계획을 세우고, 판정 오차(err)가 계획 오차에 도달한 틱에 탭
       const g = cart.gateTiming();
@@ -75,9 +78,32 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE }) => {
         if (gp.tap && !gp.done && g.err >= gp.err && Math.abs(g.err) <= 0.4) { gp.done = true; cart.resolveGate(); }
       }
       const target = seg.requiredLean > 0 ? (seg.curveDirection === 'left' ? -seg.requiredLean : seg.requiredLean) : 0;
-      if (model === 'perfect' || seg.requiredLean === 0) cart.leanInput = target;
-      else if (local < 0.15) cart.leanInput = 0;
-      else cart.leanInput = Math.max(-1, Math.min(1, target + (r() * 2 - 1) * seg.leanWindow * (plan.good ? 0.8 : 2.5)));
+      const dirS = Math.sign(target) || 1;
+      const reacting = model !== 'perfect' && local < 0.15; // 커브 진입 직후 반응 지연(모든 조작 방식 동일)
+      if (seg.requiredLean === 0) {
+        if (DEVICE === 'button' || DEVICE === 'keyboard') cart.leanInput = Math.max(0, Math.abs(cart.leanInput) - 1 / 60 / 0.3) * Math.sign(cart.leanInput);
+        else cart.leanInput = 0;
+      } else if (DEVICE === 'button' || DEVICE === 'keyboard') {
+        // 버튼/키: 누르면 0.3초 램프로 ±1, 떼면 0.3초에 0. 기본은 "커브 방향으로 누르고 있기", 일부는 목표 근처에서 톡톡
+        let press = !reacting;
+        if (press && plan.modulate) press = Math.abs(cart.leanInput) < Math.abs(target); // 목표를 넘으면 뗐다가 다시 누름
+        if (press && !plan.good) { // 엉성: 0.25초 단위로 누르다 떼다(누르는 비율 55%, 키보드 60%)
+          if (time >= plan.pressUntil) { plan.pressOn = r() < (DEVICE === 'keyboard' ? 0.6 : 0.55); plan.pressUntil = time + 0.25; }
+          press = plan.pressOn;
+        }
+        const goal = press ? dirS : 0, stepA = 1 / 60 / 0.3;
+        cart.leanInput = goal > cart.leanInput ? Math.min(goal, cart.leanInput + stepA) : Math.max(goal, cart.leanInput - stepA);
+      } else {
+        // 패드/기울기: 같은 실력 = 같은 오차 모델(0.25초마다 새 오차, 60Hz 떨림 아님). 차이는 실제 input.js 추종 속도만(패드 18/s, 기울기 6/s)
+        if (time >= (plan.errUntil || 0)) { plan.errMul = plan.good ? 1 : 0.1 + r() * 1.2; plan.errAdd = gauss(r) * (plan.good ? 0.12 : 0.25); plan.errUntil = time + 0.25; }
+        let desired;
+        if (model === 'perfect') desired = target;
+        else if (reacting) desired = 0;
+        else desired = target * plan.errMul + plan.errAdd;
+        desired = Math.max(-1, Math.min(1, desired));
+        const follow = DEVICE === 'tilt' ? 6 : 18;
+        cart.leanInput = model === 'perfect' ? desired : cart.leanInput + (desired - cart.leanInput) * (1 - Math.exp(-follow / 60));
+      }
       cart.airtimeHolding = plan.hold;
       if (cart.rollback && cart.rollback.phase === 'mash') { mashAcc += mashRate / 60; while (mashAcc >= 1) { mashAcc -= 1; cart.mashTap(); } }
       cart.update(1 / 60);
@@ -94,7 +120,8 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE }) => {
     let minGap = Infinity;
     for (let k = 1; k < hits.length; k++) minGap = Math.min(minGap, hits[k] - hits[k - 1]);
     const mash = cart.rollbackLog.filter(x => x.mode === 'mash');
-    return { mashSec: mash.length ? mash[0].climbSec : null, mashAssisted: mash.some(x => x.assisted), mashBonus: cart.scoreBreakdown.mashBonus, climb, minGap, gc, gTotal, jr: (cart.scoreBreakdown.gate + cart.scoreBreakdown.balance) / judgeMax, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, airDist: cart.airtimeDistance, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
+    const curveN = sd.segments.filter(g => g.requiredLean > 0).length * LAPS;
+    return { curveRate: (cart.curvesCleared || 0) / curveN, perfectRate: cart.balancePerfects / curveN, mashSec: mash.length ? mash[0].climbSec : null, mashAssisted: mash.some(x => x.assisted), mashBonus: cart.scoreBreakdown.mashBonus, climb, minGap, gc, gTotal, jr: (cart.scoreBreakdown.gate + cart.scoreBreakdown.balance) / judgeMax, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, airDist: cart.airtimeDistance, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
   }
 
   return STAGES.map((sd, i) => {
@@ -109,7 +136,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE }) => {
     const round = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Math.round(v)]));
     return {
       stage: i + 1, climbs,
-      perfect: { mashSec: perfect.mashSec === null ? null : +perfect.mashSec.toFixed(2), climbSec: +perfect.climb.toFixed(1), minEventGapSec: +perfect.minGap.toFixed(2), gatePGM: [perfect.gc.perfect, perfect.gc.good, perfect.gc.miss], judgeRatio: +perfect.jr.toFixed(2), lowRatio: +perfect.low.toFixed(3), assistRatio: +perfect.assist.toFixed(3), airDist: Math.round(perfect.airDist), score: Math.round(perfect.score), bd: round(perfect.bd), timeSec: +perfect.time.toFixed(1), stagSec: +perfect.stag.toFixed(1), vmaxKmh: Math.round(perfect.vmax), capKmh: Math.round(perfect.cap), maxCombo: perfect.maxCombo },
+      perfect: { curveRate: +perfect.curveRate.toFixed(2), perfectRate: +perfect.perfectRate.toFixed(2), mashSec: perfect.mashSec === null ? null : +perfect.mashSec.toFixed(2), climbSec: +perfect.climb.toFixed(1), minEventGapSec: +perfect.minGap.toFixed(2), gatePGM: [perfect.gc.perfect, perfect.gc.good, perfect.gc.miss], judgeRatio: +perfect.jr.toFixed(2), lowRatio: +perfect.low.toFixed(3), assistRatio: +perfect.assist.toFixed(3), airDist: Math.round(perfect.airDist), score: Math.round(perfect.score), bd: round(perfect.bd), timeSec: +perfect.time.toFixed(1), stagSec: +perfect.stag.toFixed(1), vmaxKmh: Math.round(perfect.vmax), capKmh: Math.round(perfect.cap), maxCombo: perfect.maxCombo },
       average: {
         score: Math.round(mean(x => x.score)),
         min: Math.round(Math.min(...avgRuns.map(x => x.score))),
@@ -123,13 +150,14 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE }) => {
         bd: round({ gate: mean(x => x.bd.gate), balance: mean(x => x.bd.balance), airtime: mean(x => x.bd.airtime), comboBonus: mean(x => x.bd.comboBonus), finishBonus: mean(x => x.bd.finishBonus) }),
         lowRatio: +mean(x => x.low).toFixed(3), lowRatioMax: +Math.max(...avgRuns.map(x => x.low)).toFixed(3), assistRatio: +mean(x => x.assist).toFixed(3), overPerfect: avgRuns.filter(x => x.score > perfect.score).length,
         climbSec: +mean(x => x.climb).toFixed(1),
+        curveRate: +mean(x => x.curveRate).toFixed(2), perfectRate: +mean(x => x.perfectRate).toFixed(2),
         mashSec: avgRuns[0].mashSec === null ? null : +mean(x => x.mashSec).toFixed(2), mashAssistRate: +(avgRuns.filter(x => x.mashAssisted).length / RUNS).toFixed(2),
         mashSecRange: avgRuns[0].mashSec === null ? null : [Math.min(...avgRuns.map(x => x.mashSec)), Math.max(...avgRuns.map(x => x.mashSec))].map(v => +v.toFixed(2)),
         timeSec: +mean(x => x.time).toFixed(1), stagSec: +mean(x => x.stag).toFixed(1), maxStagSec: +Math.max(...avgRuns.map(x => x.stag)).toFixed(1), vmaxKmh: Math.round(mean(x => x.vmax)),
       },
     };
   });
-}, { RUNS, LAPS, NOCAP, SCALE });
+}, { RUNS, LAPS, NOCAP, SCALE, DEVICE });
 
 out.forEach(o => console.log(JSON.stringify(o)));
 await browser.close();

@@ -230,6 +230,21 @@ async function main() {
       await sleep(250);
       const leanAfter = await page.evaluate(() => Game.cart.leanInput);
       check(`${tag} pad swipe = balance, release = neutral`, lean > 0.5 && Math.abs(leanAfter) < 0.1, `lean=${lean.toFixed(2)} → ${leanAfter.toFixed(2)}`);
+      if (s === STAGES[0]) {
+        // 키보드 →: 0.3초 램프로 1.0, 짧게 톡 = 중간 값, 떼면 부드럽게 0
+        await page.keyboard.down('ArrowRight'); await sleep(90);
+        const kMid = await page.evaluate(() => Game.cart.leanInput);
+        await sleep(350);
+        const kFull = await page.evaluate(() => Game.cart.leanInput);
+        await page.keyboard.up('ArrowRight'); await sleep(100);
+        const kDecay = await page.evaluate(() => Game.cart.leanInput);
+        await sleep(400);
+        const kZero = await page.evaluate(() => Game.cart.leanInput);
+        check(`${tag} key ramp (0.3s → 1.0, release → 0)`, kMid > 0.1 && kMid < 0.8 && kFull > 0.99 && kDecay > 0.2 && kDecay < 0.9 && Math.abs(kZero) < 0.01,
+          `90ms=${kMid.toFixed(2)} 440ms=${kFull.toFixed(2)} +100ms=${kDecay.toFixed(2)} +500ms=${kZero.toFixed(2)}`);
+        const g = await page.evaluate(() => ['#balanceZone', '#balancePerfect', '#balanceMin'].map(q => !!document.querySelector(q)));
+        check(`${tag} balance guide has min line + perfect zone`, g.every(Boolean), JSON.stringify(g));
+      }
       // 톡 = 부스트(게이트 판정 이벤트), 꾹 = 손 들기
       await page.evaluate(() => { window.__gates = 0; if (!window.__gateHooked) { window.__gateHooked = true; window.addEventListener('gate-result', () => window.__gates++); } });
       await page.mouse.click(px - 80, py);
@@ -323,7 +338,7 @@ async function main() {
       await page.waitForSelector('#retryBtn', { timeout: 10000 });
       await sleep(700);
       await shot(`${tag}_5_result`);
-      const sc = await page.evaluate(() => { const b = Game.cart.scoreBreakdown; return { score: Game.cart.score, sum: b.gate + b.balance + b.airtime + b.comboBonus + b.finishBonus + (b.mashBonus || 0), rows: document.querySelectorAll('.bd-row').length }; });
+      const sc = await page.evaluate(() => { const b = Game.cart.scoreBreakdown; return { score: Game.cart.score, sum: b.gate + b.balance + (b.balancePerfect || 0) + b.airtime + b.comboBonus + b.finishBonus + (b.mashBonus || 0), rows: document.querySelectorAll('.bd-row').length }; });
       check(`${tag} result screen + score breakdown`, Math.abs(sc.score - sc.sum) < 0.5 && sc.rows >= 4, `score=${sc.score.toFixed(1)} sum=${sc.sum.toFixed(1)} rows=${sc.rows}`);
       await page.locator('#stageSelectBtn').click();
       await page.waitForSelector('.stage-btn');

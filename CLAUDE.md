@@ -48,7 +48,7 @@ ride-it/
 
 ## 작업 시 체크리스트
 1. `개발기록.md`를 먼저 읽고 지금까지의 결정사항 파악
-2. 물리/조작 관련 수정 시 `stages.js`의 세그먼트 구조(`requiredLean`, `leanWindow`, `gate.timingWindow`)를 건드리게 되는데, 값 변경 시 이유를 `개발기록.md`에 한 줄 남길 것
+2. 물리/조작 관련 수정 시 `stages.js`의 세그먼트 구조(`requiredLean` = Perfect 기준점, 스테이지 `balance: {minLean, perfectRange}`, `gate.timingWindow`)를 건드리게 되는데, 값 변경 시 이유를 `개발기록.md`에 한 줄 남길 것
 3. 3D 에셋(glb) 추가/변경은 `assets/` 하위에만 — 코드에서 직접 base64 인라인하지 말 것 (기존 chaechae 단일 HTML 원칙과 달리 이 프로젝트는 멀티파일 구조로 진행하기로 결정됨)
 4. 커밋 메시지는 한글로, 무엇을 왜 바꿨는지 간단히 — 이것 자체가 제작 기록 역할을 겸함
 5. 큰 설계 판단(새 조작 추가, 스테이지 난이도 재조정 등)이 필요하면 코드를 임의로 크게 바꾸지 말고 먼저 질문할 것
