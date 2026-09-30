@@ -203,6 +203,17 @@ async function main() {
     }
     await shot('09_stage_select_after');
 
+    // 진행 저장(D): 새로고침 후에도 클리어 배지/최고 기록이 남아 있어야 함
+    const prog = await page.evaluate(() => JSON.parse(localStorage.getItem('rc_progress') || '{}'));
+    check('progress saved', Object.keys(prog).length === STAGES.length, JSON.stringify(prog));
+    await page.reload({ waitUntil: 'load' });
+    if (await page.locator('#titleScreen').count()) await page.locator('#titleScreen').click();
+    await page.waitForSelector('.stage-btn');
+    const badges = await page.locator('.stage-btn .badge.rank-badge').count();
+    check('progress persists after reload', badges === STAGES.length, `rank badges=${badges}`);
+    await sleep(400);
+    await shot('10_stage_select_reloaded');
+
     const draw = await page.evaluate(() => ({
       meshes: Game.scene.meshes.length,
       activeIndices: Game.engine._drawCalls ? Game.engine._drawCalls.current : null,

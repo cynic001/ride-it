@@ -14,6 +14,35 @@ const LapsManager = {
 };
 window.LapsManager = LapsManager;
 
+// 스테이지별 진행 저장 — { [stage.id]: { cleared, best, rank, plays } } (인덱스가 아닌 id 기준이라 순서가 바뀌어도 유지)
+const RANK_ORDER = 'CBAS';
+const ProgressManager = {
+  _data: (() => {
+    try { return JSON.parse(localStorage.getItem('rc_progress')) || {}; } catch (e) { return {}; }
+  })(),
+  get(stageId) {
+    return this._data[stageId] || null;
+  },
+  /** 완주 기록 반영 — 반환값 { firstClear, newBest }로 결과 화면 배지 결정 */
+  record(stageId, score, rank) {
+    const prev = this._data[stageId];
+    const firstClear = !prev;
+    const newBest = !!prev && score > prev.best;
+    this._data[stageId] = {
+      cleared: true,
+      best: Math.max(score, prev ? prev.best : 0),
+      rank: prev && RANK_ORDER.indexOf(prev.rank) > RANK_ORDER.indexOf(rank) ? prev.rank : rank,
+      plays: (prev ? prev.plays : 0) + 1,
+    };
+    try { localStorage.setItem('rc_progress', JSON.stringify(this._data)); } catch (e) { /* 저장 불가(사파리 개인정보 보호 모드 등) — 이번 세션 메모리에만 유지 */ }
+    return { firstClear, newBest };
+  },
+  get clearedCount() {
+    return Object.values(this._data).filter(p => p.cleared).length;
+  },
+};
+window.ProgressManager = ProgressManager;
+
 // 아이콘 — 이모지 대신 인라인 SVG(currentColor로 버튼 색 상속)
 const svg = (body, fill = false) =>
   `<svg viewBox="0 0 24 24" ${fill ? 'fill="currentColor"' : 'fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"'} aria-hidden="true">${body}</svg>`;
@@ -109,6 +138,7 @@ const UI = {
       <div class="screen stage-select">
         ${MENU_BG}
         ${LOGO(true)}
+        <div class="progress-summary">클리어 ${ProgressManager.clearedCount} / ${stages.length}</div>
         <div class="stage-list">
           ${stages.map((s, i) => `
             <button class="stage-btn" data-index="${i}">
@@ -146,9 +176,11 @@ const UI = {
     if (!localStorage.getItem('rc_howto_seen')) this.showHowTo();
   },
 
-  /** 스테이지 카드 오른쪽 배지 — 진행 저장(D) 전에는 비어 있음 */
-  _stageBadges() {
-    return '';
+  /** 스테이지 카드 오른쪽 배지 — 클리어 시 최고 랭크 + 최고 점수, 미클리어는 NEW */
+  _stageBadges(i) {
+    const p = ProgressManager.get(STAGES[i].id);
+    if (!p) return '<span class="badge">NEW</span>';
+    return `<span class="badge rank-badge">${p.rank}</span><span class="badge clear">최고 ${p.best.toLocaleString()}</span>`;
   },
 
   _qualityLabel() {
@@ -421,6 +453,7 @@ const UI = {
     const stageData = STAGES[stageIndex];
     const sum = this._summarize(cart, stageData);
     const score = Math.round(cart.score);
+    const rec = ProgressManager.record(stageData.id, score, sum.rank);
     this._setScreen(`
       <div class="screen modal-overlay" id="resultScreen">
         <div class="card result-card">
@@ -428,7 +461,7 @@ const UI = {
           <div class="result-stage">${stageData.name}</div>
           <div class="rank ${sum.rank}">${sum.rank}</div>
           <div class="result-score"><small>SCORE</small>${score.toLocaleString()}</div>
-          ${this._bestBadge(stageIndex, score, sum.rank)}
+          ${rec.firstClear ? '<div class="new-best">첫 클리어!</div>' : rec.newBest ? '<div class="new-best">NEW BEST!</div>' : `<div class="result-stage">최고 ${ProgressManager.get(stageData.id).best.toLocaleString()}</div>`}
           <div class="stats">
             <div class="stat"><small>최고 콤보</small><b>${cart.maxCombo.toLocaleString()}</b></div>
             <div class="stat"><small>밸런스 정확도</small><b>${Math.round(sum.balanceAcc * 100)}%</b></div>
@@ -447,10 +480,6 @@ const UI = {
     document.getElementById('stageSelectBtn').addEventListener('click', () => this.showStageSelect(STAGES, i => Game.loadStage(i)));
   },
 
-  /** 진행 저장(D) 전에는 표시 없음 */
-  _bestBadge() {
-    return '';
-  },
 };
 
 window.UI = UI;
