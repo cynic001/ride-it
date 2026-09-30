@@ -208,6 +208,33 @@ async function main() {
       await page.locator('#resumeBtn').click();
       await sleep(300);
 
+      // 게이트 가이드 ↔ 시간 기준 판정 일치: 판정 오차≈0 순간까지 고정 스텝으로 진행 → 마커/구간 위치가 판정값과
+      // 같은지 확인 → 그 상태에서 실제 마우스 탭 → Perfect여야 함
+      const gg = await page.evaluate(() => {
+        Game.engine.stopRenderLoop();
+        const c = Game.cart;
+        let g = null, approaching = null; // 이미 지나친 미판정 게이트가 아니라, 다가오는(err<-0.1을 거친) 게이트를 대상으로
+        for (let i = 0; i < 60 * 120; i++) {
+          g = c.gateTiming();
+          if (g && g.err < -0.1) approaching = g.key;
+          if (g && g.key === approaching && g.err >= -0.008) break;
+          Game._fixedUpdate(1 / 60);
+          if (c.isFinished) return null;
+        }
+        UI.updateHUD(c, Game.track);
+        const L = id => parseFloat(document.getElementById(id).style.left);
+        return { err: g.err, type: g.type, marker: L('gateMarker'), expMarker: 50 + g.err / 0.5 * 50, zone: L('gateZone'), expZone: 50 - g.good / 0.5 * 50,
+          perf: L('gatePerfect'), expPerf: 50 - g.perfect / 0.5 * 50, on: document.getElementById('gateGuide').classList.contains('on'), n: c._gateResults.length };
+      });
+      if (gg) {
+        await page.mouse.click(187, 150);
+        const res = await page.evaluate(() => { const r = Game.cart._gateResults; return r.length ? r[r.length - 1].result : 'none'; });
+        check(`${tag} gate guide matches timing judge`, gg.on && Math.abs(gg.marker - gg.expMarker) < 0.6 && Math.abs(gg.zone - gg.expZone) < 0.2 && Math.abs(gg.perf - gg.expPerf) < 0.2,
+          `err=${gg.err.toFixed(3)}s marker=${gg.marker}%/${gg.expMarker.toFixed(1)}% good=${gg.zone}%/${gg.expZone.toFixed(1)}% perfect=${gg.perf}%/${gg.expPerf.toFixed(1)}%`);
+        check(`${tag} tap at guide center → perfect`, res === 'perfect', `${gg.type} → ${res}`);
+      }
+      await page.evaluate(() => { if (!Game.cart.isFinished) { Game.lastTime = performance.now(); Game.engine.runRenderLoop(() => Game._loop()); } });
+
       if (args.probe) {
         for (const pt of [0, 0.25, 0.5, 0.75]) {
           for (const mode of ['third', 'first']) {

@@ -88,6 +88,7 @@ const LOGO = (small = false) => `
     <div class="logo-en">RIDE IT</div>
   </div>`;
 
+const GATE_GUIDE_RANGE = 0.5; // 게이트 가이드 막대 한쪽 끝 = ±0.5초
 const JUDGE_LABEL = { perfect: 'PERFECT!', good: 'GOOD', miss: 'MISS' };
 const GATE_LABEL = { boost: '부스트 게이트', brake: '브레이크 게이트', finish: '피니쉬!' };
 
@@ -363,7 +364,7 @@ const UI = {
         <div class="judge" id="judgeToast"></div>
         <div class="guide gate" id="gateGuide">
           <div class="guide-label" id="gateGuideLabel"></div>
-          <div class="guide-bar"><div class="guide-zone" id="gateZone"></div><div class="guide-marker" id="gateMarker"></div></div>
+          <div class="guide-bar"><div class="guide-zone" id="gateZone"></div><div class="guide-zone perfect" id="gatePerfect"></div><div class="guide-center"></div><div class="guide-marker" id="gateMarker"></div></div>
         </div>
         <div class="guide balance" id="balanceGuide">
           <div class="guide-label">밸런스!</div>
@@ -388,7 +389,7 @@ const UI = {
       speed: $('speedLabel'), speedo: $('speedo'), comboMult: $('comboMult'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'),
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
       balance: $('balanceGuide'), balanceZone: $('balanceZone'), balanceMarker: $('balanceMarker'),
-      gate: $('gateGuide'), gateLabel: $('gateGuideLabel'), gateZone: $('gateZone'), gateMarker: $('gateMarker'),
+      gate: $('gateGuide'), gateLabel: $('gateGuideLabel'), gateZone: $('gateZone'), gatePerfect: $('gatePerfect'), gateMarker: $('gateMarker'),
       judge: $('judgeToast'), lastCombo: 0,
     };
 
@@ -473,15 +474,19 @@ const UI = {
         h.balance.classList.remove('on');
       }
 
-      // 게이트 가이드: 세그먼트 진행률 위 판정 창(초록 = 지금 탭)
-      if (cart.launched && seg.gate) {
-        const local = (cart.t - seg.tStart) / (seg.tEnd - seg.tStart);
-        const { start, end } = seg.gate.timingWindow;
-        h.gateLabel.textContent = GATE_LABEL[seg.gate.type] || '';
-        h.gateZone.style.left = `${start * 100}%`;
-        h.gateZone.style.right = `${(1 - end) * 100}%`;
-        h.gateMarker.style.left = `${Math.min(100, local * 100).toFixed(1)}%`;
-        h.gate.classList.toggle('ready', local >= start && local <= end);
+      // 게이트 가이드(시간축): 가운데 = 게이트 중심 도달 순간, 좌우 끝 = ±GATE_GUIDE_RANGE초. 노랑 = Good(±good초),
+      // 초록 = Perfect(±perfect초), 마커 = "지금 탭하면 판정될 오차"(cart.gateTiming().err, 터치 지연 보정 포함) —
+      // 판정 함수와 같은 값을 그대로 그리므로 표시와 판정이 어긋날 수 없음
+      const g = cart.launched ? cart.gateTiming() : null;
+      if (g && g.timeTo <= GATE_GUIDE_RANGE * 1.6 && g.err <= GATE_ATTEMPT_RANGE) {
+        const toPct = sec => 50 + (sec / GATE_GUIDE_RANGE) * 50;
+        h.gateLabel.textContent = GATE_LABEL[g.type] || '';
+        h.gateZone.style.left = `${toPct(-g.good)}%`;
+        h.gateZone.style.right = `${100 - toPct(g.good)}%`;
+        h.gatePerfect.style.left = `${toPct(-g.perfect)}%`;
+        h.gatePerfect.style.right = `${100 - toPct(g.perfect)}%`;
+        h.gateMarker.style.left = `${Math.max(0, Math.min(100, toPct(g.err))).toFixed(1)}%`;
+        h.gate.classList.toggle('ready', Math.abs(g.err) <= g.good);
         h.gate.classList.add('on');
       } else {
         h.gate.classList.remove('on');

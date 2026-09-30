@@ -5,7 +5,8 @@
  * 플레이어 모델
  *  - perfect: 커브마다 목표 기울기 정확히, 게이트는 판정창 중앙에서 탭, 에어타임 구간 전부 홀드, pull=1·flick=1
  *  - average: "적당히 성공" — 커브 진입 후 15%는 반응 지연(중립), 커브의 75%는 판정창 안에서 흔들림(±0.8창),
- *             25%는 크게 벗어남(±2.5창). 게이트 85%만 탭하고 탭 시점은 중앙 ± N(0, 0.7×반창). 에어타임 구간 60%만 홀드.
+ *             25%는 크게 벗어남(±2.5창). 게이트 85%만 탭하고 탭 오차는 실제 시간 기준 N(0, 0.12초)(판정 기준 오차 =
+ *             cart.gateTiming().err, 터치 지연 보정 포함). 에어타임 구간 60%만 홀드.
  *             pull=0.7·flick=1. 시드 고정 난수로 RUNS회 반복 평균.
  *
  * Usage: node score-sim.mjs [--runs=30] [--laps=1]
@@ -45,31 +46,39 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP }) => {
     if (NOCAP) cart.maxSpeedMs = Infinity;
     cart.launch(model === 'perfect' ? 1 : 0.7, 1);
     let time = 0, stag = 0, segKey = null, plan = null;
+    const gatePlans = {};
     while (!cart.isFinished && time < 900) {
       const seg = tr.getSegmentAt(cart.t);
       const key = `${cart.currentLap}:${seg.tStart}`;
       const local = (cart.t - seg.tStart) / (seg.tEnd - seg.tStart);
       if (key !== segKey) {
         segKey = key;
-        const w = seg.gate && seg.gate.timingWindow;
-        const center = w ? (w.start + w.end) / 2 : 0, half = w ? (w.end - w.start) / 2 : 0;
         plan = model === 'perfect'
-          ? { good: true, tapAt: w ? center : null, hold: seg.airtimeZone }
-          : { good: r() < 0.75, tapAt: w && r() < 0.85 ? Math.min(0.999, Math.max(0, center + gauss(r) * half * 0.7)) : null, hold: seg.airtimeZone && r() < 0.6 };
-        plan.tapped = false;
+          ? { good: true, hold: seg.airtimeZone }
+          : { good: r() < 0.75, hold: seg.airtimeZone && r() < 0.6 };
+      }
+      // 게이트 탭: 게이트마다(키 단위) 계획을 세우고, 판정 오차(err)가 계획 오차에 도달한 틱에 탭
+      const g = cart.gateTiming();
+      if (g) {
+        if (!gatePlans[g.key]) gatePlans[g.key] = model === 'perfect' ? { tap: true, err: 0 } : { tap: r() < 0.85, err: gauss(r) * 0.12 };
+        const gp = gatePlans[g.key];
+        if (gp.tap && !gp.done && g.err >= gp.err && Math.abs(g.err) <= 0.4) { gp.done = true; cart.resolveGate(); }
       }
       const target = seg.requiredLean > 0 ? (seg.curveDirection === 'left' ? -seg.requiredLean : seg.requiredLean) : 0;
       if (model === 'perfect' || seg.requiredLean === 0) cart.leanInput = target;
       else if (local < 0.15) cart.leanInput = 0;
       else cart.leanInput = Math.max(-1, Math.min(1, target + (r() * 2 - 1) * seg.leanWindow * (plan.good ? 0.8 : 2.5)));
       cart.airtimeHolding = plan.hold;
-      if (plan.tapAt !== null && !plan.tapped && local >= plan.tapAt) { plan.tapped = true; cart.resolveGate(local); }
       cart.update(1 / 60);
       time += 1 / 60;
       if (cart.speed <= 2.05) stag += 1 / 60;
     }
     const judgeMax = (sd.segments.filter(g => g.gate).length * 300 + sd.segments.filter(g => g.requiredLean > 0).length * 100) * LAPS;
-    return { jr: (cart.scoreBreakdown.gate + cart.scoreBreakdown.balance) / judgeMax, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, airDist: cart.airtimeDistance, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
+    const gTotal = sd.segments.filter(g => g.gate).length * LAPS;
+    const gc = { perfect: 0, good: 0, miss: 0 };
+    cart._gateResults.forEach(x => { gc[x.result] += 1; });
+    gc.miss += gTotal - cart._gateResults.length; // 안 누른/범위 밖 게이트도 Miss로 집계
+    return { gc, gTotal, jr: (cart.scoreBreakdown.gate + cart.scoreBreakdown.balance) / judgeMax, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, airDist: cart.airtimeDistance, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
   }
 
   return STAGES.map((sd, i) => {
@@ -81,13 +90,15 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP }) => {
     const round = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Math.round(v)]));
     return {
       stage: i + 1,
-      perfect: { judgeRatio: +perfect.jr.toFixed(2), lowRatio: +perfect.low.toFixed(3), assistRatio: +perfect.assist.toFixed(3), airDist: Math.round(perfect.airDist), score: Math.round(perfect.score), bd: round(perfect.bd), timeSec: +perfect.time.toFixed(1), stagSec: +perfect.stag.toFixed(1), vmaxKmh: Math.round(perfect.vmax), capKmh: Math.round(perfect.cap), maxCombo: perfect.maxCombo },
+      perfect: { gatePGM: [perfect.gc.perfect, perfect.gc.good, perfect.gc.miss], judgeRatio: +perfect.jr.toFixed(2), lowRatio: +perfect.low.toFixed(3), assistRatio: +perfect.assist.toFixed(3), airDist: Math.round(perfect.airDist), score: Math.round(perfect.score), bd: round(perfect.bd), timeSec: +perfect.time.toFixed(1), stagSec: +perfect.stag.toFixed(1), vmaxKmh: Math.round(perfect.vmax), capKmh: Math.round(perfect.cap), maxCombo: perfect.maxCombo },
       average: {
         score: Math.round(mean(x => x.score)),
         min: Math.round(Math.min(...avgRuns.map(x => x.score))),
         max: Math.round(Math.max(...avgRuns.map(x => x.score))),
         ratio: +(mean(x => x.score) / perfect.score).toFixed(2),
-        judgeRatio: +mean(x => x.jr).toFixed(2), judgeRatioP: avgRuns.map(x => x.jr).sort((a, b) => a - b).filter((_, k) => k % 6 === 0).map(v => +v.toFixed(2)),
+        gatePGM: ['perfect', 'good', 'miss'].map(k => +(avgRuns.reduce((a, x) => a + x.gc[k], 0) / avgRuns.reduce((a, x) => a + x.gTotal, 0)).toFixed(2)),
+        judgeRatio: +mean(x => x.jr).toFixed(2), judgeRatioP: (() => { const v = avgRuns.map(x => x.jr).sort((a, b) => a - b); return [0.2, 0.5, 0.8].map(q => +v[Math.min(v.length - 1, Math.floor(q * v.length))].toFixed(2)); })(), // p20/p50/p80
+        rankDist: (() => { const c = { S: 0, A: 0, B: 0, C: 0 }; avgRuns.forEach(x => { c[x.jr >= 0.9 ? 'S' : x.jr >= 0.7 ? 'A' : x.jr >= 0.45 ? 'B' : 'C'] += 1; }); return c; })(),
         ratioMin: +(Math.min(...avgRuns.map(x => x.score)) / perfect.score).toFixed(2),
         ratioMax: +(Math.max(...avgRuns.map(x => x.score)) / perfect.score).toFixed(2),
         bd: round({ gate: mean(x => x.bd.gate), balance: mean(x => x.bd.balance), airtime: mean(x => x.bd.airtime), comboBonus: mean(x => x.bd.comboBonus), finishBonus: mean(x => x.bd.finishBonus) }),

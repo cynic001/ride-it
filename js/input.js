@@ -169,15 +169,8 @@ class InputController {
   }
 
   _resolveGateTap() {
-    const gateType = this.cart.track.getSegmentAt(this.cart.t).gate?.type ?? null;
-    const result = this.cart.resolveGate(this._localTWithinSegment());
-    window.dispatchEvent(new CustomEvent('gate-result', { detail: { type: gateType, result } }));
-  }
-
-  /** 현재 세그먼트 내에서의 상대 진행률 (0~1) — 게이트 판정 타이밍 계산용 */
-  _localTWithinSegment() {
-    const seg = this.cart.track.getSegmentAt(this.cart.t);
-    return (this.cart.t - seg.tStart) / (seg.tEnd - seg.tStart);
+    const result = this.cart.resolveGate(); // 실제 시간 기준 판정(cart.js) — 게이트 종류는 판정된 게이트 기준
+    window.dispatchEvent(new CustomEvent('gate-result', { detail: { type: this.cart.lastGateType, result } }));
   }
 }
 

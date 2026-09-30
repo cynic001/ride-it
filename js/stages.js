@@ -11,6 +11,11 @@
  * segment.requiredLean: 0~1  (판정에 필요한 기울기 강도, 0=밸런스 불필요)
  * segment.leanWindow: 판정 허용 오차 (작을수록 어려움)
  * segment.gate: { type: 'boost'|'brake'|'finish', timingWindow: {start, end} } | null
+ *   timingWindow는 이제 "게이트 위치"만 정함 — 판정 기준점 = 세그먼트 내 (start+end)/2 지점. 판정 자체는 실제 시간(초)
+ *   기준으로 stage.gateTiming의 ±perfect/±good 초 이내인지로 결정(cart.js resolveGate) — 속도가 바뀌어도 난이도 일정
+ * gateTiming: { perfect, good } (초) — 스테이지가 올라갈수록 조금씩 엄격하게
+ *   피니쉬 게이트는 전부 timingWindow {0.6, 0.8}(중심 0.7) — 예전 값(중심 0.925~0.95)은 트랙 끝까지 0.1초 남짓이라
+ *   늦게 누를 여유가 없어 시간 기준 판정에서 늦은 탭이 전부 Miss가 됐음
  * segment.airtimeZone: boolean (해당 구간에서 손들기 입력 시 에어타임 보너스)
  *
  * railType: 'mouse' | 'hanging' | 'monorail' | 'steel' | 'wood' — Kenney Coaster Kit(CC0)의 트랙 패밀리.
@@ -33,6 +38,7 @@ const STAGES = [
     motif: '이월드 (구 우방타워랜드) — 입문용 완만한 트랙',
     railType: 'mouse',
     baseSpeedKmh: 45,
+    gateTiming: { perfect: 0.10, good: 0.20 }, // 게이트 판정창(초, ±)
     trackLengthM: 480,
     // 폐곡선(스타디움형 오벌) — 좌측으로 나갔다가 원거리 턴을 돌아 우측으로 돌아옴. 5개 스테이지 중 가장 완만한 기복.
     controlPoints: [
@@ -64,7 +70,7 @@ const STAGES = [
         // 이 구간 진입 직후 속도가 MIN_SPEED까지 떨어져 정체(약 38초)하는 것을 확인해 boost 추가
         gate: { type: 'boost', timingWindow: { start: 0.1, end: 0.2 } }, airtimeZone: false },
       { type: 'straight', curveDirection: null,   requiredLean: 0,    leanWindow: 0,
-        gate: { type: 'finish', timingWindow: { start: 0.85, end: 1.0 } }, airtimeZone: false },
+        gate: { type: 'finish', timingWindow: { start: 0.6, end: 0.8 } }, airtimeZone: false },
     ],
   },
 
@@ -75,6 +81,7 @@ const STAGES = [
     motif: '경주월드 파에톤 — 인버티드, 최고속도 72km/h, 길이 1148m, 360도 루프',
     railType: 'hanging',
     baseSpeedKmh: 72,
+    gateTiming: { perfect: 0.095, good: 0.19 }, // 게이트 판정창(초, ±)
     trackLengthM: 1180,
     // 폐곡선 — 출발 직후 인버티드 루프, 이후 원거리 턴을 돌아 복귀. 스테이지1보다 기복/커브 밀도 상승.
     controlPoints: [
@@ -119,7 +126,7 @@ const STAGES = [
       { type: 'curve',    curveDirection: 'left',  requiredLean: 0.5,  leanWindow: 0.3,
         gate: null, airtimeZone: false },
       { type: 'straight', curveDirection: null,   requiredLean: 0,    leanWindow: 0,
-        gate: { type: 'finish', timingWindow: { start: 0.85, end: 1.0 } }, airtimeZone: false },
+        gate: { type: 'finish', timingWindow: { start: 0.6, end: 0.8 } }, airtimeZone: false },
     ],
   },
 
@@ -130,6 +137,7 @@ const STAGES = [
     motif: '경주월드 스콜&하티 — 아시아 최초 싱글레일, 좌우 밸런스가 핵심',
     railType: 'monorail',
     baseSpeedKmh: 80,
+    gateTiming: { perfect: 0.09, good: 0.18 }, // 게이트 판정창(초, ±)
     trackLengthM: 960,
     // 폐곡선 — 좌우 연속 스윙(싱글레일 특유의 불안정감)을 원거리 턴 전후로 촘촘하게 배치, 스테이지2보다 커브 밀도 상승.
     controlPoints: [
@@ -177,7 +185,7 @@ const STAGES = [
       { type: 'curve',    curveDirection: 'left',  requiredLean: 0.7,  leanWindow: 0.14,
         gate: { type: 'boost', timingWindow: { start: 0.6, end: 0.7 } }, airtimeZone: false },
       { type: 'straight', curveDirection: null,   requiredLean: 0,    leanWindow: 0,
-        gate: { type: 'finish', timingWindow: { start: 0.85, end: 1.0 } }, airtimeZone: false },
+        gate: { type: 'finish', timingWindow: { start: 0.6, end: 0.8 } }, airtimeZone: false },
     ],
   },
 
@@ -188,6 +196,7 @@ const STAGES = [
     motif: '경주월드 드라켄 — 90도 수직 다이브, 최고높이 70m, 최고속도 104km/h',
     railType: 'steel',
     baseSpeedKmh: 104,
+    gateTiming: { perfect: 0.08, good: 0.17 }, // 게이트 판정창(초, ±)
     trackLengthM: 1080,
     // 폐곡선 — 출발 직후 90도 다이브(핵심 기믹)를 그대로 유지, 이후 언덕/커브를 촘촘히 배치하고
     // 마지막 구간에서 스테이션 높이(70m)까지 다시 상승해 복귀(귀환 리프트 연출).
@@ -238,7 +247,7 @@ const STAGES = [
         // 남아있을 때 걸리도록)
         gate: { type: 'boost', timingWindow: { start: 0.1, end: 0.2 } }, airtimeZone: false },
       { type: 'straight', curveDirection: null,   requiredLean: 0,    leanWindow: 0,
-        gate: { type: 'finish', timingWindow: { start: 0.88, end: 1.0 } }, airtimeZone: false },
+        gate: { type: 'finish', timingWindow: { start: 0.6, end: 0.8 } }, airtimeZone: false },
     ],
   },
 
@@ -249,6 +258,7 @@ const STAGES = [
     motif: '에버랜드 (구 자연농원) T익스프레스 — 77도 낙하, 4.5G, 12회 무중력, 1.6km, 하이브리드 목재+스틸',
     railType: 'wood',
     baseSpeedKmh: 104,
+    gateTiming: { perfect: 0.07, good: 0.16 }, // 게이트 판정창(초, ±)
     trackLengthM: 1680,
     // 폐곡선 — 5개 스테이지 중 가장 다이나믹: 77도 급낙하 이후 무중력 힐을 최대한 촘촘히 연속 배치하고,
     // 원거리 턴을 돈 뒤 복귀 구간에서 다시 스테이션 높이(56m)까지 상승.
@@ -326,7 +336,7 @@ const STAGES = [
         // 실측 시뮬레이션에서 정체(약 104초) 확인해 boost 추가(구간 초반)
         gate: { type: 'boost', timingWindow: { start: 0.1, end: 0.2 } }, airtimeZone: false },
       { type: 'straight',  curveDirection: null,   requiredLean: 0,    leanWindow: 0,            // 스테이션 복귀 + 피니쉬
-        gate: { type: 'finish', timingWindow: { start: 0.9, end: 1.0 } }, airtimeZone: false },
+        gate: { type: 'finish', timingWindow: { start: 0.6, end: 0.8 } }, airtimeZone: false },
     ],
   },
 ];

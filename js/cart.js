@@ -28,6 +28,11 @@ const SCORE = {
   balanceClearRatio: 0.7,   // 그 커브 구간 틱 중 판정창 안(good 이상) 비율이 이 이상이면 성공
   airtimePerMeter: 4.4,     // 홀드한 채 달린 거리 1m당 — 완벽 플레이 에어타임 총량(전 스테이지 합 약 8,400)이 시간 기준(초당 120) 시절과 같도록 맞춘 계수
 };
+// 게이트 판정(시간 기준): 모바일 터치 지연 보정 — 탭 이벤트가 실제 손가락 접촉보다 약 이만큼 늦게 도착한다고 보고
+// 판정 시각을 앞당겨 계산. 기기별 체감이 다르면 이 값 하나만 조정
+const INPUT_LATENCY_OFFSET = 0.05; // 초
+// 게이트 중심 도달 시각과의 차이가 이 범위(초) 밖인 탭은 판정 자체를 하지 않음(엉뚱한 탭으로 게이트를 날리지 않도록)
+const GATE_ATTEMPT_RANGE = 0.4;
 const FINISH_MULTIPLIER = { perfect: 1.5, good: 1.2, miss: 1.0 };
 
 class Cart {
@@ -212,26 +217,52 @@ class Cart {
     // 게이트 판정은 input.js의 탭 이벤트에서 별도 처리 (타이밍 윈도우 대조)
   }
 
-  /** input.js에서 게이트 탭 시 호출 */
-  resolveGate(localT) {
-    const seg = this.track.getSegmentAt(this.t);
-    if (!seg.gate) return 'none';
-    const gateKey = `${this.currentLap}:${seg.tStart}`;
-    if (this._resolvedGates.has(gateKey)) return 'none';
-    this._resolvedGates.add(gateKey);
+  /** 현재 세그먼트 앞뒤 1칸까지의 게이트 후보 — 중심 지점(timingWindow 중앙)까지 남은 진행률(dT, 음수면 이미 지남) */
+  _gateCandidates() {
+    const segs = this.track.segmentRanges;
+    const n = segs.length;
+    let i = segs.findIndex(s => this.t >= s.tStart && this.t < s.tEnd);
+    if (i === -1) i = n - 1;
+    const out = [];
+    for (const off of [-1, 0, 1]) {
+      let j = i + off, lap = this.currentLap;
+      if (j < 0) { j += n; lap -= 1; }
+      if (j >= n) { j -= n; lap += 1; }
+      if (lap < 1 || lap > this.totalLaps || !segs[j].gate) continue;
+      const s = segs[j];
+      const w = s.gate.timingWindow;
+      const center = s.tStart + (s.tEnd - s.tStart) * (w.start + w.end) / 2;
+      out.push({ seg: s, type: s.gate.type, key: `${lap}:${s.tStart}`, dT: (lap - 1 + center) - (this.currentLap - 1 + this.t) });
+    }
+    return out;
+  }
 
-    const { start, end } = seg.gate.timingWindow;
-    const center = (start + end) / 2;
-    const halfWindow = (end - start) / 2;
-    const diff = Math.abs(localT - center);
+  /** 가장 가까운 미판정 게이트의 시간 정보 — HUD 가이드와 판정이 같은 값을 쓰도록 단일 소스.
+   * timeTo: 현재 속도로 중심 지점까지 남은 시간(초), err: 지금 탭하면 판정될 오차(초, 음수=이름/양수=늦음, 터치 지연 보정 포함) */
+  gateTiming() {
+    const tPerSec = Math.max(0.1, this.speed * GAME_SPEED_SCALE) / this.track.lengthM; // cart.t 진행 속도와 동일 모델
+    let best = null;
+    for (const c of this._gateCandidates()) {
+      if (this._resolvedGates.has(c.key)) continue;
+      const timeTo = c.dT / tPerSec;
+      const err = -timeTo - INPUT_LATENCY_OFFSET;
+      if (!best || Math.abs(err) < Math.abs(best.err)) best = { ...c, timeTo, err };
+    }
+    if (best) Object.assign(best, this.track.stageData.gateTiming);
+    return best;
+  }
 
-    let result;
-    if (diff <= halfWindow * 0.4) result = 'perfect';
-    else if (diff <= halfWindow) result = 'good';
-    else result = 'miss';
-
-    this._applyGateResult(seg.gate.type, result);
-    this._gateResults.push({ type: seg.gate.type, result, t: this.t });
+  /** input.js에서 게이트 탭 시 호출 — 실제 시간(초) 기준 판정. 판정 대상 게이트 종류는 lastGateType에 남김 */
+  resolveGate() {
+    this.lastGateType = null;
+    const g = this.gateTiming();
+    if (!g || Math.abs(g.err) > GATE_ATTEMPT_RANGE) return 'none';
+    this._resolvedGates.add(g.key); // 게이트당(랩별) 판정 1회
+    const e = Math.abs(g.err);
+    const result = e <= g.perfect ? 'perfect' : e <= g.good ? 'good' : 'miss';
+    this.lastGateType = g.type;
+    this._applyGateResult(g.type, result);
+    this._gateResults.push({ type: g.type, result, t: this.t, err: g.err });
     return result;
   }
 
