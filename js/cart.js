@@ -24,6 +24,10 @@ const ASSIST = { trigger: 0.6, target: 0.85, release: 0.78, tau: 0.5 };
 // 최고속도 상한 = 스테이지 기본 속도 × 이 배율 — 부스트 연속 성공 시 배율이 누적되어 1500km/h 넘게 폭주하던 문제 방지
 const MAX_SPEED_FACTOR = 1.5;
 // 체인 리프트(긴 오르막): 기본 속도의 이 비율 이상으로 끌어올림 — 오르막이 지루하지 않게. 정상 직전 낙하가 있으면 잠깐 멈칫
+// 뒤로 떨어지기: 꼭대기 직전(골짜기→꼭대기 78% 지점)에서 멈칫 → 뒤로 미끄러짐 → auto: 부스터 자동 발사 / mash: 부스트 연타로 등반.
+// 연타 게이지: 탭마다 +tapGain, 초당 decay 감소. 등반 속도 = (게이지−0.25)/0.75 × 구간길이/climbFullSec(음수면 다시 밀려 내려감).
+// 평균 연타 속도(초당 6회)에서 약 3초에 올라가도록 score-sim으로 맞춤. mashTimeout초 안에 못 올라가면 부스터가 도와줌(보너스 없음)
+const ROLLBACK = { triggerFrac: 0.78, stallSec: 0.45, mashTimeout: 6, tapGain: 0.16, decayPerSec: 1.6, climbFullSec: 1.1, bonusPerSec: 250, launchSpeed: 1.3 };
 const CHAIN_LIFT = { speed: 1.2, crestHold: 0.45, crestSpeed: 0.28 };
 
 // 점수 체계 — 모든 획득 점수에 콤보 배율(콤보 10마다 +0.1, 최대 2배) 적용, 피니쉬 배율은 마지막에 총점에 곱함
@@ -78,7 +82,10 @@ class Cart {
     this.airtimeDistance = 0;
     this.atSpeedCap = false;  // HUD 강조용
     // 점수 원천별 내역 — 콤보 배율로 늘어난 몫은 comboBonus로 따로 집계(합계 = score)
-    this.scoreBreakdown = { gate: 0, balance: 0, airtime: 0, comboBonus: 0, finishBonus: 0 };
+    this.scoreBreakdown = { gate: 0, balance: 0, airtime: 0, comboBonus: 0, finishBonus: 0, mashBonus: 0 };
+    this.rollback = null;     // 뒤로 떨어지기 진행 상태 { phase: 'stall'|'back'|'launch'|'mash', time, gauge, ... }
+    this.rollbackLog = [];    // 랩별 결과 { mode, climbSec, bonus, assisted } — 결과/시뮬레이션용
+    this._rbLap = 0;
     this._curve = null;        // 진행 중인 커브 세그먼트 { key, inWindow, total }
     this._resolvedGates = new Set(); // 게이트당(랩별) 판정 1회 — 연타로 점수/부스트를 반복 획득하는 것 방지
     this.boostRemaining = 0;  // 남은 가속 거리(m)
@@ -100,6 +107,89 @@ class Cart {
     this.scoreBreakdown[source] += base;
     this.scoreBreakdown.comboBonus += base * (m - 1);
     this.score += base * m;
+  }
+
+  _startRollback(rz) {
+    this._rbLap = this.currentLap;
+    this.boostRemaining = 0; this.boostAccel = 0;
+    this.airtimeHolding = false;
+    this.rollback = { phase: 'stall', time: 0, mode: rz.mode, zone: rz, gauge: 0, taps: 0, mashTime: 0 };
+    window.dispatchEvent(new CustomEvent('rollback', { detail: { phase: 'stall', mode: rz.mode } }));
+  }
+
+  _rbPhase(phase) {
+    this.rollback.phase = phase;
+    this.rollback.time = 0;
+    window.dispatchEvent(new CustomEvent('rollback', { detail: { phase, mode: this.rollback.mode } }));
+  }
+
+  /** 뒤로 떨어지기 진행 — 진행률 t가 거꾸로 줄어드는 구간. 골짜기(tValley)보다 뒤로는 가지 않아 랩/완주 판정은 그대로 */
+  _updateRollback(dt, L) {
+    const rb = this.rollback, z = rb.zone, base = this.baseSpeedMs;
+    rb.time += dt;
+    const h0 = this.track.getHeightAt(this.t);
+    let dir = 1;
+    if (rb.phase === 'stall') {
+      this.speed *= Math.exp(-dt * 9); // 꼭대기 직전에서 힘이 빠지며 멈칫
+      if (rb.time >= ROLLBACK.stallSec) { this.speed = 0.5; this._rbPhase('back'); }
+    } else if (rb.phase === 'back') {
+      dir = -1;
+      const dh = this._lastHeight - h0; // 뒤로 내려가며 높이가 낮아지면 양수 → 가속
+      this.speed = Math.sqrt(Math.max(this.speed * this.speed + 2 * G * DOWNHILL_GRAVITY * dh, 0.25));
+      this.speed *= Math.pow(FRICTION_RETAIN_PER_SECOND, dt);
+      if (this.t <= z.tValley + 0.002) {
+        this.t = z.tValley;
+        if (rb.mode === 'mash') { this.speed = 0; this._rbPhase('mash'); }
+        else { this._rbPhase('launch'); }
+      }
+    } else if (rb.phase === 'mash') {
+      rb.mashTime += dt;
+      rb.gauge = Math.max(0, rb.gauge - rb.gauge * ROLLBACK.decayPerSec * dt); // 비례 감쇠 → 게이지가 연타 속도에 비례한 값에 머묾
+      const d = (z.tPeak - z.tValley) * L;
+      const v = (rb.gauge - 0.25) / 0.75 * d / ROLLBACK.climbFullSec; // 게이지가 낮으면 다시 밀려 내려감
+      this.t = Math.max(z.tValley, this.t + v * dt / L);
+      this.speed = Math.abs(v) / Cart.speedScale;
+      this._stepDistance = Math.abs(v) * dt;
+      if (this.t >= z.tPeak) {
+        const bonus = Math.round(Math.max(0, ROLLBACK.mashTimeout - rb.mashTime) * ROLLBACK.bonusPerSec);
+        this.scoreBreakdown.mashBonus += bonus;
+        this.score += bonus;
+        this.rollbackLog.push({ mode: 'mash', climbSec: rb.mashTime, bonus, assisted: false });
+        this.rollback = null;
+        this.speed = base * 0.9;
+        this._lastHeight = this.track.getHeightAt(this.t);
+        window.dispatchEvent(new CustomEvent('rollback', { detail: { phase: 'success', bonus, sec: rb.mashTime } }));
+        return;
+      }
+      if (rb.mashTime >= ROLLBACK.mashTimeout) { rb.assisted = true; this._rbPhase('launch'); }
+      this._lastHeight = this.track.getHeightAt(this.t);
+      return;
+    } else if (rb.phase === 'launch') {
+      // 부스터가 앞으로 쏘아 올림 — 꼭대기를 넘을 때까지 속도 보장
+      const dh = this._lastHeight - h0;
+      this.speed = Math.sqrt(Math.max(this.speed * this.speed + 2 * G * dh, 0));
+      this.speed = Math.max(this.speed, base * ROLLBACK.launchSpeed);
+      if (this.t >= z.tPeak) {
+        this.rollbackLog.push({ mode: rb.mode, climbSec: rb.mode === 'mash' ? rb.mashTime : 0, bonus: 0, assisted: rb.mode === 'mash' });
+        this.rollback = null;
+        this._lastHeight = this.track.getHeightAt(this.t);
+        window.dispatchEvent(new CustomEvent('rollback', { detail: { phase: 'done' } }));
+        return;
+      }
+    }
+    this._capSpeed();
+    this._stepDistance = this.speed * Cart.speedScale * dt;
+    this.t += dir * this._stepDistance / L;
+    this._lastHeight = h0; // 일반 주행과 같이 "이동 전" 높이 — 다음 틱의 높이 차(에너지)가 이번 이동분이 됨
+  }
+
+  /** 연타 입력(패드 톡/BOOST/↑) — 연타 구간에서만 게이지 충전 */
+  mashTap() {
+    const rb = this.rollback;
+    if (!rb || rb.phase !== 'mash') return false;
+    rb.gauge = Math.min(1, rb.gauge + ROLLBACK.tapGain);
+    rb.taps += 1;
+    return true;
   }
 
   /** 체인 리프트 중엔 최소 속도 보장, 끝(정상)에서 바로 급낙하가 이어지면 0.45초 멈칫 후 놓아줌 */
@@ -168,6 +258,11 @@ class Cart {
     // 진행률은 실제 커브 길이 기준 — stageData.trackLengthM(실제 코스터 길이)은 모델링된 커브보다 10~50% 길어서
     // 그대로 쓰면 화면상 카트가 표시 속도보다 느리게 움직였음
     const trackLength = this.track.lengthM;
+    if (this.rollback) {
+      this._updateRollback(dt, trackLength);
+      this.rideTime += dt;
+      return; // 뒤로 떨어지는 동안은 밸런스/게이트/에어타임 판정 없음(억울한 실패 방지)
+    }
     const currentHeight = this.track.getHeightAt(this.t);
 
     if (this._lastHeight !== null) {
@@ -193,7 +288,13 @@ class Cart {
 
     // 진행률 갱신 (속도 × 게임 배율 × dt / 트랙길이)
     this._stepDistance = this.speed * Cart.speedScale * dt;
+    const prevT = this.t;
     this.t += this._stepDistance / trackLength;
+    const rz = this.track.rollbackZone;
+    if (rz && this._rbLap !== this.currentLap) {
+      const trig = rz.tValley + (rz.tPeak - rz.tValley) * ROLLBACK.triggerFrac;
+      if (prevT < trig && this.t >= trig) this._startRollback(rz);
+    }
     this.rideTime += dt;
     if (this.speed < this.baseSpeedMs * 0.7) this.lowSpeedTime += dt;
     if (this.t >= 1) {
@@ -270,6 +371,7 @@ class Cart {
       const s = segs[j];
       const w = s.gate.timingWindow;
       const center = s.tStart + (s.tEnd - s.tStart) * (w.start + w.end) / 2;
+      if (this.track.inRollbackZone(center)) continue; // 뒤로 떨어지기 구간 안의 게이트는 제외
       out.push({ seg: s, type: s.gate.type, key: `${lap}:${s.tStart}`, dT: (lap - 1 + center) - (this.currentLap - 1 + this.t) });
     }
     return out;
@@ -293,6 +395,7 @@ class Cart {
   /** input.js에서 게이트 탭 시 호출 — 실제 시간(초) 기준 판정. 판정 대상 게이트 종류는 lastGateType에 남김 */
   resolveGate(snapshot) {
     this.lastGateType = null;
+    if (this.rollback) return 'none';
     // snapshot: 패드 "톡"은 떼는 순간에야 탭으로 확정되므로, 손가락이 닿은 순간 계산해 둔 타이밍으로 판정
     const g = snapshot && !this._resolvedGates.has(snapshot.key) ? snapshot : this.gateTiming();
     if (!g || Math.abs(g.err) > GATE_ATTEMPT_RANGE) return 'none';

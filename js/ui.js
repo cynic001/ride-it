@@ -263,6 +263,7 @@ const UI = {
           <span class="stage-num big">${i + 1}</span>
           <h2>${s.name}</h2>
           <p class="detail-motif">${s.motif}</p>
+          ${s.rollback ? `<p class="detail-warn">⚠ 뒤로 떨어지는 구간이 있어요${s.rollback.mode === 'mash' ? ' — 부스트 연타로 다시 올라가요!' : ' — 부스터가 다시 쏘아 올려줘요'}</p>` : ''}
           <div class="detail-meta"><span class="stars">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><span>최고 ${Math.round(s.baseSpeedKmh * 1.5)}km/h</span></div>
           <div class="stats">
             <div class="stat"><small>최고 랭크</small><b>${p ? p.rank : '-'}</b></div>
@@ -507,6 +508,8 @@ const UI = {
           </div>
         </div>
         <div class="judge" id="judgeToast"></div>
+        <div class="rb-overlay" id="rbOverlay"><div class="rb-title" id="rbTitle"></div>
+          <div class="rb-gauge" id="rbGauge"><div class="rb-gauge-fill" id="rbGaugeFill"></div></div><div class="rb-sub" id="rbSub"></div></div>
         <div class="lift-hint" id="liftHint">체인 리프트 · 꾹 눌러 손 들기 보너스!</div>
         <div class="guide gate" id="gateGuide">
           <div class="guide-label" id="gateGuideLabel"></div>
@@ -539,7 +542,8 @@ const UI = {
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
       balance: $('balanceGuide'), balanceZone: $('balanceZone'), balanceMarker: $('balanceMarker'),
       gate: $('gateGuide'), gateLabel: $('gateGuideLabel'), gateZone: $('gateZone'), gatePerfect: $('gatePerfect'), gateMarker: $('gateMarker'),
-      judge: $('judgeToast'), padLean: $('padLeanMark'), liftHint: $('liftHint'), lastCombo: 0,
+      judge: $('judgeToast'), padLean: $('padLeanMark'), liftHint: $('liftHint'),
+      rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
     };
 
     $('cameraToggleBtn').addEventListener('click', () => {
@@ -664,7 +668,7 @@ const UI = {
       // 밸런스 가이드: 목표 기울기 ±leanWindow를 노란 구간으로, 현재 입력을 흰 마커로 (−1~1 → 0~100%)
       const seg = track.getSegmentAt(cart.t);
       const pct = v => (Math.max(-1, Math.min(1, v)) + 1) * 50;
-      if (cart.launched && seg.requiredLean > 0) {
+      if (cart.launched && !cart.rollback && seg.requiredLean > 0) { // 뒤로 떨어지는 동안은 판정 없음 → 가이드도 숨김
         const target = seg.curveDirection === 'left' ? -seg.requiredLean : seg.requiredLean;
         h.balanceZone.style.left = `${pct(target - seg.leanWindow).toFixed(1)}%`;
         h.balanceZone.style.right = `${(100 - pct(target + seg.leanWindow)).toFixed(1)}%`;
@@ -677,7 +681,7 @@ const UI = {
       // 게이트 가이드(시간축): 가운데 = 게이트 중심 도달 순간, 좌우 끝 = ±GATE_GUIDE_RANGE초. 노랑 = Good(±good초),
       // 초록 = Perfect(±perfect초), 마커 = "지금 탭하면 판정될 오차"(cart.gateTiming().err, 터치 지연 보정 포함) —
       // 판정 함수와 같은 값을 그대로 그리므로 표시와 판정이 어긋날 수 없음
-      const g = cart.launched ? cart.gateTiming() : null;
+      const g = cart.launched && !cart.rollback ? cart.gateTiming() : null;
       if (g && g.timeTo <= GATE_GUIDE_RANGE * 1.6 && g.err <= GATE_ATTEMPT_RANGE) {
         const toPct = sec => 50 + (sec / GATE_GUIDE_RANGE) * 50;
         h.gateLabel.textContent = GATE_LABEL[g.type] || '';
@@ -691,6 +695,20 @@ const UI = {
       } else {
         h.gate.classList.remove('on');
       }
+    }
+    // 뒤로 떨어지기 안내: 멈칫/뒤로 = 경고, 연타 = "연타!" + 힘 게이지, 자동 발사 = 부스터
+    const rb = cart.rollback;
+    h.rb.classList.toggle('on', !!rb);
+    if (rb) {
+      const mash = rb.phase === 'mash';
+      h.rbTitle.textContent = mash ? '연타!' : rb.phase === 'launch' ? '부스터 발사!' : '뒤로 떨어진다!!!';
+      h.rb.classList.toggle('mash', mash);
+      h.rbGauge.style.display = mash ? 'block' : 'none';
+      if (mash) {
+        h.rbFill.style.width = `${Math.round(rb.gauge * 100)}%`;
+        const left = Math.max(0, 6 - rb.mashTime);
+        h.rbSub.textContent = ControlSettings.mode === 'twohand' ? `BOOST 연타! ${left.toFixed(1)}초` : `톡톡 연타! (↑ 연타) ${left.toFixed(1)}초`;
+      } else h.rbSub.textContent = rb.phase === 'launch' ? '' : '꽉 잡아!';
     }
     if (h.liftHint) h.liftHint.classList.toggle('on', cart.launched && (cart.onChainLift || cart._crestHold > 0));
     if (h.padLean) h.padLean.style.left = `${((Math.max(-1, Math.min(1, cart.leanInput)) + 1) * 50).toFixed(1)}%`; // 패드 기울기 표시
@@ -707,7 +725,7 @@ const UI = {
     const balanceAcc = bTotal ? (bt.perfect + bt.good) / bTotal : 1;
     const gates = { perfect: 0, good: 0, miss: 0 };
     cart._gateResults.forEach(g => { gates[g.result] += 1; });
-    const gateCount = stageData.segments.filter(s => s.gate).length * cart.totalLaps; // 못 누른 게이트도 실패로 취급
+    const gateCount = cart.track.gateCenters().length * cart.totalLaps; // 못 누른 게이트도 실패로 취급(뒤로 떨어지기 구간 안 게이트는 제외)
     const curveCount = stageData.segments.filter(s => s.requiredLean > 0).length * cart.totalLaps;
     const judgeMax = gateCount * SCORE.gate.perfect + curveCount * SCORE.balancePerCurve;
     const judgeRatio = judgeMax ? (cart.scoreBreakdown.gate + cart.scoreBreakdown.balance) / judgeMax : 1;
@@ -740,6 +758,7 @@ const UI = {
               ['에어타임', bd.airtime],
               ['콤보 보너스', bd.comboBonus],
               ...(bd.finishBonus > 0 ? [['피니쉬 보너스', bd.finishBonus]] : []),
+              ...(bd.mashBonus > 0 ? [['연타 보너스', bd.mashBonus]] : []),
             ].map(([k, v]) => `<div class="bd-row"><span>${k}</span><b>+${Math.round(v).toLocaleString()}</b></div>`).join('')}
           </div>
           <div class="stats">

@@ -274,6 +274,14 @@
   #uiRoot .ctl-btn.pressed { transform: translateY(4px) scale(.96); box-shadow: 0 1px 0 #b8c2dc; filter: brightness(1.08); }
   .twohand .key-hint { align-self: center; }
 
+  .rb-overlay { position: absolute; left: 0; right: 0; top: 26%; text-align: center; pointer-events: none; opacity: 0; transition: opacity .15s ease; }
+  .rb-overlay.on { opacity: 1; }
+  .rb-title { font-size: 40px; color: var(--red); -webkit-text-stroke: 6px var(--navy); paint-order: stroke fill; animation: wobble .5s ease-in-out infinite; }
+  .rb-overlay.mash .rb-title { color: var(--yellow); animation: pulse .25s ease-in-out infinite; }
+  .rb-gauge { width: 70%; max-width: 280px; height: 18px; margin: 8px auto 0; border-radius: 999px; background: rgba(20,26,51,.65); border: 3px solid #fff; overflow: hidden; }
+  .rb-gauge-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--yellow), var(--red)); transition: width .08s linear; }
+  .rb-sub { margin-top: 6px; font-size: 16px; color: #fff; -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; }
+  .detail-warn { font-size: 14px !important; color: #d9432f !important; }
   .lift-hint { position: absolute; left: 0; right: 0; top: 40%; text-align: center; font-size: 17px; color: #bfe9ff; opacity: 0; transition: opacity .3s ease;
     -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; pointer-events: none; }
   .lift-hint.on { opacity: 1; animation: pulse 1.2s ease-in-out infinite; }

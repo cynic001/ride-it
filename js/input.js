@@ -293,6 +293,11 @@ class InputController {
 
   /** 부스트 입력(톡/BOOST 버튼/↑) — 실제 시간 기준 게이트 판정. gate: 손가락이 닿은 순간 저장해 둔 타이밍(패드 탭) */
   _boost(gate) {
+    // 뒤로 떨어지기: 연타 구간에선 부스트 입력 = 연타, 그 밖의 뒤로 가는 동안은 무시
+    if (this.cart.rollback) {
+      if (this.cart.mashTap()) window.dispatchEvent(new CustomEvent('mash-tap'));
+      return;
+    }
     const result = this.cart.resolveGate(gate);
     window.dispatchEvent(new CustomEvent('gate-result', { detail: { type: this.cart.lastGateType, result } }));
   }

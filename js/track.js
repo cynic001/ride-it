@@ -96,7 +96,21 @@ class Track {
     }));
 
     this._meshes = []; // 로드된 템플릿+인스턴스 전체 — dispose()에서 일괄 정리
-    this.liftZones = this._findLiftZones();
+    // 뒤로 떨어지기 구간: 폐곡선 CatmullRom은 controlPoints[1]에서 시작하고 제어점 구간마다 진행률이 균등하므로
+    // 제어점 k의 t = (k-1)/n. 골짜기 = cp-1, 꼭대기 = cp
+    const rb = stageData.rollback;
+    if (rb) {
+      const n = stageData.controlPoints.length;
+      const tOf = k => (((k - 1) / n) % 1 + 1) % 1;
+      this.rollbackZone = { mode: rb.mode, tValley: tOf(rb.cp - 1), tPeak: tOf(rb.cp) };
+    }
+    this.liftZones = this._findLiftZones().filter(z => !this.rollbackZone || z.t1 < this.rollbackZone.tValley || z.t0 > this.rollbackZone.tPeak);
+  }
+
+  /** 뒤로 떨어지기 구간 안의 게이트인지 — 억울한 실패 방지로 판정/만점/표시에서 제외 */
+  inRollbackZone(t) {
+    const z = this.rollbackZone;
+    return !!z && t >= z.tValley - 0.01 && t <= z.tPeak + 0.02;
   }
 
   /** 체인 리프트: 경사 > 0.15가 50m 이상 이어지는 긴 오르막(5단계 에어타임 언덕처럼 짧은 언덕은 제외).
@@ -258,9 +272,52 @@ class Track {
       });
 
     this._placeGateMarkers(railTopY, isHanging);
+    this._placeRollbackMarkers(railTopY, isHanging);
     this._placeTrackside(railTopY, isHanging);
     this._placeTunnels(isHanging);
     await Promise.all([this._placeNatureProps(), this._placeParkProps()]);
+  }
+
+  /** 뒤로 떨어지기 경고 표시 — 골짜기~꼭대기 레일 위 빨간 역방향 화살표. 매 플레이 첫 랩은 숨기고 두 번째 랩부터 보임 */
+  _placeRollbackMarkers(railTopY, isHanging) {
+    const z = this.rollbackZone;
+    if (!z) return;
+    const scene = this.scene;
+    const tex = new BABYLON.DynamicTexture('rbTex', { width: 128, height: 128 }, scene, true);
+    const ctx = tex.getContext();
+    ctx.clearRect(0, 0, 128, 128);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); // 아래(진행 반대 방향)를 가리키는 꺾쇠
+    ctx.moveTo(64, 114); ctx.lineTo(118, 58); ctx.lineTo(96, 36); ctx.lineTo(64, 68); ctx.lineTo(32, 36); ctx.lineTo(10, 58);
+    ctx.closePath(); ctx.fill();
+    tex.hasAlpha = true;
+    tex.update();
+    const m = new BABYLON.StandardMaterial('rbMat', scene);
+    m.diffuseTexture = tex; m.opacityTexture = tex; m.emissiveColor = new BABYLON.Color3(1, 0.2, 0.25);
+    m.disableLighting = true; m.backFaceCulling = false;
+    const plane = BABYLON.MeshBuilder.CreatePlane('rbChevron', { width: 1.3, height: 1.0 }, scene);
+    plane.rotation.x = Math.PI / 2;
+    plane.bakeCurrentTransformIntoVertices();
+    plane.material = m;
+    plane.setEnabled(false);
+    this._meshes.push(plane, m, tex);
+    const L = this.lengthM;
+    const up = isHanging ? -0.08 : railTopY + 0.05;
+    this._rollbackMarkers = [];
+    for (let t = z.tValley; t <= z.tPeak; t += 3 / L) {
+      const p = this.getPositionAt(t), tn = this.getTangentAt(t);
+      const c = plane.createInstance(`rbMark_${this._rollbackMarkers.length}`);
+      c.position = p.add(new BABYLON.Vector3(0, up, 0));
+      c.lookAt(c.position.add(tn), 0, 0, this.getBankRollAt(t));
+      c.setEnabled(false); // 첫 랩은 숨김
+      this._rollbackMarkers.push(c);
+      this._meshes.push(c);
+    }
+  }
+
+  /** main.js가 랩이 바뀔 때 호출 — 두 번째 랩부터 경고 표시 */
+  setRollbackMarkersVisible(on) {
+    (this._rollbackMarkers || []).forEach(m => m.setEnabled(on));
   }
 
   /** 근거리 시각 흐름: 트랙 좌우 1.7m에 7m 간격으로 조명 기둥/깃발(레일 높이에 부착, 뱅킹 따라 기울어짐).
@@ -404,7 +461,7 @@ class Track {
     return this.segmentRanges.filter(s => s.gate).map(s => {
       const w = s.gate.timingWindow;
       return { t: s.tStart + (s.tEnd - s.tStart) * (w.start + w.end) / 2, type: s.gate.type };
-    });
+    }).filter(g => !this.inRollbackZone(g.t));
   }
 
   /** 가속 구간 표시: 게이트 중심에 빛나는 링(카트가 통과), 중심 앞 20m ~ 뒤 40m 레일 위 화살표 띠(이미시브, 조명 무관).

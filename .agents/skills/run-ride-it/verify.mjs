@@ -316,7 +316,7 @@ async function main() {
       await page.waitForSelector('#retryBtn', { timeout: 10000 });
       await sleep(700);
       await shot(`${tag}_5_result`);
-      const sc = await page.evaluate(() => { const b = Game.cart.scoreBreakdown; return { score: Game.cart.score, sum: b.gate + b.balance + b.airtime + b.comboBonus + b.finishBonus, rows: document.querySelectorAll('.bd-row').length }; });
+      const sc = await page.evaluate(() => { const b = Game.cart.scoreBreakdown; return { score: Game.cart.score, sum: b.gate + b.balance + b.airtime + b.comboBonus + b.finishBonus + (b.mashBonus || 0), rows: document.querySelectorAll('.bd-row').length }; });
       check(`${tag} result screen + score breakdown`, Math.abs(sc.score - sc.sum) < 0.5 && sc.rows >= 4, `score=${sc.score.toFixed(1)} sum=${sc.sum.toFixed(1)} rows=${sc.rows}`);
       await page.locator('#stageSelectBtn').click();
       await page.waitForSelector('.stage-btn');

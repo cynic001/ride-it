@@ -377,6 +377,10 @@ const Game = {
   /** 레일 이음새 "덜컹"(6m마다, 속도 비례 음량) + 터널/게이트 링 통과 "휙" */
   _updateRideSounds() {
     const c = this.cart;
+    if (c.currentLap !== this._lastLapSeen) { // 뒤로 떨어지기 경고는 매 플레이 두 번째 랩부터
+      this._lastLapSeen = c.currentLap;
+      this.track.setRollbackMarkersVisible(c.currentLap >= 2);
+    }
     // 체인 리프트: 초당 약 12회 딸깍(멈칫하는 동안은 느리게) — 리프트를 벗어나면 멈춤
     if (c.onChainLift || c._crestHold > 0) {
       this._chainAcc = (this._chainAcc || 0) + (c._crestHold > 0 ? 1 / 60 * 0.4 : 1 / 60);
@@ -450,6 +454,13 @@ window.addEventListener('gate-result', e => {
   }
 });
 window.addEventListener('booster-assist', () => Game._onBoostMoment(0.45));
+// 뒤로 떨어지기 연출: 뒤로 미끄러지기 시작 = 흔들림 킥, 부스터 발사/연타 성공 = 부스트 킥
+window.addEventListener('rollback', e => {
+  const ph = e.detail.phase;
+  if (ph === 'back') { if (Game.camera) Game.camera.kick(0.6); AudioManager.playPassBy(1.2); }
+  else if (ph === 'launch' || ph === 'success') { Game._onBoostMoment(1); AudioManager.playBoostHit(1); }
+});
+window.addEventListener('mash-tap', () => AudioManager.playChainClick());
 // 발사 순간 연출: 카메라 밀림+FOV 킥, 스피드 라인 버스트 (발사음은 input.js가 AudioManager.playLaunch)
 window.addEventListener('cart-launched', e => {
   const k = e.detail ? e.detail.strength : 1;
