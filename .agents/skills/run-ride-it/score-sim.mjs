@@ -23,6 +23,7 @@ const args = Object.fromEntries(process.argv.slice(2).map(a => { const [k, v] = 
 const RUNS = Number(args.runs ?? 30);
 const LAPS = Number(args.laps ?? 1);
 const NOCAP = !!args.nocap; // 비교용: 속도 상한 해제
+const SCALE = args.scale ? Number(args.scale) : null; // 게임 속도 배율 실험
 
 const server = http.createServer((req, res) => {
   const f = path.join(ROOT, decodeURIComponent(req.url.split('?')[0]));
@@ -36,7 +37,8 @@ page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE', m.t
 await page.goto('http://localhost:8132/index.html', { waitUntil: 'domcontentloaded', timeout: 90000 });
 await page.waitForFunction(() => window.STAGES && window.Track && window.Cart && window.Game && Game.scene, null, { timeout: 90000 });
 
-const out = await page.evaluate(({ RUNS, LAPS, NOCAP }) => {
+const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE }) => {
+  if (SCALE) Cart.speedScale = SCALE;
   window.dispatchEvent = () => true; // 시뮬 중 오디오/UI 이벤트 무시
   const rng = seed => () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const gauss = r => Math.sqrt(-2 * Math.log(r() || 1e-9)) * Math.cos(2 * Math.PI * r());
@@ -47,6 +49,8 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP }) => {
     if (NOCAP) cart.maxSpeedMs = Infinity;
     cart.launch(model === 'perfect' ? 1 : 0.7, 1);
     let time = 0, stag = 0, segKey = null, plan = null;
+    const events = [...tr.gateCenters().map(g => g.t), ...tr.segmentRanges.filter(s => s.requiredLean > 0).map(s => s.tStart)].sort((a, b) => a - b);
+    const hits = []; let prevT = 0;
     const gatePlans = {};
     while (!cart.isFinished && time < 900) {
       const seg = tr.getSegmentAt(cart.t);
@@ -72,6 +76,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP }) => {
       cart.airtimeHolding = plan.hold;
       cart.update(1 / 60);
       time += 1 / 60;
+      if (cart.currentLap === 1) { for (const e of events) if (prevT < e && cart.t >= e) hits.push(time); prevT = cart.t; }
       if (cart.speed <= 2.05) stag += 1 / 60;
     }
     const judgeMax = (sd.segments.filter(g => g.gate).length * 300 + sd.segments.filter(g => g.requiredLean > 0).length * 100) * LAPS;
@@ -79,7 +84,9 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP }) => {
     const gc = { perfect: 0, good: 0, miss: 0 };
     cart._gateResults.forEach(x => { gc[x.result] += 1; });
     gc.miss += gTotal - cart._gateResults.length; // 안 누른/범위 밖 게이트도 Miss로 집계
-    return { gc, gTotal, jr: (cart.scoreBreakdown.gate + cart.scoreBreakdown.balance) / judgeMax, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, airDist: cart.airtimeDistance, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
+    let minGap = Infinity;
+    for (let k = 1; k < hits.length; k++) minGap = Math.min(minGap, hits[k] - hits[k - 1]);
+    return { minGap, gc, gTotal, jr: (cart.scoreBreakdown.gate + cart.scoreBreakdown.balance) / judgeMax, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, airDist: cart.airtimeDistance, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
   }
 
   return STAGES.map((sd, i) => {
@@ -91,7 +98,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP }) => {
     const round = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Math.round(v)]));
     return {
       stage: i + 1,
-      perfect: { gatePGM: [perfect.gc.perfect, perfect.gc.good, perfect.gc.miss], judgeRatio: +perfect.jr.toFixed(2), lowRatio: +perfect.low.toFixed(3), assistRatio: +perfect.assist.toFixed(3), airDist: Math.round(perfect.airDist), score: Math.round(perfect.score), bd: round(perfect.bd), timeSec: +perfect.time.toFixed(1), stagSec: +perfect.stag.toFixed(1), vmaxKmh: Math.round(perfect.vmax), capKmh: Math.round(perfect.cap), maxCombo: perfect.maxCombo },
+      perfect: { minEventGapSec: +perfect.minGap.toFixed(2), gatePGM: [perfect.gc.perfect, perfect.gc.good, perfect.gc.miss], judgeRatio: +perfect.jr.toFixed(2), lowRatio: +perfect.low.toFixed(3), assistRatio: +perfect.assist.toFixed(3), airDist: Math.round(perfect.airDist), score: Math.round(perfect.score), bd: round(perfect.bd), timeSec: +perfect.time.toFixed(1), stagSec: +perfect.stag.toFixed(1), vmaxKmh: Math.round(perfect.vmax), capKmh: Math.round(perfect.cap), maxCombo: perfect.maxCombo },
       average: {
         score: Math.round(mean(x => x.score)),
         min: Math.round(Math.min(...avgRuns.map(x => x.score))),
@@ -108,7 +115,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP }) => {
       },
     };
   });
-}, { RUNS, LAPS, NOCAP });
+}, { RUNS, LAPS, NOCAP, SCALE });
 
 out.forEach(o => console.log(JSON.stringify(o)));
 await browser.close();

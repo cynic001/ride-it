@@ -84,13 +84,14 @@ class CoasterCamera {
       // 급커브(requiredLean 높음)일수록 카메라를 더 멀리·높이 띄워 지지대/레일을 뚫고 들어가
       // 보이는 것을 방지 (헤어핀 급커브에서 고정 8m 후방 지점이 안쪽 지지대와 겹치는 문제 확인)
       const bankFactor = seg.requiredLean || 0;
-      const behind = tangent.scale(-(isHanging ? 10 + bankFactor * 5 : 8 + bankFactor * 6));
+      // 6-2: 이전(후방 8m·위 3m)보다 낮고 가깝게 — 레일과 지면이 화면에 더 많이 들어와 속도감이 커짐
+      const behind = tangent.scale(-(isHanging ? 8 + bankFactor * 4 : 6.2 + bankFactor * 4));
       // 인버티드는 카트 높이(레일 아래) 뒤쪽에서 — 레일 바로 위/안이면 레일 상자가 화면을 통째로 가림
-      const up = new BABYLON.Vector3(0, isHanging ? -1.1 - bankFactor : 3 + bankFactor * 4, 0);
+      const up = new BABYLON.Vector3(0, isHanging ? -1.1 - bankFactor : 2.0 + bankFactor * 2.5, 0);
       targetPos = cartPos.add(behind).add(up).add(tangent.scale(-this._push));
       // 카트 자체가 아니라 카트 앞쪽 약간 위를 바라봄 — 화면이 땅으로 기울지 않고 하늘/진행 방향이 더 보이는 구도
-      targetLookAt = cartPos.add(tangent.scale(5)).add(new BABYLON.Vector3(0, isHanging ? -0.8 : 1.2, 0));
-      targetFov = 0.74 + speedRatio * 0.46; // 속도감: 가속 시 앞으로 빨려드는 느낌(0.74→1.20rad)
+      targetLookAt = cartPos.add(tangent.scale(5)).add(new BABYLON.Vector3(0, isHanging ? -0.8 : 1.0, 0));
+      targetFov = 0.72 + speedRatio * 0.6; // 속도감: 가속 시 앞으로 빨려드는 느낌(0.72→1.32rad, 이전 1.20)
     } else {
       // 월드 위쪽이 아니라 카트 기준 위쪽(트랙 법선)으로 띄우고 앞좌석 쪽으로 당김 — 월드 +Y로만 띄우면
       // 4·5단계 급낙하처럼 카트가 크게 기울 때 카메라가 카트 몸체 안으로 들어가 화면이 통째로 가려졌음
@@ -102,10 +103,16 @@ class CoasterCamera {
       // 카트 앞끝(길이 약 2m의 절반 너머)에 두어 앞좌석 등받이가 화면 아래 1/3을 가리지 않게
       targetPos = cartPos.add(localUp.scale(isHanging ? -0.45 : 1.1)).add(tangent.scale(1.1));
       targetLookAt = targetPos.add(tangent.scale(10));
-      targetFov = 0.82 + speedRatio * 0.28; // 1인칭은 변화폭을 줄여 어지럽지 않게(최대 1.10rad)
+      targetFov = 0.82 + speedRatio * 0.33; // 1인칭은 변화폭을 줄여 어지럽지 않게(최대 1.15rad)
     }
 
     const first = this.mode === CAMERA_MODES.FIRST_PERSON;
+
+    // 급하강 진입: 시선이 아래로 쏠리도록 바라보는 점을 더 낮추고 FOV를 살짝 더 벌림(경사에 비례)
+    const dive = cart.launched ? Math.max(0, -tangent.y - 0.2) : 0;
+    this._dive = BABYLON.Scalar.Lerp(this._dive || 0, dive, Math.min(1, dt * 4));
+    targetLookAt = targetLookAt.add(new BABYLON.Vector3(0, -this._dive * (first ? 4 : 7), 0));
+    targetFov += this._dive * 0.18;
 
     // 전환 중이면 보간(lerp), 아니면 스프링 추적으로 부드럽게 따라감
     if (this._transitionT < 1) {
@@ -143,7 +150,7 @@ class CoasterCamera {
     this.camera.setTarget(targetLookAt.add(shake.scale(0.3)));
 
     this._fov = BABYLON.Scalar.Lerp(this._fov, targetFov, Math.min(1, dt * 6));
-    this.camera.fov = Math.min(first ? 1.2 : 1.35, this._fov + this._fovKick * (first ? 0.6 : 1));
+    this.camera.fov = Math.min(first ? 1.25 : 1.45, this._fov + this._fovKick * (first ? 0.6 : 1));
 
     // 커브 구간 뱅킹(roll) 연출 — 1인칭에서만 체감 크게 (setTarget이 roll을 초기화하므로 별도 상태로 유지 후 적용)
     let rollTarget = 0;

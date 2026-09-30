@@ -95,9 +95,9 @@ const AudioManager = {
     if (!this._ready() || !this._windGain) return;
     const t = this.ctx.currentTime;
     const norm = Math.max(0, Math.min(1, ratio));
-    this._windFilter.frequency.setTargetAtTime(350 + norm * norm * 6500, t, 0.08);
-    this._windSource.playbackRate.setTargetAtTime(0.7 + norm * 0.8, t, 0.1);
-    this._windGain.gain.setTargetAtTime(norm > 0 ? 0.02 + Math.pow(norm, 1.6) * 0.38 : 0, t, 0.08);
+    this._windFilter.frequency.setTargetAtTime(300 + norm * norm * 7500, t, 0.08);
+    this._windSource.playbackRate.setTargetAtTime(0.55 + norm * 1.25, t, 0.1); // 피치 0.55→1.8배
+    this._windGain.gain.setTargetAtTime(norm > 0 ? 0.02 + Math.pow(norm, 1.4) * 0.45 : 0, t, 0.08);
   },
 
   /** 부스트 성공 "쾅" — 저음 쿵 + 위로 쓸려 올라가는 바람 + 기존 부스트 톤 */
@@ -121,6 +121,31 @@ const AudioManager = {
     if (!this._ready()) return;
     this._blip({ freq: 170, freqEnd: 560, duration: 0.45, type: 'sawtooth', peak: 0.09 });
     this._whoosh(this.ctx.currentTime, 0.5, 300, 2600, 0.16);
+  },
+
+  /** 레일 이음새 "덜컹" — 앞/뒤 바퀴가 연달아 지나가는 두 번의 짧은 타격(저음 쿵 + 금속성 딸깍), 속도 비례 음량 */
+  playRailJoint(ratio) {
+    if (!this._ready()) return;
+    const t0 = this.ctx.currentTime;
+    const vol = 0.05 + Math.min(1, ratio) * 0.12;
+    [0, 0.045].forEach((off, i) => {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.frequency.setValueAtTime(i ? 70 : 90, t0 + off);
+      osc.frequency.exponentialRampToValueAtTime(40, t0 + off + 0.05);
+      g.gain.setValueAtTime(vol, t0 + off);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.06);
+      osc.connect(g).connect(this.masterGain);
+      osc.start(t0 + off);
+      osc.stop(t0 + off + 0.07);
+      this._whoosh(t0 + off, 0.03, 2500, 1800, vol * 0.5);
+    });
+  },
+
+  /** 근처 구조물(터널/게이트 링)을 스치는 "휙" — 높은 음에서 낮은 음으로 떨어지는 도플러풍 바람 */
+  playPassBy(strength = 1) {
+    if (!this._ready()) return;
+    this._whoosh(this.ctx.currentTime, 0.4, 3800, 500, 0.28 * strength);
   },
 
   _whoosh(t0, dur, f0, f1, peak) {

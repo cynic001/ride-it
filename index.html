@@ -42,6 +42,8 @@
   #renderCanvas { width: 100%; height: 100%; touch-action: none; outline: none; display: block; }
   /* 속도감 스피드 라인 — 3D 캔버스와 UI 사이, 입력은 통과 */
   #speedLines { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  /* 고속 비네트: 가장자리를 어둡게 해 시야가 좁아지는 느낌 — opacity는 main.js가 속도 비례로 */
+  #vignette { position: fixed; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 50% 55%, transparent 60%, rgba(10,6,24,.6) 100%); }
 
   #uiRoot, .ui-ghost {
     position: fixed; inset: 0; pointer-events: none;
@@ -416,6 +418,7 @@
 <body>
   <canvas id="renderCanvas"></canvas>
   <canvas id="speedLines" aria-hidden="true"></canvas>
+  <div id="vignette" aria-hidden="true"></div>
   <div id="uiRoot"></div>
   <div class="rotate-warning" id="rotateWarning">
     <svg class="rotate-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>

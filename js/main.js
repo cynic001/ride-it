@@ -93,6 +93,7 @@ const Game = {
     AudioManager.setAirtimeHold(false);
     AudioManager.setBgmMode('pause');
     SpeedLines.draw(0, 0);
+    if (this._vignette) this._vignette.style.opacity = '0';
     UI.showPauseOverlay();
   },
 
@@ -212,8 +213,11 @@ const Game = {
   _makeGrassTexture() {
     const tex = new BABYLON.DynamicTexture('grassTex', { width: 256, height: 256 }, this.scene, true);
     const ctx = tex.getContext();
+    // 잔디 깎은 줄무늬(밝고 어두운 띠 반복) — 지면 흐름이 잘 보여 속도감이 커짐
     ctx.fillStyle = '#5a9a3c';
     ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#4c8a31';
+    ctx.fillRect(0, 0, 128, 256);
     for (let i = 0; i < 900; i++) {
       const l = 30 + Math.random() * 18;
       ctx.fillStyle = `hsla(${95 + Math.random() * 20}, 45%, ${l}%, 0.35)`;
@@ -270,6 +274,23 @@ const Game = {
     if (this._motionBlur) {
       this._motionBlur.dispose(); // 이전 스테이지 카메라는 이미 dispose됐을 수 있어 카메라 인자 없이 전체 해제
       this._motionBlur = null;
+    }
+    if (this._radial) {
+      this._radial.dispose();
+      this._radial = null;
+    }
+    const rs = QualityManager.settings.radialBlur;
+    if (rs) {
+      // 부스트 가속 중에만 붙였다 뗌(_render) — 평소엔 풀스크린 패스 비용 0
+      const defines = `#define SAMPLES ${rs}\n${QualityManager.settings.chromaticAberration ? '#define CA\n' : ''}`;
+      const rp = new BABYLON.PostProcess('radialBoost', 'radialBoost', ['center', 'strength'], null, 1.0, null,
+        BABYLON.Texture.BILINEAR_SAMPLINGMODE, this.engine, false, defines);
+      rp.onApply = eff => {
+        eff.setFloat2('center', this._radialCenter ? this._radialCenter.x : 0.5, this._radialCenter ? this._radialCenter.y : 0.55);
+        eff.setFloat('strength', this._radialStrength || 0);
+      };
+      this._radial = rp;
+      this._radialAttached = false;
     }
     if (QualityManager.settings.motionBlur) {
       // 화면(깊이) 기반 — 카메라 이동에 따른 번짐. 세기는 _render에서 속도 비례로 갱신
@@ -334,8 +355,10 @@ const Game = {
     const currentSeg = this.track.getSegmentAt(this.cart.t);
     AudioManager.setAirtimeHold(currentSeg.airtimeZone && this.cart.airtimeHolding);
 
+    this._updateRideSounds();
     if (this.cart.isFinished) {
       SpeedLines.draw(0, 0);
+      if (this._vignette) this._vignette.style.opacity = '0';
       AudioManager.updateWind(0);
       AudioManager.setAirtimeHold(false);
       this.camera.unlockToggle(); // 이미 풀려있겠지만 안전장치
@@ -350,6 +373,23 @@ const Game = {
     }
   },
 
+  /** 레일 이음새 "덜컹"(6m마다, 속도 비례 음량) + 터널/게이트 링 통과 "휙" */
+  _updateRideSounds() {
+    const c = this.cart;
+    this._jointAcc = (this._jointAcc || 0) + (c._stepDistance || 0);
+    if (this._jointAcc >= 6) {
+      this._jointAcc %= 6;
+      AudioManager.playRailJoint(c.speed / c.maxSpeedMs);
+    }
+    const markers = this.track.passMarkers || [];
+    const prev = this._prevT ?? c.t;
+    const lookAhead = 0.35 * c.speed * Cart.speedScale / this.track.lengthM; // 소리는 통과 0.35초 전부터 차오름
+    markers.forEach(m => {
+      if (prev < m.t - lookAhead && c.t >= m.t - lookAhead) AudioManager.playPassBy(m.kind === 'tunnel' ? 1 : 0.6);
+    });
+    this._prevT = c.t;
+  },
+
   _render(alpha) {
     // 속도감 연출(렌더 프레임 단위): 스피드 라인은 상한 대비 50% 이상부터 차오르고, 부스트/보조 추진 순간 버스트
     const dt = this.engine.getDeltaTime() / 1000;
@@ -359,7 +399,34 @@ const Game = {
     const intensity = Math.min(1, Math.max(0, (ratio - 0.5) / 0.5) * 0.85 + this._lineBurst);
     SpeedLines.draw(ratio > 0 ? intensity : 0, Math.min(dt, 0.05));
     if (this._motionBlur) this._motionBlur.motionStrength = Math.max(0, ratio - 0.4) * 0.9;
+    this._updateBoostFx(dt, ratio);
     this.scene.render();
+  },
+
+  /** 부스트 가속 중 방사형 블러(가속 세기 비례, 끝나면 부드럽게 해제) + 고속 비네트(전 프리셋, CSS) */
+  _updateBoostFx(dt, ratio) {
+    const c = this.cart;
+    const boosting = c && c.launched && !this.paused && c.boostRemaining > 0;
+    const target = boosting ? Math.min(1, c.boostAccel / (0.6 * c.baseSpeedMs)) * 0.14 : 0;
+    this._radialStrength = BABYLON.Scalar.Lerp(this._radialStrength || 0, target, Math.min(1, dt * (target > (this._radialStrength || 0) ? 8 : 2.5)));
+    if (this._radial && this.camera) {
+      const cam = this.camera.camera;
+      const want = this._radialStrength > 0.004;
+      if (want !== this._radialAttached) {
+        if (want) cam.attachPostProcess(this._radial); else cam.detachPostProcess(this._radial);
+        this._radialAttached = want;
+      }
+      if (want && this.cartMesh) {
+        const w = this.engine.getRenderWidth(), h = this.engine.getRenderHeight();
+        const p = BABYLON.Vector3.Project(this.cartMesh.position, BABYLON.Matrix.Identity(), this.scene.getTransformMatrix(), cam.viewport.toGlobal(w, h));
+        this._radialCenter = { x: Math.min(1, Math.max(0, p.x / w)), y: Math.min(1, Math.max(0, 1 - p.y / h)) };
+      }
+    }
+    if (!this._vignette) this._vignette = document.getElementById('vignette');
+    if (this._vignette) {
+      const v = c && c.launched && !this.paused ? Math.min(0.7, Math.max(0, (ratio - 0.45) / 0.55) * 0.55 + this._radialStrength * 1.5) : 0;
+      this._vignette.style.opacity = v.toFixed(3);
+    }
   },
 
   /** 부스트 성공/보조 추진 순간 — 카메라 킥 + 스피드 라인 버스트 (효과음은 audio.js가 같은 이벤트로 재생) */

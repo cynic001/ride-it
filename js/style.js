@@ -100,6 +100,32 @@ void main(void) {
   gl_FragColor = vec4(mix(c.rgb, lineColor, edge * 0.85), c.a);
 }`;
 
+// 부스트 방사형 블러: 카트 화면 위치(center)에서 바깥쪽으로 늘어지는 줌 블러. 중심부는 선명하게(거리 비례 마스크).
+// CA 정의 시(high) 가장자리 색수차 — R/B를 반대 방향으로 약간 벌림
+BABYLON.Effect.ShadersStore.radialBoostFragmentShader = `
+precision highp float;
+varying vec2 vUV;
+uniform sampler2D textureSampler;
+uniform vec2 center;
+uniform float strength;
+void main(void) {
+  vec2 dir = vUV - center;
+  float d = length(dir);
+  float amt = strength * smoothstep(0.08, 0.55, d);
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < SAMPLES; i++) {
+    float k = 1.0 - amt * (float(i) / float(SAMPLES - 1));
+    acc += texture2D(textureSampler, center + dir * k).rgb;
+  }
+  vec3 col = acc / float(SAMPLES);
+#ifdef CA
+  float ca = amt * 0.06;
+  col.r = mix(col.r, texture2D(textureSampler, center + dir * (1.0 + ca)).r, 0.6);
+  col.b = mix(col.b, texture2D(textureSampler, center + dir * (1.0 - ca)).b, 0.6);
+#endif
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
 const StyleManager = {
   current: localStorage.getItem('rc_style') || 'toon',
   _skyDome: null,

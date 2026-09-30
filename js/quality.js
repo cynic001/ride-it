@@ -14,6 +14,7 @@ const QUALITY_PRESETS = {
     nearPropCount: 16,        // 트랙 가까이 스쳐 지나가는 나무(속도감)
     speedLineCount: 14,       // 화면 가장자리 스피드 라인 수(2D 캔버스)
     motionBlur: false,
+    radialBlur: 0,            // 부스트 방사형 블러 샘플 수(0=끔) — low는 프레임 유지 최우선
   },
   medium: {
     particleCount: 30,
@@ -25,6 +26,7 @@ const QUALITY_PRESETS = {
     nearPropCount: 30,
     speedLineCount: 26,
     motionBlur: false,
+    radialBlur: 6,
   },
   high: {
     particleCount: 60,
@@ -36,6 +38,8 @@ const QUALITY_PRESETS = {
     nearPropCount: 44,
     speedLineCount: 40,
     motionBlur: true,         // 화면 기반 모션 블러 — 깊이 버퍼 추가 패스가 필요해 high 전용
+    radialBlur: 12,
+    chromaticAberration: true,
   },
 };
 

@@ -232,7 +232,145 @@ class Track {
       });
 
     this._placeGateMarkers(railTopY, isHanging);
+    this._placeTrackside(railTopY, isHanging);
+    this._placeTunnels(isHanging);
     await Promise.all([this._placeNatureProps(), this._placeParkProps()]);
+  }
+
+  /** 근거리 시각 흐름: 트랙 좌우 1.7m에 7m 간격으로 조명 기둥/깃발(레일 높이에 부착, 뱅킹 따라 기울어짐).
+   * 카트(반폭 약 0.55m)·3인칭 카메라(중심선 위 2m)와 닿지 않되 바로 옆을 휙휙 지나가는 거리 */
+  _placeTrackside(railTopY, isHanging) {
+    const scene = this.scene;
+    const mat = (name, c, emissive) => {
+      const m = new BABYLON.StandardMaterial(name, scene);
+      m.diffuseColor = c; m.specularColor = BABYLON.Color3.Black();
+      if (emissive) { m.emissiveColor = c; m.disableLighting = true; }
+      return m;
+    };
+    const poleMat = mat('tsPole', new BABYLON.Color3(0.08, 0.1, 0.2));
+    const lampMat = mat('tsLamp', new BABYLON.Color3(1, 0.86, 0.45), true);
+    const flagMats = [mat('tsFlagY', new BABYLON.Color3(1, 0.72, 0.05), true), mat('tsFlagR', new BABYLON.Color3(1, 0.35, 0.3), true)];
+    const H = 1.2; // 기둥 높이(m) — 카메라(2m)보다 충분히 낮게
+    const build = (kind, k) => {
+      const pole = BABYLON.MeshBuilder.CreateCylinder(`tsPoleG_${kind}`, { height: H, diameter: 0.07, tessellation: 6 }, scene);
+      pole.position.y = H / 2;
+      pole.material = poleMat;
+      let head;
+      if (kind === 'lamp') {
+        head = BABYLON.MeshBuilder.CreateSphere('tsHead', { diameter: 0.26, segments: 6 }, scene);
+        head.position.y = H;
+        head.material = lampMat;
+      } else {
+        head = BABYLON.MeshBuilder.CreatePlane('tsFlag', { width: 0.55, height: 0.32, sideOrientation: BABYLON.Mesh.DOUBLESIDE }, scene);
+        head.position.set(0, H - 0.18, -0.28); // 진행 반대 방향으로 나부끼는 깃발
+        head.rotation.y = Math.PI / 2;
+        head.material = flagMats[k % 2];
+      }
+      const m = BABYLON.Mesh.MergeMeshes([pole, head], true, true, undefined, false, true);
+      m.name = `trackside_${kind}_${k}`;
+      m.setEnabled(false);
+      this._meshes.push(m);
+      return m;
+    };
+    const templates = [build('lamp', 0), build('flag', 0), build('flag', 1)];
+    const base = isHanging ? 0 : railTopY;
+    const station = this.getPositionAt(0);
+    this._sampleLoop(7).forEach(({ pos, tangent, t }, i) => {
+      if (Math.hypot(pos.x - station.x, pos.z - station.z) < 14) return; // 스테이션 플랫폼 구간 제외
+      const roll = this.getBankRollAt(t);
+      const right = BABYLON.Vector3.Cross(BABYLON.Vector3.Up(), tangent);
+      if (right.lengthSquared() < 0.01) return; // 수직 낙하 구간은 생략
+      right.normalize();
+      const side = i % 2 ? 1 : -1;
+      const inst = templates[i % 4 === 0 ? 0 : 1 + (i >> 2) % 2].createInstance(`ts_${i}`);
+      inst.position = pos.add(right.scale(1.7 * side)).add(new BABYLON.Vector3(0, base, 0));
+      inst.lookAt(inst.position.add(tangent), 0, 0, roll);
+      this._meshes.push(inst);
+    });
+  }
+
+  /** 머리 위로 스치는 구조물: 직선·완만한 구간 2~3곳에 게이트형 프레임 5개(3m 간격) 터널. 기둥은 지면에서 올라오고
+   * 가로 빔은 레일 위 3.3m(3인칭 카메라 2m, 1인칭 1.1m보다 높게 — "닿을 것 같은" 거리). 인버티드는 빔을 레일 위 1m에 두고
+   * 기둥을 옆 지지대(2.2m)보다 바깥(3.2m)에. 다른 트랙 구간이 프레임을 지나거나 게이트/스테이션과 가까우면 그 자리는 건너뜀 */
+  _placeTunnels(isHanging) {
+    const scene = this.scene;
+    const m = new BABYLON.StandardMaterial('tunnelMat', scene);
+    m.diffuseColor = new BABYLON.Color3(0.95, 0.95, 1);
+    m.specularColor = BABYLON.Color3.Black();
+    const stripe = new BABYLON.StandardMaterial('tunnelStripe', scene);
+    stripe.diffuseColor = new BABYLON.Color3(1, 0.45, 0.25);
+    stripe.specularColor = BABYLON.Color3.Black();
+    const HALF0 = isHanging ? 3.2 : 2.6, BEAM0 = isHanging ? 1.0 : 3.3;
+    const L = this.lengthM;
+    const gates = this.gateCenters().map(g => g.t);
+    const station = this.getPositionAt(0);
+    const probe = this._sampleLoop(2);
+    // 커브 구간도 허용하되(5단계는 거의 전 구간이 커브) 커브 세기(requiredLean)만큼 빔을 높이고 폭을 넓힘 —
+    // 3인칭 카메라가 커브에서 2+2.5×lean m까지 올라가고 바깥으로 치우치므로 그만큼 여유를 더함
+    const leanAt = t0 => {
+      let lean = 0;
+      for (let d = -12; d <= 14; d += 2) lean = Math.max(lean, this.getSegmentAt(((t0 + d / L) % 1 + 1) % 1).requiredLean || 0);
+      return lean;
+    };
+    const ok = t0 => {
+      const lean = leanAt(t0), HALF = HALF0 + lean * 1.5;
+      for (let d = -2; d <= 14; d += 2) {
+        const t = ((t0 + d / L) % 1 + 1) % 1;
+        if (Math.abs(this.getTangentAt(t).y) > 0.25) return false;
+      }
+      const p0 = this.getPositionAt(t0);
+      if (Math.hypot(p0.x - station.x, p0.z - station.z) < 40) return false;
+      // 세그먼트 데이터상 직선이어도 실제 커브가 휘어 있으면 안쪽 기둥이 카메라에 붙음 — 14m 동안 방향 변화 10° 이내만
+      const ta = this.getTangentAt(t0), tb = this.getTangentAt(((t0 + 14 / L) % 1 + 1) % 1);
+      if (BABYLON.Vector3.Dot(ta, tb) < Math.cos((lean > 0 ? 18 : 10) * Math.PI / 180)) return false;
+      if (gates.some(g => Math.abs(g - t0) * L < 30)) return false;
+      // 다른 트랙 구간이 프레임 폭 안(수평 HALF+2m, 높이 −2~+6m)으로 지나가면 제외
+      return !probe.some(p => {
+        const dt = Math.min(Math.abs(p.t - t0), 1 - Math.abs(p.t - t0)) * L;
+        return dt > 30 && Math.hypot(p.pos.x - p0.x, p.pos.z - p0.z) < HALF + 2 && Math.abs(p.pos.y - p0.y) < 6;
+      });
+    };
+    const spots = [];
+    for (let t = 0.08; t < 0.86 && spots.length < 3; t += 0.01) { // 트랙 끝(스테이션 진입부)은 제외
+      if (ok(t) && spots.every(s => (t - s) * L > 120)) spots.push(t);
+    }
+    this.passMarkers = this.passMarkers || [];
+    spots.forEach((t0, n) => {
+      this.passMarkers.push({ t: t0, kind: 'tunnel' });
+      const lean = leanAt(t0);
+      const HALF = HALF0 + lean * 1.5, BEAM_Y = BEAM0 + (isHanging ? 0 : lean * 2.5 + 0.3 * (lean > 0));
+      const parts = [];
+      for (let f = 0; f < 5; f++) {
+        const t = t0 + (f * 3) / L;
+        const pos = this.getPositionAt(t), tan = this.getTangentAt(t);
+        const right = BABYLON.Vector3.Cross(BABYLON.Vector3.Up(), tan).normalize();
+        const topY = pos.y + BEAM_Y;
+        [-1, 1].forEach(sd => {
+          const post = BABYLON.MeshBuilder.CreateBox(`tunPost_${n}_${f}_${sd}`, { width: 0.3, depth: 0.3, height: topY }, scene);
+          const p = pos.add(right.scale(HALF * sd));
+          post.position.set(p.x, topY / 2, p.z);
+          post.lookAt(new BABYLON.Vector3(p.x + tan.x, topY / 2, p.z + tan.z));
+          post.material = f % 2 ? stripe : m;
+          parts.push(post);
+        });
+        const beam = BABYLON.MeshBuilder.CreateBox(`tunBeam_${n}_${f}`, { width: HALF * 2 + 0.3, depth: 0.35, height: 0.35 }, scene);
+        beam.position.set(pos.x, topY, pos.z);
+        beam.lookAt(new BABYLON.Vector3(pos.x + tan.x, topY, pos.z + tan.z));
+        beam.material = f % 2 ? m : stripe;
+        parts.push(beam);
+      }
+      // 터널 하나 = 재질별 메시 2개(드로우콜 2) — 멀티머티리얼 병합은 원본 박스마다 서브메시가 남아 15콜이 됨(실측 low 59콜)
+      [m, stripe].forEach((mat, k) => {
+        const group = parts.filter(x => x.material === mat);
+        if (!group.length) return;
+        const merged = BABYLON.Mesh.MergeMeshes(group, true, true);
+        merged.name = `tunnel_${n}_${k}`;
+        merged.material = mat;
+        merged.freezeWorldMatrix();
+        this._meshes.push(merged);
+      });
+    });
+    this._meshes.push(m, stripe);
   }
 
   /** 게이트 중심(cart.js와 같은 기준점)의 진행률 목록 — 표시물과 판정이 같은 지점을 가리키도록 */

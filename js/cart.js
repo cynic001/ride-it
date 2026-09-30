@@ -11,8 +11,9 @@ const MIN_SPEED = 2;          // 최소 속도 (m/s) — 완전 정지 방지
 // Perfect는 길고 강하게, Good은 짧고 약하게, Miss는 없음 — 속도 상한(기본×1.5)은 그대로 적용
 const BOOST = { perfect: { accel: 0.6, distance: 80 }, good: { accel: 0.35, distance: 40 } };
 // 게임용 속도 과장 — 물리 속도(=HUD 표시, 실제 모티브 km/h 범위)는 그대로 두고, 트랙 위 진행만 이 배율로 빠르게.
-// 1.3~1.5 중 1.4: 1.5는 5단계 급하강에서 게이트 판정창이 0.2초 아래로 좁아져 과함, 1.3은 1단계가 여전히 느긋함
-const GAME_SPEED_SCALE = 1.4;
+// 1.8(요청 범위 1.6~1.8의 최대): 게이트 판정이 시간 기준이라 속도를 올려도 판정 난이도는 그대로. 부스트 게이트를 세그먼트
+// 중앙으로 옮긴 뒤 연속 이벤트(게이트/커브 진입) 최소 간격 0.73초(≥0.6), 완주 15.0초 이상 — 개발기록 36번 측정표
+const GAME_SPEED_SCALE = 1.8;
 // 커브 밸런스 실패 감속 — 초당 3% (이전: 틱당 ×0.995 = 초당 약 26%로, 평균 플레이가 최저속도로 수 분씩 정체하던 주원인)
 const BALANCE_MISS_RETAIN_PER_SECOND = 0.97;
 // 최저 속도 보장(부스터 타이어): 기본 속도의 trigger 미만이면 발동, tau초 시정수로 target까지 끌어올리고 release 이상이면 해제
@@ -163,7 +164,7 @@ class Cart {
     this._capSpeed();
 
     // 진행률 갱신 (속도 × 게임 배율 × dt / 트랙길이)
-    this._stepDistance = this.speed * GAME_SPEED_SCALE * dt;
+    this._stepDistance = this.speed * Cart.speedScale * dt;
     this.t += this._stepDistance / trackLength;
     this.rideTime += dt;
     if (this.speed < this.baseSpeedMs * 0.7) this.lowSpeedTime += dt;
@@ -248,7 +249,7 @@ class Cart {
   /** 가장 가까운 미판정 게이트의 시간 정보 — HUD 가이드와 판정이 같은 값을 쓰도록 단일 소스.
    * timeTo: 현재 속도로 중심 지점까지 남은 시간(초), err: 지금 탭하면 판정될 오차(초, 음수=이름/양수=늦음, 터치 지연 보정 포함) */
   gateTiming() {
-    const tPerSec = Math.max(0.1, this.speed * GAME_SPEED_SCALE) / this.track.lengthM; // cart.t 진행 속도와 동일 모델
+    const tPerSec = Math.max(0.1, this.speed * Cart.speedScale) / this.track.lengthM; // cart.t 진행 속도와 동일 모델
     let best = null;
     for (const c of this._gateCandidates()) {
       if (this._resolvedGates.has(c.key)) continue;
@@ -301,4 +302,5 @@ class Cart {
   }
 }
 
+Cart.speedScale = GAME_SPEED_SCALE; // 밸런싱 시뮬레이션(score-sim --scale)에서 바꿔 보기 위한 정적 값
 window.Cart = Cart;
