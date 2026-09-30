@@ -14,7 +14,7 @@ class CoasterCamera {
     this.camera = new BABYLON.UniversalCamera('coasterCam', new BABYLON.Vector3(0, 10, -20), scene);
     this.camera.minZ = 0.1;
     this.camera.attachControl(canvas, false); // 카트가 주도, 사용자 자유시점 없음
-    this.camera.maxZ = 1500;
+    this.camera.maxZ = 3000;
     scene.activeCamera = this.camera; // 스테이지 재로드 시 새 카메라가 확실히 활성화되도록
 
     this.mode = CAMERA_MODES.THIRD_PERSON;
@@ -61,11 +61,12 @@ class CoasterCamera {
       // 급커브(requiredLean 높음)일수록 카메라를 더 멀리·높이 띄워 지지대/레일을 뚫고 들어가
       // 보이는 것을 방지 (헤어핀 급커브에서 고정 8m 후방 지점이 안쪽 지지대와 겹치는 문제 확인)
       const bankFactor = seg.requiredLean || 0;
-      const behind = tangent.scale(-(8 + bankFactor * 6));
+      const behind = tangent.scale(-(isHanging ? 10 + bankFactor * 5 : 8 + bankFactor * 6));
       // 인버티드는 카트 높이(레일 아래) 뒤쪽에서 — 레일 바로 위/안이면 레일 상자가 화면을 통째로 가림
-      const up = new BABYLON.Vector3(0, isHanging ? -0.8 - bankFactor : 3 + bankFactor * 4, 0);
+      const up = new BABYLON.Vector3(0, isHanging ? -1.1 - bankFactor : 3 + bankFactor * 4, 0);
       targetPos = cartPos.add(behind).add(up);
-      targetLookAt = isHanging ? cartPos.add(new BABYLON.Vector3(0, -0.5, 0)) : cartPos;
+      // 카트 자체가 아니라 카트 앞쪽 약간 위를 바라봄 — 화면이 땅으로 기울지 않고 하늘/진행 방향이 더 보이는 구도
+      targetLookAt = cartPos.add(tangent.scale(5)).add(new BABYLON.Vector3(0, isHanging ? -0.8 : 1.2, 0));
       targetFov = this.baseFov + speedRatio * 0.25; // 속도감 연출: FOV 확장
     } else {
       // 월드 위쪽이 아니라 카트 기준 위쪽(트랙 법선)으로 띄우고 앞좌석 쪽으로 당김 — 월드 +Y로만 띄우면
@@ -75,7 +76,8 @@ class CoasterCamera {
       right.normalize();
       this._lastRight = right;
       const localUp = BABYLON.Vector3.Cross(tangent, right).normalize();
-      targetPos = cartPos.add(localUp.scale(isHanging ? -0.45 : 1.05)).add(tangent.scale(0.6));
+      // 카트 앞끝(길이 약 2m의 절반 너머)에 두어 앞좌석 등받이가 화면 아래 1/3을 가리지 않게
+      targetPos = cartPos.add(localUp.scale(isHanging ? -0.45 : 1.1)).add(tangent.scale(1.1));
       targetLookAt = targetPos.add(tangent.scale(10));
       targetFov = this.baseFov + speedRatio * 0.15;
     }
@@ -84,9 +86,11 @@ class CoasterCamera {
     if (this._transitionT < 1) {
       this._transitionT = Math.min(1, this._transitionT + dt / 0.25); // 0.25초 전환
       this.camera.position = BABYLON.Vector3.Lerp(this.camera.position, targetPos, this._transitionT);
+    } else if (this.mode === CAMERA_MODES.FIRST_PERSON) {
+      // 1인칭은 탑승자 시점이라 카트에 고정 — 스프링을 두면 100km/h 이상에서 목표보다 2m 넘게 뒤처져 카트 몸체가 화면을 가림
+      this.camera.position = targetPos;
     } else {
-      const springFactor = this.mode === CAMERA_MODES.THIRD_PERSON ? 5 : 12;
-      this.camera.position = BABYLON.Vector3.Lerp(this.camera.position, targetPos, Math.min(1, dt * springFactor));
+      this.camera.position = BABYLON.Vector3.Lerp(this.camera.position, targetPos, Math.min(1, dt * 5));
     }
 
     this.camera.setTarget(targetLookAt);

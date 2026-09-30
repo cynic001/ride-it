@@ -197,7 +197,8 @@ class Track {
       const side = new BABYLON.Vector3(-tangent.z, 0, tangent.x).normalize();
       const base = isHanging ? pos.add(side.scale(HANGING_SIDE_OFFSET)) : pos;
       if (this._pillarHitsLowerTrack(base, pos.y, arc)) return;
-      const topY = isHanging ? pos.y + railTopY : pos.y;
+      // 일반 트랙은 레일 밑면보다 0.3m 낮게 — 경사 구간에서 기울어진 레일 타일 사이로 기둥 머리가 비죽 솟아 보이던 것 방지
+      const topY = isHanging ? pos.y + railTopY : pos.y - 0.3;
       const inst = pillarTemplate.createInstance(`pillar_${k}`);
       inst.scaling.set(KIT_SCALE, topY / pillarBB.y, KIT_SCALE);
       inst.position.set(base.x, 0, base.z);
@@ -355,6 +356,10 @@ class Track {
     result.meshes.forEach(m => this._meshes.push(m));
     const geo = result.meshes.filter(m => m.getTotalVertices() > 0);
     let mesh = geo[0];
+    // __root__(glTF 좌표계 변환용 미러링)에서 떼어냄 — 인스턴스는 부모 변환을 안 따르므로 화면은 그대로인데,
+    // 템플릿만 미러링(행렬식 음수)이면 Babylon이 부호가 다른 인스턴스를 배칭하지 않고 한 개씩 그려
+    // 드로우콜이 인스턴스 수만큼 늘어남(실측: 2스테이지 low 389콜). main.js 카트와 같은 방식
+    geo.forEach(m => { m.parent = null; });
     if (geo.length > 1) {
       mesh = BABYLON.Mesh.MergeMeshes(geo, false, true, undefined, false, true);
       mesh.name = fileName;

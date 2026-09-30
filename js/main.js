@@ -185,11 +185,11 @@ const Game = {
     this.sun.intensity = 2.2;
     this.sun.shadowMinZ = 1;
 
-    const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: 1600, height: 1600 }, scene);
+    const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: 5000, height: 5000 }, scene); // 4·5단계 70m 높이에서도 지면 끝이 안개 안에 묻히도록
     ground.position.y = -0.02; // 지지대 밑면(y=0)과 z-fighting 방지
     const groundMat = new BABYLON.PBRMaterial('groundMat', scene);
     groundMat.albedoTexture = this._makeGrassTexture();
-    groundMat.albedoTexture.uScale = groundMat.albedoTexture.vScale = 160;
+    groundMat.albedoTexture.uScale = groundMat.albedoTexture.vScale = 500;
     groundMat.metallic = 0;
     groundMat.roughness = 1;
     groundMat.environmentIntensity = 0.6; // 넓은 면이 하늘빛 반사로 떠 보이지 않게
