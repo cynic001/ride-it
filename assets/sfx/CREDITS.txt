@@ -1,0 +1,5 @@
+효과음 출처 (모두 CC0 1.0 퍼블릭 도메인) — 원본을 모노 AAC 48kbps로 변환
+- whoa.m4a  ← "OoOoOoOoOoOoOo" by Nocturnal_Vanguard, OpenGameArt.org (opengameart.org/content/oooooooooooooo)
+- cheer.m4a ← "Cheers" (cheers_1.ogg) by Nocturnal_Vanguard, OpenGameArt.org (opengameart.org/content/cheers-0)
+- splash_big/mid/small.m4a, water_rush.m4a ← "40 CC0 water / splash / slime SFX" (splash_01/07/04, loop_water_01) by rubberduck, OpenGameArt.org
+- voice_go/voice_congrats/voice_newbest.m4a ← "Voiceover Pack" (Female: go, congratulations, new_highscore) by Kenney (kenney.nl)

@@ -426,8 +426,10 @@ const UI = {
       <h2>크레딧</h2>
       <div class="credits-list">
         <p><strong>떨어진다!!! RIDE IT</strong><br>chaechae studio</p>
+        <div class="tester-card"><small>TESTER</small><b>Chaewon</b></div>
         <p><strong>3D 모델</strong><br>Coaster Kit · Nature Kit — <a href="https://kenney.nl" target="_blank" rel="noopener">Kenney.nl</a> (CC0)</p>
         <p><strong>하늘 HDRI</strong><br>Kloofendal 43d Clear (Pure Sky) — Greg Zaal, <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a> (CC0)</p>
+        <p><strong>효과음</strong><br>환호 "Cheers", "OoOoOo" — Nocturnal_Vanguard<br>물소리 "40 CC0 water / splash / slime SFX" — rubberduck<br>(<a href="https://opengameart.org" target="_blank" rel="noopener">OpenGameArt.org</a>, CC0)<br>음성 Voiceover Pack — <a href="https://kenney.nl" target="_blank" rel="noopener">Kenney.nl</a> (CC0)<br>그 밖의 소리·배경음악은 Web Audio 합성</p>
         <p><strong>엔진</strong><br>Babylon.js</p>
       </div>
       <div class="actions"><button id="creditsCloseBtn" class="btn primary wide">닫기</button></div>
@@ -772,6 +774,7 @@ const UI = {
     const score = Math.round(cart.score);
     const bd = cart.scoreBreakdown;
     const rec = ProgressManager.record(stageData.id, score, sum.rank);
+    if (rec.newBest) AudioManager.playSample('voice_newbest', { volume: 0.6, delay: 0.9 });
     this._setScreen(`
       <div class="screen modal-overlay" id="resultScreen">
         <div class="card result-card">

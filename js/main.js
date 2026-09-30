@@ -65,6 +65,7 @@ const Game = {
 
     // 레일/지지대/스테이션 + 카트 glb 로딩 동안 스피너 표시 — 끝나야 스타트 바 화면으로 전환
     UI.showLoadingOverlay();
+    AudioManager.preloadSamples(); // 녹음 효과음 미리 받기(작은 파일, 서비스 워커가 캐싱)
     AudioManager.setBgmMode('menu'); // 재도전 시 드럼 빠진 잔잔한 버전으로 — 발사(cart-launched) 때 ride로 전환
     Promise.all([this.track.loadTrackMeshes(), this._loadCartMesh()])
       .then(() => {
@@ -358,6 +359,13 @@ const Game = {
     AudioManager.setAirtimeHold(currentSeg.airtimeZone && this.cart.airtimeHolding);
 
     this._updateRideSounds();
+    const ty = this.track.getTangentAt(this.cart.t).y;
+    if (!this.cart.rollback && ty < -0.45 && (this._prevTy ?? 0) >= -0.45 && this.cart.speed / this.cart.maxSpeedMs > 0.3
+      && performance.now() - (this._lastWhoa || 0) > 4000) {
+      this._lastWhoa = performance.now();
+      AudioManager.playSample('whoa', { volume: 0.85, rate: 0.95 + Math.random() * 0.15 });
+    }
+    this._prevTy = ty;
     if (this.cart.isFinished) {
       SpeedLines.draw(0, 0);
       if (this._vignette) this._vignette.style.opacity = '0';
@@ -546,13 +554,15 @@ window.addEventListener('booster-assist', () => Game._onBoostMoment(0.45));
 // 뒤로 떨어지기 연출: 뒤로 미끄러지기 시작 = 흔들림 킥, 부스터 발사/연타 성공 = 부스트 킥
 window.addEventListener('rollback', e => {
   const ph = e.detail.phase;
-  if (ph === 'back') { if (Game.camera) Game.camera.kick(0.6); AudioManager.playPassBy(1.2); }
+  if (ph === 'back') { if (Game.camera) Game.camera.kick(0.6); AudioManager.playPassBy(1.2); AudioManager.playSample('whoa', { volume: 0.9, rate: 1.15 }); }
   else if (ph === 'launch' || ph === 'success') { Game._onBoostMoment(1); AudioManager.playBoostHit(1); }
+  if (ph === 'success') AudioManager.playSample('cheer', { volume: 0.8 });
 });
 window.addEventListener('mash-tap', () => AudioManager.playChainClick());
 // 발사 순간 연출: 카메라 밀림+FOV 킥, 스피드 라인 버스트 (발사음은 input.js가 AudioManager.playLaunch)
 window.addEventListener('cart-launched', e => {
   const k = e.detail ? e.detail.strength : 1;
+  AudioManager.playSample('voice_go', { volume: 0.55 });
   if (Game.camera) Game.camera.launchPush(k);
   Game._lineBurst = Math.max(Game._lineBurst || 0, 0.6 + 0.4 * k);
 });

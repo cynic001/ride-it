@@ -33,7 +33,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const MIME = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.glb': 'model/gltf-binary',
   '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.hdr': 'application/octet-stream',
-  '.env': 'application/octet-stream', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json',
+  '.env': 'application/octet-stream', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.m4a': 'audio/mp4',
 };
 const bytesByExt = {};
 function startServer() {
@@ -125,6 +125,11 @@ async function main() {
       }, 40);
     }));
     const bgmOn = await rms();
+    // 녹음 효과음 로드/디코딩(스테이지 선택 전이라 직접 요청) — 9개 모두 받아져야 함
+    await page.evaluate(() => AudioManager.preloadSamples());
+    await sleep(1500);
+    const nS = await page.evaluate(() => Object.keys(AudioManager._samples).length);
+    check('sfx samples decoded', nS === 9, `${nS}/9`);
     check('bgm audible after first gesture', bgmOn > 0.005, `rms=${bgmOn.toFixed(4)} state=${await page.evaluate(() => AudioManager.ctx && AudioManager.ctx.state)}`);
     // 오디오가 멈춘 경우(iOS 백그라운드 복귀·전화 끼어들기 등) 다음 탭에서 다시 살아나야 함
     await page.evaluate(() => AudioManager.ctx.suspend());

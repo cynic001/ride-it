@@ -160,6 +160,8 @@ const AudioManager = {
   playLapChime(finish) {
     const notes = finish ? [784, 988, 1175, 1568] : [880, 1175];
     notes.forEach((f, i) => setTimeout(() => this._blip({ freq: f, duration: 0.3, type: 'triangle', peak: 0.2 }), i * 110));
+    this.playSample('cheer', { volume: finish ? 0.9 : 0.45 });
+    if (finish) this.playSample('voice_congrats', { volume: 0.6, delay: 0.5 });
   },
 
   /** 물 착수 "첨벙 + 쏴아" — 단계가 오를수록 크고 길게 */
@@ -176,6 +178,40 @@ const AudioManager = {
     osc.start(t0); osc.stop(t0 + 0.4);
     this._whoosh(t0, 0.35, 1800, 700, 0.35 + 0.1 * level);       // 첨벙
     this._whoosh(t0 + 0.05, 0.9 + 0.5 * level, 5000, 2500, 0.12 + 0.06 * level); // 쏴아(물보라)
+    this.playSample(['splash_small', 'splash_mid', 'splash_big'][level - 1] || 'splash_big', { volume: 0.7 + 0.15 * level });
+    if (level >= 2) this.playSample('water_rush', { volume: 0.35 + 0.15 * level, delay: 0.08 });
+    if (level >= 3) this.playSample('whoa', { volume: 0.6, rate: 1.1, delay: 0.15 });
+  },
+
+  // ── 9) CC0 녹음 효과음(비명/환호/물/음성) — assets/sfx/*.m4a(모노 AAC, iOS Safari 호환). 스테이지 로드 때 미리 받아 둠(preloadSamples),
+  // 아직 안 받아진 샘플은 그 순간엔 건너뜀. 마스터 게인 경유라 사운드 토글과 연동
+  _samples: {},
+  _sampleLoading: {},
+  SAMPLE_FILES: ['whoa', 'cheer', 'splash_big', 'splash_mid', 'splash_small', 'water_rush', 'voice_go', 'voice_congrats', 'voice_newbest'],
+
+  preloadSamples() {
+    if (!this.ctx) return;
+    this.SAMPLE_FILES.forEach(name => {
+      if (this._samples[name] || this._sampleLoading[name]) return;
+      this._sampleLoading[name] = fetch(`assets/sfx/${name}.m4a`)
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+        .then(buf => new Promise((res, rej) => this.ctx.decodeAudioData(buf, res, rej)))
+        .then(ab => { this._samples[name] = ab; })
+        .catch(() => { delete this._sampleLoading[name]; }); // 실패하면 다음 로드에서 재시도(소리 없이 계속 진행)
+    });
+  },
+
+  playSample(name, { volume = 1, rate = 1, delay = 0 } = {}) {
+    if (!this._ready() || !this.enabled) return;
+    const buf = this._samples[name];
+    if (!buf) { this.preloadSamples(); return; }
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    const g = this.ctx.createGain();
+    g.gain.value = volume;
+    src.connect(g).connect(this.masterGain);
+    src.start(this.ctx.currentTime + delay);
   },
 
   /** 체인 리프트 "딸깍" — 짧고 높은 금속 클릭 */
