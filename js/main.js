@@ -72,7 +72,7 @@ const Game = {
         StyleManager.apply(this); // 새로 로드된 glb 재질에 단계형 음영 적용
         // showStartPrompt가 스타트 바 DOM을 먼저 만들어야 InputController가 그 엘리먼트에 바인딩 가능
         UI.showStartPrompt(stageData.name, stageData.motif);
-        this.input = new InputController(this.canvas, this.cart, this.camera, UI.startBarEl);
+        this.input = new InputController(this.canvas, this.cart, this.camera, UI.startBarEl, ControlSettings.mode);
 
         this.accumulator = 0;
         this.lastTime = performance.now();
@@ -324,6 +324,7 @@ const Game = {
       return;
     }
 
+    if (this.input) this.input.update(dt);
     this.cart.update(dt);
     this.camera.update(this.track, this.cart, dt);
     this._updateCartMesh();

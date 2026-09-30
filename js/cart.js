@@ -253,9 +253,10 @@ class Cart {
   }
 
   /** input.js에서 게이트 탭 시 호출 — 실제 시간(초) 기준 판정. 판정 대상 게이트 종류는 lastGateType에 남김 */
-  resolveGate() {
+  resolveGate(snapshot) {
     this.lastGateType = null;
-    const g = this.gateTiming();
+    // snapshot: 패드 "톡"은 떼는 순간에야 탭으로 확정되므로, 손가락이 닿은 순간 계산해 둔 타이밍으로 판정
+    const g = snapshot && !this._resolvedGates.has(snapshot.key) ? snapshot : this.gateTiming();
     if (!g || Math.abs(g.err) > GATE_ATTEMPT_RANGE) return 'none';
     this._resolvedGates.add(g.key); // 게이트당(랩별) 판정 1회
     const e = Math.abs(g.err);

@@ -225,6 +225,42 @@
   .combo-chip.bump { animation: bump .25s var(--ease-pop); }
   @keyframes bump { 50% { transform: scale(1.18); } }
 
+  /* ── 주행 조작: 발사 후 표시 ── */
+  .drive-controls {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 0 10px calc(10px + env(safe-area-inset-bottom, 0px));
+    pointer-events: none; opacity: 0; transform: translateY(20px); transition: opacity .25s ease, transform .25s ease;
+  }
+  .drive-controls.on { opacity: 1; transform: none; }
+  .drive-controls.on .thumb-pad, .drive-controls.on .ctl-btn { pointer-events: auto; }
+  /* 한손/기울기: 가로 전체 엄지 패드 — 왼손/오른손 어느 쪽으로 잡아도 닿도록 */
+  .thumb-pad {
+    position: relative; height: 150px; border-radius: 26px; touch-action: none; overflow: hidden;
+    background: linear-gradient(180deg, rgba(20,26,51,.18), rgba(20,26,51,.42)); border: 2px solid rgba(255,255,255,.55);
+  }
+  .pad-lean { position: absolute; left: 18px; right: 18px; top: 16px; height: 8px; border-radius: 999px; background: rgba(255,255,255,.35); }
+  .pad-lean::before { content: ''; position: absolute; left: 50%; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: rgba(255,255,255,.8); }
+  .pad-lean-mark { position: absolute; top: -5px; left: 50%; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 0 2px var(--navy); }
+  .pad-hint { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 13px; color: #fff; opacity: .9; -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; }
+  .thumb-pad .key-hint { position: absolute; left: 0; right: 0; bottom: 36px; text-align: center; }
+  .pad-thumb {
+    position: absolute; left: 0; top: 0; width: 60px; height: 60px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(255,184,13,.9) 0 30%, rgba(255,184,13,.25) 31% 100%); border: 3px solid #fff;
+    opacity: 0; transition: opacity .12s ease;
+  }
+  .pad-thumb.on { opacity: 1; }
+  /* 양손: 왼쪽 ◀▶, 오른쪽 손 들기(위)·BOOST(아래, 크게) */
+  .drive-controls.twohand { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+  .lean-btns { display: flex; gap: 10px; }
+  .action-btns { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  .ctl-btn {
+    min-width: 64px; min-height: 64px; border-radius: 20px; font-size: 26px; color: var(--navy); background: rgba(255,255,255,.85);
+    box-shadow: 0 5px 0 #b8c2dc, 0 8px 16px rgba(0,0,0,.25); touch-action: none;
+  }
+  .ctl-btn.boost { min-width: 104px; min-height: 104px; border-radius: 50%; font-size: 22px; background: var(--yellow); box-shadow: 0 6px 0 var(--yellow-deep), 0 10px 20px rgba(0,0,0,.3); }
+  .ctl-btn.hands { min-width: 104px; min-height: 48px; font-size: 16px; border-radius: 999px; }
+  #uiRoot .ctl-btn.pressed { transform: translateY(4px) scale(.96); box-shadow: 0 1px 0 #b8c2dc; filter: brightness(1.08); }
+  .twohand .key-hint { align-self: center; }
+
   /* 판정 토스트(게이트 탭 결과) */
   .judge { position: absolute; top: 24%; left: 0; right: 0; text-align: center; pointer-events: none; font-size: 40px;
     -webkit-text-stroke: 6px var(--navy); paint-order: stroke fill; opacity: 0; }
@@ -239,7 +275,7 @@
   .guide-bar { position: relative; height: 14px; border-radius: 999px; background: rgba(20,26,51,.6); border: 2px solid rgba(255,255,255,.7); overflow: hidden; }
   .guide-zone { position: absolute; top: 0; bottom: 0; background: rgba(255,184,13,.85); }
   .guide-marker { position: absolute; top: -3px; width: 8px; height: 16px; margin-left: -4px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 2px var(--navy); }
-  .guide.balance { bottom: calc(104px + env(safe-area-inset-bottom, 0px)); }
+  .guide.balance { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); } /* 엄지 패드(150px) 바로 위 */
   .guide.gate { top: 16%; }
   .guide-zone.perfect { background: var(--green); }
   .guide-center { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: rgba(20,26,51,.7); }

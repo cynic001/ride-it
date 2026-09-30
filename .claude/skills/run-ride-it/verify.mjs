@@ -196,18 +196,30 @@ async function main() {
       check(`${tag} booster assist`, asg.at > 0 && asg.r >= 0.6, `assist=${asg.at.toFixed(2)}s speed=${(asg.r * 100).toFixed(0)}% of base`);
       if (!launched) continue;
 
-      // 밸런스 스와이프(하단) + 게이트 탭(상단)
-      await page.mouse.move(187, 560); await page.mouse.down();
-      for (let i = 1; i <= 6; i++) { await page.mouse.move(187 + i * 12, 560); await sleep(16); }
+      // 엄지 패드(한손 모드 기본): 좌우로 밀기 = 밸런스, 떼면 중립 복귀
+      await page.waitForSelector('#driveControls.on');
+      const pad = await page.locator('#thumbPad').boundingBox();
+      const px = pad.x + pad.width / 2, py = pad.y + pad.height / 2;
+      await page.mouse.move(px, py); await page.mouse.down();
+      for (let i = 1; i <= 6; i++) { await page.mouse.move(px + i * 13, py); await sleep(16); }
+      await sleep(150);
       const lean = await page.evaluate(() => Game.cart.leanInput);
+      if (s === STAGES[0]) await shot(`${tag}_2b_pad_swipe`);
       await page.mouse.up();
-      check(`${tag} balance swipe`, lean > 0.5, `leanInput=${lean.toFixed(2)}`);
-      // 게이트 탭: 화면 상단(150)과 중앙 약간 위(300 = 45%) 모두 게이트 판정으로 들어가야 함(하단 50%만 밸런스)
+      await sleep(250);
+      const leanAfter = await page.evaluate(() => Game.cart.leanInput);
+      check(`${tag} pad swipe = balance, release = neutral`, lean > 0.5 && Math.abs(leanAfter) < 0.1, `lean=${lean.toFixed(2)} → ${leanAfter.toFixed(2)}`);
+      // 톡 = 부스트(게이트 판정 이벤트), 꾹 = 손 들기
       await page.evaluate(() => { window.__gates = 0; if (!window.__gateHooked) { window.__gateHooked = true; window.addEventListener('gate-result', () => window.__gates++); } });
-      await page.mouse.click(187, 150);
-      await page.mouse.click(187, 300);
+      await page.mouse.click(px - 80, py);
+      await page.mouse.click(px + 80, py);
       const gates = await page.evaluate(() => window.__gates);
-      check(`${tag} gate taps (top/upper-middle)`, gates === 2, `gate-result=${gates}`);
+      check(`${tag} pad taps = boost`, gates === 2, `gate-result=${gates}`);
+      await page.mouse.move(px, py); await page.mouse.down(); await sleep(300);
+      const holding = await page.evaluate(() => Game.cart.airtimeHolding);
+      await page.mouse.up(); await sleep(50);
+      const released = await page.evaluate(() => Game.cart.airtimeHolding);
+      check(`${tag} pad hold = hands up`, holding && !released, `hold=${holding} release=${released}`);
       await sleep(900);
       await shot(`${tag}_2_ride_3rd`);
       // 한 프레임 드로우콜 실측(그림자/포스트프로세싱 패스 포함) — Babylon SceneInstrumentation
@@ -255,7 +267,7 @@ async function main() {
           perf: L('gatePerfect'), expPerf: 50 - g.perfect / 0.5 * 50, on: document.getElementById('gateGuide').classList.contains('on'), n: c._gateResults.length };
       });
       if (gg) {
-        await page.mouse.click(187, 150);
+        await page.mouse.click(px, py);
         const res = await page.evaluate(() => { const r = Game.cart._gateResults; return r.length ? r[r.length - 1].result : 'none'; });
         check(`${tag} gate guide matches timing judge`, gg.on && Math.abs(gg.marker - gg.expMarker) < 0.6 && Math.abs(gg.zone - gg.expZone) < 0.2 && Math.abs(gg.perf - gg.expPerf) < 0.2,
           `err=${gg.err.toFixed(3)}s marker=${gg.marker}%/${gg.expMarker.toFixed(1)}% good=${gg.zone}%/${gg.expZone.toFixed(1)}% perfect=${gg.perf}%/${gg.expPerf.toFixed(1)}%`);

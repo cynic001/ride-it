@@ -466,6 +466,7 @@ const UI = {
           <div class="start-power"><div class="start-power-fill" id="startPowerFill"></div></div>
           <div class="key-hint">키보드: ↓ 누르고 있기 · ↑ 발사</div>
         </div>
+        ${this._driveControlsHTML()}
         <div class="hud-controls">
           <button class="hud-icon-btn" id="soundToggleBtn" aria-label="사운드 켜기/끄기">${AudioManager.enabled ? ICONS.soundOn : ICONS.soundOff}</button>
           <button class="hud-icon-btn" id="pauseBtn" disabled aria-label="일시정지">${ICONS.pause}</button>
@@ -479,7 +480,7 @@ const UI = {
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
       balance: $('balanceGuide'), balanceZone: $('balanceZone'), balanceMarker: $('balanceMarker'),
       gate: $('gateGuide'), gateLabel: $('gateGuideLabel'), gateZone: $('gateZone'), gatePerfect: $('gatePerfect'), gateMarker: $('gateMarker'),
-      judge: $('judgeToast'), lastCombo: 0,
+      judge: $('judgeToast'), padLean: $('padLeanMark'), lastCombo: 0,
     };
 
     $('cameraToggleBtn').addEventListener('click', () => {
@@ -517,7 +518,27 @@ const UI = {
     // 발사 성공 시: 힌트 텍스트만 사라지는 게 아니라 스타트 바 UI 자체를 화면에서 치우고 HUD로 전환
     this._launchedHandler = () => {
       this.startBarEl.classList.add('launched');
+      const dc = $('driveControls');
+      if (dc) dc.classList.add('on');
     };
+    if (this._padHandler) window.removeEventListener('pad-touch', this._padHandler);
+    if (this._fallbackHandler) window.removeEventListener('control-fallback', this._fallbackHandler);
+    const thumb = $('padThumb');
+    this._padHandler = e => {
+      if (!thumb) return;
+      const { x, y, down } = e.detail;
+      thumb.classList.toggle('on', !!down);
+      if (down) {
+        const r = $('thumbPad').getBoundingClientRect();
+        thumb.style.transform = `translate(${x - r.left - 30}px, ${y - r.top - 30}px)`;
+      }
+    };
+    this._fallbackHandler = () => {
+      const hint = document.querySelector('.pad-hint');
+      if (hint) hint.textContent = '기울기 센서를 쓸 수 없어 한손 모드로 바꿨어요 · 좌우로 밀어 밸런스';
+    };
+    window.addEventListener('pad-touch', this._padHandler);
+    window.addEventListener('control-fallback', this._fallbackHandler);
     // 게이트 탭 판정 토스트(게이트 없는 곳의 탭 = 'none'은 표시하지 않음)
     this._gateHandler = e => {
       const { result } = e.detail;
@@ -531,6 +552,28 @@ const UI = {
     window.addEventListener('pull-progress', this._pullProgressHandler);
     window.addEventListener('cart-launched', this._launchedHandler);
     window.addEventListener('gate-result', this._gateHandler);
+  },
+
+  /** 주행 조작 DOM — 조작 방식별. 발사 전에는 숨겨 두고(스타트 바가 하단 중앙 사용) cart-launched에서 표시 */
+  _driveControlsHTML() {
+    const mode = ControlSettings.mode;
+    const keys = '<div class="key-hint">← → 밸런스 · ↑ 부스트 · Space 손 들기</div>';
+    if (mode === 'twohand') {
+      return `<div class="drive-controls twohand" id="driveControls">
+        <div class="lean-btns"><button class="ctl-btn" id="leanLeftBtn" aria-label="왼쪽으로 기울이기">◀</button><button class="ctl-btn" id="leanRightBtn" aria-label="오른쪽으로 기울이기">▶</button></div>
+        ${keys}
+        <div class="action-btns"><button class="ctl-btn hands" id="handsBtn">손 들기</button><button class="ctl-btn boost" id="boostBtn">BOOST</button></div>
+      </div>`;
+    }
+    const hint = mode === 'tilt' ? '폰 기울이기 = 밸런스 · 톡 = 부스트 · 꾹 = 손 들기' : '← 밀기 = 밸런스 → · 톡 = 부스트 · 꾹 = 손 들기';
+    return `<div class="drive-controls" id="driveControls">
+      <div class="thumb-pad" id="thumbPad">
+        <div class="pad-lean"><div class="pad-lean-mark" id="padLeanMark"></div></div>
+        <div class="pad-hint">${hint}</div>
+        ${keys}
+        <div class="pad-thumb" id="padThumb"></div>
+      </div>
+    </div>`;
   },
 
   updateHUD(cart, track) {
@@ -590,6 +633,7 @@ const UI = {
         h.gate.classList.remove('on');
       }
     }
+    if (h.padLean) h.padLean.style.left = `${((Math.max(-1, Math.min(1, cart.leanInput)) + 1) * 50).toFixed(1)}%`; // 패드 기울기 표시
     h.cameraBtn.disabled = !cart.launched;
     h.pauseBtn.disabled = !cart.launched;
   },
