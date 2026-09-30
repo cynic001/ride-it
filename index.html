@@ -318,6 +318,12 @@
   .judge-row span { flex: 1; padding: 4px 0; border-radius: 8px; text-align: center; font-size: 13px; color: #fff; }
   .judge-row .p { background: #e0a000; } .judge-row .g { background: #27b36a; } .judge-row .m { background: #e5484d; }
 
+  .update-toast {
+    position: fixed; z-index: 50; left: 50%; top: calc(64px + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+    padding: 10px 16px; border: none; border-radius: 999px; background: var(--yellow); color: var(--navy);
+    font-family: inherit; font-size: 14px; box-shadow: 0 4px 0 var(--yellow-deep), 0 8px 18px rgba(0,0,0,.3); cursor: pointer;
+    animation: screenIn .3s ease both;
+  }
   .rotate-warning {
     display: none; position: fixed; inset: 0; z-index: 9999;
     flex-direction: column; align-items: center; justify-content: center; gap: 12px;

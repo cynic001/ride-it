@@ -1,12 +1,15 @@
 /**
  * sw.js — 오프라인 캐싱 서비스 워커
- * - 설치 시: 앱 셸(html/js/manifest/아이콘/하늘 .env)만 선캐싱 — 스테이지별 glb는 처음 플레이할 때 런타임 캐싱
- *   (초기 다운로드를 늘리지 않기 위해 5스테이지 에셋 전체 선캐싱은 하지 않음)
- * - html/js: 네트워크 우선(배포 업데이트가 바로 반영), 오프라인이면 캐시
- * - glb/env/png/폰트/CDN(Babylon.js): 캐시 우선(내용이 바뀌지 않는 정적 에셋)
- * 캐시 구조를 바꾸거나 선캐싱 목록이 달라지면 CACHE 버전을 올릴 것.
+ * - 설치 시: 앱 셸(html/js/manifest/아이콘/하늘 .env)+Babylon CDN 선캐싱 — 스테이지별 glb는 처음 플레이할 때 런타임 캐싱
+ * - html/js/manifest: 네트워크 우선(온라인이면 항상 최신), 오프라인이면 캐시
+ * - 같은 출처 정적 에셋(glb/env/png 등): stale-while-revalidate — 캐시로 즉시 응답하고 백그라운드에서 다시 받아
+ *   내용(ETag/Last-Modified/길이)이 바뀌었으면 캐시를 갱신하고 페이지에 'asset-updated'를 알림 → "새 버전이 있어요" 안내.
+ *   예전(v1)엔 캐시 우선이라 같은 경로의 에셋이 바뀌어도 영영 옛 파일을 보여줄 수 있었음.
+ * - CDN(버전 고정 URL)/폰트: 캐시 우선
+ * 빌드 단계가 없어 배포마다 버전을 올리지 않아도 되도록 "내용 비교"로 새 버전을 감지함. CACHE 이름은 캐시 구조가
+ * 바뀔 때만 올리면 됨(올리면 activate에서 이전 캐시 전부 삭제).
  */
-const CACHE = 'ride-it-v1';
+const CACHE = 'ride-it-v2';
 const CORE = [
   './',
   'index.html',
@@ -50,6 +53,13 @@ const put = (req, res) => {
   return res;
 };
 
+const signature = res => res && [res.headers.get('etag'), res.headers.get('last-modified'), res.headers.get('content-length')].join('|');
+
+async function notifyUpdated(url) {
+  const clients = await self.clients.matchAll({ type: 'window' });
+  clients.forEach(c => c.postMessage({ type: 'asset-updated', url }));
+}
+
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
@@ -64,6 +74,21 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // 정적 에셋 + CDN(cdnjs/jsdelivr/Google Fonts): 캐시 우선
+  if (sameOrigin) {
+    // stale-while-revalidate + 변경 감지
+    e.respondWith(caches.match(req).then(hit => {
+      const refresh = fetch(req).then(res => {
+        if (hit && res.ok && signature(res) !== signature(hit)) notifyUpdated(url.pathname);
+        return put(req, res);
+      });
+      if (hit) {
+        e.waitUntil(refresh.catch(() => {}));
+        return hit;
+      }
+      return refresh;
+    }));
+    return;
+  }
+  // CDN(cdnjs/jsdelivr/Google Fonts): 캐시 우선
   e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => put(req, res))));
 });

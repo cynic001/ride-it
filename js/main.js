@@ -375,7 +375,16 @@ window.addEventListener('booster-assist', () => Game._onBoostMoment(0.45));
 
 // PWA 오프라인 캐싱 — file://이나 미지원 브라우저는 조용히 건너뜀(게임 동작과 무관)
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(err => console.warn('[SW] 등록 실패:', err)));
+  window.addEventListener('load', () => {
+    // updateViaCache:'none' — sw.js 자체는 HTTP 캐시(max-age 600)를 거치지 않고 매번 확인해 새 배포를 바로 감지
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+      .then(reg => reg.update())
+      .catch(err => console.warn('[SW] 등록 실패:', err));
+  });
+  // 새 버전 감지 → 안내 토스트: (1) 정적 에셋 내용이 바뀜(SW가 알림) (2) 새 SW가 활성화되어 제어권이 넘어옴(이전 제어자가 있던 경우만)
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'asset-updated') UI.showUpdateToast(); });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) UI.showUpdateToast(); });
 }
 
 window.addEventListener('DOMContentLoaded', () => {

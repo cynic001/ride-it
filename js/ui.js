@@ -277,6 +277,17 @@ const UI = {
     document.getElementById('creditsCloseBtn').addEventListener('click', () => el.remove());
   },
 
+  /** 새 버전 안내 — 주행 중에도 방해되지 않게 화면 위 작은 토스트, 누르면 새로고침 */
+  showUpdateToast() {
+    if (document.getElementById('updateToast')) return;
+    const el = document.createElement('button');
+    el.id = 'updateToast';
+    el.className = 'update-toast';
+    el.textContent = '새 버전이 있어요 · 탭해서 새로고침';
+    el.addEventListener('click', () => location.reload());
+    document.body.appendChild(el);
+  },
+
   showLoadingOverlay() {
     this._setScreen(`
       <div class="screen modal-overlay solid" id="loadingOverlay">

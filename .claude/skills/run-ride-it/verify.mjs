@@ -27,6 +27,7 @@ const OUT = path.resolve(args.out ?? '/tmp/ride-it-verify');
 const STAGES = String(args.stages ?? '0,1,2,3,4').split(',').map(Number);
 const QUALITY = args.quality ?? 'high';
 const PORT = Number(args.port ?? 8124);
+const BASE = args.base ? String(args.base).replace(/\/$/, '') : null; // 실서버 검증: --base=https://cynic001.github.io/ride-it
 fs.mkdirSync(OUT, { recursive: true });
 
 const MIME = {
@@ -59,8 +60,8 @@ function check(name, ok, detail = '') {
 }
 
 async function main() {
-  const server = await startServer();
-  const base = `http://localhost:${PORT}`;
+  const server = BASE ? { close() {} } : await startServer();
+  const base = BASE || `http://localhost:${PORT}`;
   const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu'] });
   const ctx = await browser.newContext({ viewport: { width: 375, height: 667 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
@@ -166,6 +167,11 @@ async function main() {
       await sleep(120);
       const cap = await page.evaluate(() => ({ kmh: Game.cart.speed * 3.6, cap: Game.cart.maxSpeedMs * 3.6, capped: document.getElementById('speedo').classList.contains('capped') }));
       check(`${tag} speed cap`, cap.kmh <= cap.cap + 0.01 && cap.capped, `${cap.kmh.toFixed(1)}/${cap.cap.toFixed(1)}km/h highlight=${cap.capped}`);
+      // 부스터 타이어: 기본 속도 30%로 떨어뜨리면 1.5초 안에 보조 추진이 걸려 60% 이상으로 복귀해야 함
+      await page.evaluate(() => { Game.cart.speed = Game.cart.baseSpeedMs * 0.3; });
+      await sleep(1500);
+      const asg = await page.evaluate(() => ({ at: Game.cart.assistTime, r: Game.cart.speed / Game.cart.baseSpeedMs }));
+      check(`${tag} booster assist`, asg.at > 0 && asg.r >= 0.6, `assist=${asg.at.toFixed(2)}s speed=${(asg.r * 100).toFixed(0)}% of base`);
       if (!launched) continue;
 
       // 밸런스 스와이프(하단) + 게이트 탭(상단)
