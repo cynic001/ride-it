@@ -28,7 +28,7 @@ const MAX_SPEED_FACTOR = 1.5;
 // 연타 게이지: 탭마다 +tapGain, 초당 decay 감소. 등반 속도 = (게이지−0.25)/0.75 × 구간길이/climbFullSec(음수면 다시 밀려 내려감).
 // 평균 연타 속도(초당 6회)에서 약 3초에 올라가도록 score-sim으로 맞춤. mashTimeout초 안에 못 올라가면 부스터가 도와줌(보너스 없음)
 const ROLLBACK = { triggerFrac: 0.78, stallSec: 0.45, mashTimeout: 6, tapGain: 0.16, decayPerSec: 1.6, climbFullSec: 1.1, bonusPerSec: 250, launchSpeed: 1.3 };
-const CHAIN_LIFT = { speed: 1.2, crestHold: 0.45, crestSpeed: 0.28 };
+const CHAIN_LIFT = { speed: 1.4, crestHold: 0.45, crestSpeed: 0.28 };
 
 // 점수 체계 — 모든 획득 점수에 콤보 배율(콤보 10마다 +0.1, 최대 2배) 적용, 피니쉬 배율은 마지막에 총점에 곱함
 const SCORE = {
@@ -98,6 +98,7 @@ class Cart {
     this.boostTime = 0;
     this.onChainLift = false;
     this._crestHold = 0;
+    this._liftArmed = null;
   }
 
   /** 현재 콤보 배율: 콤보 10마다 +0.1배, 최대 2배 */
@@ -197,24 +198,26 @@ class Cart {
     return true;
   }
 
-  /** 체인 리프트 중엔 최소 속도 보장, 끝(정상)에서 바로 급낙하가 이어지면 0.45초 멈칫 후 놓아줌 */
+  /** 체인 리프트 중엔 최소 속도 보장. 리프트를 타고 올라온 뒤 급낙하 시작점(tCrest) 3m 앞에서 0.45초 멈칫 후 놓아줌 */
   _updateChainLift(dt) {
     const z = this.track.liftZoneAt(this.t);
     this.onChainLift = !!z && !this.rollback;
+    if (this.onChainLift && z.tCrest !== null) this._liftArmed = z; // 리프트를 탄 랩에만 멈칫(출발 직후 낙하엔 없음)
     if (this._crestHold > 0) {
       this._crestHold -= dt;
       this.speed = Math.min(this.speed, this.baseSpeedMs * CHAIN_LIFT.crestSpeed);
       return;
     }
-    if (!this.onChainLift) return;
-    this.speed = Math.max(this.speed, this.baseSpeedMs * CHAIN_LIFT.speed);
-    const L = this.track.lengthM;
-    if (z.crestDrop && !this._crested?.[z.t0] && (z.t1 - this.t) * L < 3) {
-      (this._crested = this._crested || {})[z.t0] = this.currentLap; // 랩마다 1회
-      this._crestHold = CHAIN_LIFT.crestHold;
-      window.dispatchEvent(new CustomEvent('lift-crest'));
+    const a = this._liftArmed;
+    if (a && !this.rollback) {
+      const d = (((a.tCrest - this.t) % 1) + 1) % 1 * this.track.lengthM; // 폐곡선 — 낙하 시작점이 랩 경계 너머일 수 있음
+      if (d < 3) {
+        this._liftArmed = null;
+        this._crestHold = CHAIN_LIFT.crestHold;
+        window.dispatchEvent(new CustomEvent('lift-crest'));
+      }
     }
-    if (this._crested && this._crested[z.t0] && this._crested[z.t0] !== this.currentLap && (z.t1 - this.t) * L > 5) delete this._crested[z.t0];
+    if (this.onChainLift) this.speed = Math.max(this.speed, this.baseSpeedMs * CHAIN_LIFT.speed);
   }
 
   /** 부스터 타이어: 기본 속도의 60% 아래로 떨어지면 부드럽게(지수 접근) 85%까지 끌어올림 — 중력보다 우선 */

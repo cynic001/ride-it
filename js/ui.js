@@ -764,7 +764,7 @@ const UI = {
         h.rbSub.textContent = ControlSettings.mode === 'twohand' ? `BOOST 연타! ${left.toFixed(1)}초` : `톡톡 연타! (↑ 연타) ${left.toFixed(1)}초`;
       } else h.rbSub.textContent = rb.phase === 'launch' ? '' : '꽉 잡아!';
     }
-    if (h.liftHint) h.liftHint.classList.toggle('on', cart.launched && (cart.onChainLift || cart._crestHold > 0));
+    if (h.liftHint) h.liftHint.classList.toggle('on', cart.launched && cart.onChainLift); // 멈칫(정상)은 랩 아치 직후라 LAP 표시와 겹치지 않게 제외
     if (h.padLean) h.padLean.style.left = `${((Math.max(-1, Math.min(1, cart.leanInput)) + 1) * 50).toFixed(1)}%`; // 패드 기울기 표시
     h.cameraBtn.disabled = !cart.launched;
     h.pauseBtn.disabled = !cart.launched;

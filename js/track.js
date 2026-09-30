@@ -126,8 +126,9 @@ class Track {
     return !!z && t >= z.tValley - 0.01 && t <= z.tPeak + 0.02;
   }
 
-  /** 체인 리프트: 경사 > 0.15가 50m 이상 이어지는 긴 오르막(5단계 에어타임 언덕처럼 짧은 언덕은 제외).
-   * crestDrop = 끝난 직후 30m 안에 급한 내리막이 있으면 true(정상 직전 멈칫 연출 대상) */
+  /** 체인 리프트: 경사 > 0.15가 50m 이상 이어지는 긴 오르막(에어타임 언덕은 상승 25m 미만이면 제외 — 5단계 복귀 리프트는 포함).
+   * tCrest = 리프트가 끝난 뒤 300m 안에서 급한 내리막(경사 < -0.3)이 시작되는 지점 — 정상 직전 멈칫 위치(없으면 null).
+   * 4·5단계처럼 리프트 끝 → 스테이션 평지 → 낙하면 평지를 건너 낙하 시작점에서 멈칫 */
   _findLiftZones() {
     const S = this._sampleLoop(2);
     const zones = [];
@@ -137,10 +138,11 @@ class Track {
       if (up && st === null) st = k;
       if ((!up || k === S.length - 1) && st !== null) {
         const mid = S[Math.floor((st + k) / 2)].t;
-        if ((k - st) * 2 >= 50 && !this.getSegmentAt(mid).airtimeZone) { // 에어타임 언덕(5단계 등)은 체인 리프트가 아님
-          const t1 = p.t;
-          const crestDrop = S.slice(k, k + 15).some(q => q.tangent.y < -0.3);
-          zones.push({ t0: S[st].t, t1, crestDrop });
+        const rise = p.pos.y - S[st].pos.y;
+        if ((k - st) * 2 >= 50 && (!this.getSegmentAt(mid).airtimeZone || rise >= 25)) {
+          let tCrest = null;
+          for (let j = 0; j < 150; j++) { const q = S[(k + j) % S.length]; if (q.tangent.y < -0.3) { tCrest = q.t; break; } }
+          zones.push({ t0: S[st].t, t1: p.t, tCrest });
         }
         st = null;
       }
