@@ -556,10 +556,6 @@ const UI = {
           <span class="tp-label" id="gatePopLabel">BOOST</span>
           <div class="tp-result" id="gatePopResult"></div>
         </div>
-        <div class="guide balance" id="balanceGuide">
-          <div class="guide-label">밸런스!</div>
-          <div class="guide-bar"><div class="guide-zone ok" id="balanceZone"></div><div class="guide-zone perfect" id="balancePerfect"></div><div class="guide-minline" id="balanceMin"></div><div class="guide-center"></div><div class="guide-marker" id="balanceMarker"></div></div>
-        </div>
         <div class="start-bar" id="startBar">
           <div class="start-bar-label" id="startBarLabel">아래로 당겼다가<br>위로 밀어 올려!</div>
           <div class="start-bar-track">
@@ -581,7 +577,7 @@ const UI = {
     this._hud = {
       speed: $('speedLabel'), speedo: $('speedo'), comboMult: $('comboMult'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'),
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
-      balance: $('balanceGuide'), balanceZone: $('balanceZone'), balancePerfect: $('balancePerfect'), balanceMin: $('balanceMin'), balanceMarker: $('balanceMarker'),
+      bal: $('balGauge'), balDir: $('balDir'), balBand: $('balBand'), balPerfect: $('balPerfect'), balCursor: $('balCursor'), balProg: $('balProg'), balResult: $('balResult'),
       pop: $('gatePop'), popLabel: $('gatePopLabel'), popGood: $('gatePopGood'), popPerfect: $('gatePopPerfect'), popRing: $('gatePopRing'), popResult: $('gatePopResult'), popKey: null, popResultUntil: 0,
       judge: $('judgeToast'),
       rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
@@ -641,16 +637,16 @@ const UI = {
     window.addEventListener('pull-progress', this._pullProgressHandler);
     window.addEventListener('cart-launched', this._launchedHandler);
     window.addEventListener('gate-result', this._gateHandler);
-    if (this._balPerfectHandler) window.removeEventListener('balance-perfect', this._balPerfectHandler);
-    this._balPerfectHandler = () => {
-      if (!this._hud) return;
-      const j = this._hud.judge;
-      j.textContent = '밸런스 PERFECT!';
-      j.className = 'judge';
-      void j.offsetWidth;
-      j.className = 'judge show perfect small';
+    if (this._balJudgeHandler) window.removeEventListener('balance-judge', this._balJudgeHandler);
+    this._balJudgeHandler = e => { // 밸런스 판정 확정/실패 — 게이지 위에 짧게
+      const r = this._hud && this._hud.balResult;
+      if (!r) return;
+      r.textContent = JUDGE_LABEL[e.detail];
+      r.className = 'bal-result';
+      void r.offsetWidth;
+      r.className = `bal-result show ${e.detail}`;
     };
-    window.addEventListener('balance-perfect', this._balPerfectHandler);
+    window.addEventListener('balance-judge', this._balJudgeHandler);
   },
 
   /** 주행 조작 DOM — 왼쪽 아래 ◀ ▶(기울기 모드면 숨김), 오른쪽 아래 BOOST. 발사 전에는 숨겨 두고(스타트 바가 하단 중앙 사용)
@@ -659,6 +655,13 @@ const UI = {
     const tilt = ControlSettings.mode === 'tilt';
     return `<div class="drive-controls twohand${tilt ? ' tilt' : ''}" id="driveControls">
       <div class="ctl-left" id="ctlLeft">
+        <div class="bal-gauge" id="balGauge" aria-hidden="true">
+          <div class="bal-dir" id="balDir"></div>
+          <div class="bal-result" id="balResult"></div>
+          <div class="bal-bar"><div class="bal-band" id="balBand"></div><div class="bal-perfect" id="balPerfect"></div><i class="bal-zero"></i></div>
+          <div class="bal-cursor" id="balCursor"></div>
+          <div class="bal-prog"><div class="bal-prog-fill" id="balProg"></div></div>
+        </div>
         <div class="lean-btns"><button class="ctl-btn lean" id="leanLeftBtn" aria-label="왼쪽으로 기울이기">◀</button><button class="ctl-btn lean" id="leanRightBtn" aria-label="오른쪽으로 기울이기">▶</button></div>
       </div>
       <div class="ctl-right" id="ctlRight"><button class="ctl-btn boost" id="boostBtn">BOOST</button></div>
@@ -714,25 +717,27 @@ const UI = {
       const overall = ((cart.currentLap - 1) + Math.min(1, cart.t)) / cart.totalLaps;
       h.progress.style.width = `${(overall * 100).toFixed(1)}%`;
 
-      // 밸런스 가이드: 목표 기울기 ±leanWindow를 노란 구간으로, 현재 입력을 흰 마커로 (−1~1 → 0~100%)
-      const seg = track.getSegmentAt(cart.t);
+      // 밸런스 게이지(13번): 회색 바 = −1(왼쪽 끝)~+1(오른쪽 끝). 초록 띠 = 목표 범위(커브 방향 최소 기울기~끝), 진한 초록 = Perfect,
+      // 삼각형 커서 + 세로선 = 지금 내 기울기, 아래 막대 = holdSec초 연속 유지 진행도(범위를 벗어나면 즉시 0)
       const pct = v => (Math.max(-1, Math.min(1, v)) + 1) * 50;
-      if (cart.launched && !cart.rollback && seg.requiredLean > 0) {
-        // 성공 구간 = 커브 방향 최소 기울기~끝(연한 노랑), Perfect 범위 = 목표 ±perfectRange(초록), 최소 기울기 선
-        const dir = seg.curveDirection === 'left' ? -1 : 1;
-        const rule = cart.balanceRule;
-        const minLean = Math.min(rule.minLean, seg.requiredLean);
-        const a = pct(dir * minLean), b = pct(dir * 1);
-        h.balanceZone.style.left = `${Math.min(a, b).toFixed(1)}%`;
-        h.balanceZone.style.right = `${(100 - Math.max(a, b)).toFixed(1)}%`;
-        const p0 = pct(dir * (seg.requiredLean - rule.perfectRange)), p1 = pct(dir * (seg.requiredLean + rule.perfectRange));
-        h.balancePerfect.style.left = `${Math.min(p0, p1).toFixed(1)}%`;
-        h.balancePerfect.style.right = `${(100 - Math.max(p0, p1)).toFixed(1)}%`;
-        h.balanceMin.style.left = `${a.toFixed(1)}%`;
-        h.balanceMarker.style.left = `${pct(cart.leanInput).toFixed(1)}%`;
-        h.balance.classList.add('on');
+      const bs = cart.launched && !cart.rollback ? cart.balanceState : null;
+      if (bs) {
+        const a = pct(bs.dir * bs.minLean), b = pct(bs.dir);
+        h.balBand.style.left = `${Math.min(a, b).toFixed(1)}%`;
+        h.balBand.style.right = `${(100 - Math.max(a, b)).toFixed(1)}%`;
+        const p0 = pct(bs.dir * Math.max(bs.minLean, bs.target - bs.perfectRange)), p1 = pct(bs.dir * Math.min(1, bs.target + bs.perfectRange));
+        h.balPerfect.style.left = `${Math.min(p0, p1).toFixed(1)}%`;
+        h.balPerfect.style.right = `${(100 - Math.max(p0, p1)).toFixed(1)}%`;
+        h.balCursor.style.left = `${pct(cart.leanInput).toFixed(1)}%`;
+        h.balProg.style.width = `${(bs.progress * 100).toFixed(1)}%`;
+        h.balDir.textContent = bs.dir < 0 ? '◀' : '▶';
+        h.balDir.classList.toggle('right', bs.dir > 0);
+        h.bal.classList.toggle('in', bs.inBand);
+        h.bal.classList.toggle('perfect', bs.inBand && bs.perfectNow);
+        h.bal.classList.toggle('done', !!bs.done);
+        h.bal.classList.add('on');
       } else {
-        h.balance.classList.remove('on');
+        h.bal.classList.remove('on', 'in', 'perfect', 'done');
       }
 
       // 부스트 타이밍 팝업: 다가오는 게이트(중심까지 POP_RANGE초 이내)에서 등장, 바깥 원이 줄어 안쪽 원과 겹치는 순간 = 정타.

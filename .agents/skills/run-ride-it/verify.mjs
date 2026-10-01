@@ -242,8 +242,28 @@ async function main() {
         const kZero = await page.evaluate(() => Game.cart.leanInput);
         check(`${tag} key ramp (0.3s → 1.0, release → 0)`, kMid > 0.1 && kMid < 0.8 && kFull > 0.99 && kDecay > 0.2 && kDecay < 0.9 && Math.abs(kZero) < 0.01,
           `90ms=${kMid.toFixed(2)} 440ms=${kFull.toFixed(2)} +100ms=${kDecay.toFixed(2)} +500ms=${kZero.toFixed(2)}`);
-        const g = await page.evaluate(() => ['#balanceZone', '#balancePerfect', '#balanceMin'].map(q => !!document.querySelector(q)));
-        check(`${tag} balance guide has min line + perfect zone`, g.every(Boolean), JSON.stringify(g));
+        // 밸런스 1.5초 유지 판정(13번): 커브 시작으로 옮겨 진행을 아주 느리게 → 커브 방향 키를 0.7초 누름(진행도 ≈0.47) → 떼면 범위를 벗어나 0으로
+        // → 다시 holdSec+0.4초 누름 → balance-judge(good, 1.0은 Perfect 범위 밖) 1회
+        const bal = await page.evaluate(() => {
+          const c = Game.cart, seg = Game.track.segmentRanges.find(x => x.requiredLean > 0);
+          window.__bj = []; if (!window.__bjHooked) { window.__bjHooked = true; window.addEventListener('balance-judge', e => window.__bj.push(e.detail)); }
+          c._finalizeCurve(); c.t = seg.tStart + 0.003; Cart.speedScale = 0.02; window.__bj = [];
+          return { key: seg.curveDirection === 'left' ? 'ArrowLeft' : 'ArrowRight', hold: c.balanceRule.holdSec };
+        });
+        await page.keyboard.down(bal.key); await sleep(700);
+        const b1 = await page.evaluate(() => ({ p: Game.cart.balanceState && Game.cart.balanceState.progress, on: document.getElementById('balGauge').classList.contains('on'), inn: document.getElementById('balGauge').classList.contains('in') }));
+        if (s === STAGES[0]) await shot(`${tag}_2e_balance_in`);
+        await page.keyboard.up(bal.key); await sleep(450);
+        const b2 = await page.evaluate(() => Game.cart.balanceState && Game.cart.balanceState.progress);
+        if (s === STAGES[0]) await shot(`${tag}_2f_balance_out`);
+        await page.keyboard.down(bal.key); await sleep(bal.hold * 1000 + 400);
+        const b3 = await page.evaluate(() => ({ j: window.__bj.slice(), done: Game.cart.balanceState && Game.cart.balanceState.done, txt: document.getElementById('balResult').textContent }));
+        await page.keyboard.up(bal.key);
+        await page.evaluate(() => { Cart.speedScale = GAME_SPEED_SCALE; });
+        check(`${tag} balance: hold builds progress, leaving resets, ${bal.hold}s hold confirms`, b1.on && b1.inn && b1.p > 0.25 && b1.p < 0.75 && b2 === 0 && b3.j.length === 1 && b3.j[0] === 'good' && b3.done === 'good' && b3.txt === 'GOOD',
+          `0.7s→${(b1.p ?? -1).toFixed(2)} release→${b2} hold→${JSON.stringify(b3)}`);
+        const g = await page.evaluate(() => ['#balBand', '#balPerfect', '#balCursor', '#balProg', '#balDir'].map(q => !!document.querySelector(q)));
+        check(`${tag} balance gauge: band + perfect + cursor + progress + direction`, g.every(Boolean), JSON.stringify(g));
       }
       // BOOST 버튼 = 부스트(게이트 판정 이벤트) — 누를 때마다 1회
       await page.evaluate(() => { window.__gates = 0; if (!window.__gateHooked) { window.__gateHooked = true; window.addEventListener('gate-result', () => window.__gates++); } });

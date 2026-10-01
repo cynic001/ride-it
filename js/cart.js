@@ -33,9 +33,8 @@ const CHAIN_LIFT = { speed: 1.4, crestHold: 0.45, crestSpeed: 0.28 };
 // 점수 체계 — 모든 획득 점수에 콤보 배율(콤보 10마다 +0.1, 최대 2배) 적용, 피니쉬 배율은 마지막에 총점에 곱함
 const SCORE = {
   gate: { perfect: 300, good: 100, miss: 0 },
-  balancePerCurve: 100,     // 커브 세그먼트 하나를 밸런스 성공으로 통과 시 1회
-  balanceClearRatio: 0.7,   // 그 커브 구간 틱 중 성공(최소 기울기 이상) 비율이 이 이상이면 성공
-  balancePerfect: 50,       // 목표 기울기 ±perfectRange를 구간의 balancePerfectRatio 이상 유지하면 추가(랭크 계산에서는 제외)
+  balancePerCurve: 100,     // 커브 하나 밸런스 판정 확정(Good) — 목표 범위를 holdSec초 연속 유지(13번)
+  balancePerfect: 50,       // 그 유지 시간 중 balancePerfectRatio 이상을 Perfect 범위(목표 ±perfectRange)에 있었으면 추가 → Perfect 150
   balancePerfectRatio: 0.6,
 };
 // 게이트 판정(시간 기준): 모바일 터치 지연 보정 — 탭 이벤트가 실제 손가락 접촉보다 약 이만큼 늦게 도착한다고 보고
@@ -86,11 +85,13 @@ class Cart {
     this.scoreBreakdown = { gate: 0, balance: 0, balancePerfect: 0, comboBonus: 0, finishBonus: 0, mashBonus: 0 };
     this.balancePerfects = 0;
     // 스테이지별 밸런스 난이도 — 없으면 캐주얼 기본값
-    this.balanceRule = track.stageData.balance || { minLean: 0.2, perfectRange: 0.15 };
+    this.balanceRule = { minLean: 0.2, perfectRange: 0.15, holdSec: 1.5, ...track.stageData.balance };
+    this.balanceState = null; // HUD용 { dir, minLean, target, perfectRange, progress 0~1, inBand, perfectNow, done: null|'perfect'|'good' }
+    this.balanceResults = { perfect: 0, good: 0, miss: 0 };
     this.rollback = null;     // 뒤로 떨어지기 진행 상태 { phase: 'stall'|'back'|'launch'|'mash', time, gauge, ... }
     this.rollbackLog = [];    // 랩별 결과 { mode, climbSec, bonus, assisted } — 결과/시뮬레이션용
     this._rbLap = 0;
-    this._curve = null;        // 진행 중인 커브 세그먼트 { key, inWindow, total }
+    this._curve = null;        // 진행 중인 커브 세그먼트 { key, hold(초), holdPerfect(초), done }
     this._resolvedGates = new Set(); // 게이트당(랩별) 판정 1회 — 연타로 점수/부스트를 반복 획득하는 것 방지
     this.boostRemaining = 0;  // 남은 가속 거리(m)
     this.boostAccel = 0;      // 가속량(m/s²) — 연출(방사형 블러 등)이 세기로 사용
@@ -237,19 +238,26 @@ class Cart {
     if (this.speed > this.maxSpeedMs) this.speed = this.maxSpeedMs;
   }
 
-  /** 커브 세그먼트를 빠져나올 때(또는 완주 시) 그 구간의 밸런스 성공 여부로 1회 점수 */
+  /** 커브 세그먼트를 빠져나올 때(또는 완주 시) — 끝까지 holdSec초를 못 채웠으면 Miss */
   _finalizeCurve() {
     const c = this._curve;
     this._curve = null;
-    if (c && c.total > 0 && c.inWindow / c.total >= SCORE.balanceClearRatio) {
+    this.balanceState = null;
+    if (c && !c.done) this._balanceJudge('miss');
+  }
+
+  /** 커브 밸런스 판정 확정 — perfect 150 / good 100 / miss 0 */
+  _balanceJudge(result) {
+    this.balanceResults[result] += 1;
+    if (result !== 'miss') {
       this._addScore('balance', SCORE.balancePerCurve);
       this.curvesCleared = (this.curvesCleared || 0) + 1;
-      if (c.perfect / c.total >= SCORE.balancePerfectRatio) {
-        this._addScore('balancePerfect', SCORE.balancePerfect);
-        this.balancePerfects += 1;
-        window.dispatchEvent(new CustomEvent('balance-perfect'));
-      }
     }
+    if (result === 'perfect') {
+      this._addScore('balancePerfect', SCORE.balancePerfect);
+      this.balancePerfects += 1;
+    }
+    window.dispatchEvent(new CustomEvent('balance-judge', { detail: result }));
   }
 
   /** 스타트: 드래그 거리(pullStrength) × release 순간 속도(flickMultiplier)로 초기 속도 부여 */
@@ -327,26 +335,37 @@ class Cart {
     const segKey = `${this.currentLap}:${seg.tStart}`;
     if (this._curve && this._curve.key !== segKey) this._finalizeCurve();
 
-    // 좌우 밸런스 판정(캐주얼): 커브 방향으로 최소 기울기 이상이면 성공 — 과하게 기울여도(버튼·키보드 1.0) 실패 아님.
-    // 목표 기울기(requiredLean) ±perfectRange 안이면 perfect
+    // 좌우 밸런스 판정(13번): 커브 방향으로 최소 기울기 이상(과하게 기울여도 OK — 버튼·키보드 1.0도 성공) = 목표 범위.
+    // 목표 범위를 holdSec초 "연속" 유지하면 판정 확정 — 그동안 Perfect 범위(목표 ±perfectRange)에 있던 비율로 Perfect/Good.
+    // 범위를 벗어나면 진행도 0으로, 구간이 끝날 때까지 못 채우면 Miss(_finalizeCurve). 확정 후엔 남은 구간에서 감점 없음
     if (seg.requiredLean > 0) {
+      const R = this.balanceRule;
       const dir = seg.curveDirection === 'left' ? -1 : 1;
       const lean = this.leanInput * dir; // 커브 방향 기준 기울기(+면 맞는 방향)
-      const minLean = Math.min(this.balanceRule.minLean, seg.requiredLean);
-      let tier;
-      if (lean >= minLean) {
+      const minLean = Math.min(R.minLean, seg.requiredLean);
+      const inBand = lean >= minLean;
+      const perfectNow = Math.abs(lean - seg.requiredLean) <= R.perfectRange;
+      if (!this._curve) this._curve = { key: segKey, hold: 0, holdPerfect: 0, done: null };
+      const c = this._curve;
+      if (inBand) {
         this.combo += 1;
-        tier = Math.abs(lean - seg.requiredLean) <= this.balanceRule.perfectRange ? 'perfect' : 'good';
-      } else {
-        this.speed *= Math.pow(BALANCE_MISS_RETAIN_PER_SECOND, dt); // 감속 패널티(초당 3%) — 실수의 대가는 주로 점수(콤보 리셋·밸런스 점수 미획득)
+        if (!c.done) {
+          c.hold += dt;
+          if (perfectNow) c.holdPerfect += dt;
+          if (c.hold >= R.holdSec - 1e-6) {
+            c.done = c.holdPerfect / c.hold >= SCORE.balancePerfectRatio ? 'perfect' : 'good';
+            this._balanceJudge(c.done);
+          }
+        }
+      } else if (!c.done) {
+        if (c.hold > 0) window.dispatchEvent(new CustomEvent('balance-reset'));
+        c.hold = 0; c.holdPerfect = 0; // 벗어나면 진행도 초기화
+        this.speed *= Math.pow(BALANCE_MISS_RETAIN_PER_SECOND, dt); // 감속 패널티(초당 3%)
         this.combo = 0;
-        tier = 'miss';
       }
-      this.balanceTicks[tier] += 1;
-      if (!this._curve) this._curve = { key: segKey, inWindow: 0, perfect: 0, total: 0 };
-      this._curve.total += 1;
-      if (tier !== 'miss') this._curve.inWindow += 1;
-      if (tier === 'perfect') this._curve.perfect += 1;
+      const tier = !inBand ? 'miss' : perfectNow ? 'perfect' : 'good';
+      this.balanceTicks[tier] += 1; // 결과 화면 "밸런스 정확도" 통계
+      this.balanceState = { dir, minLean, target: seg.requiredLean, perfectRange: R.perfectRange, progress: c.done ? 1 : c.hold / R.holdSec, inBand, perfectNow, done: c.done };
       // tier가 바뀔 때만 이벤트 발생 — 매 틱(60Hz) 발사하면 사운드가 겹쳐 스팸이 됨
       if (tier !== this._lastBalanceTier) {
         window.dispatchEvent(new CustomEvent('balance-result', { detail: tier }));
@@ -354,6 +373,7 @@ class Cart {
       }
     } else {
       this._lastBalanceTier = null; // 밸런스 불필요 구간을 지나면 리셋 — 다음 커브 진입 시 다시 엣지 감지되도록
+      this.balanceState = null;
     }
 
     this.maxCombo = Math.max(this.maxCombo, this.combo);
@@ -436,16 +456,17 @@ class Cart {
   }
 
   /** 랭크용 판정 비율(UI 결과 화면·score-sim 공용 단일 소스) — 실력이 드러나는 판정 항목만 만점 대비로:
-   * 게이트(부스트·피니쉬, 개당 Perfect 300) + 커브 밸런스(Good 100 / Perfect 150) + 뒤로 떨어지기 연타(빨리 오를수록 0~300, 2초 이내 만점, 도움 받으면 0).
+   * 게이트(부스트·피니쉬, 개당 Perfect 300) + 커브 밸런스 확정(100) + 뒤로 떨어지기 연타(빨리 오를수록 0~300, 2초 이내 만점, 도움 받으면 0).
+   * 밸런스 Perfect(+50)는 점수에만 — 기울기(아날로그)가 버튼보다 Perfect를 내기 쉬워(score-sim) 랭크에 넣으면 조작 방식 차이가 생김
    * 콤보는 같은 판정에서 파생되는 배율이라, 피니쉬 배율·연타 보너스 점수 자체는 총점을 키우는 쪽이라 비율에는 넣지 않음(13번) */
   judgeSummary() {
-    const curves = this.track.stageData.segments.filter(s => s.requiredLean > 0 && !this.track.inRollbackZone(s.tStart)).length * this.totalLaps;
+    const curves = this.track.stageData.segments.filter(s => s.requiredLean > 0).length * this.totalLaps;
     const gates = this.track.gateCenters().length * this.totalLaps;
     const rz = this.track.rollbackZone;
     const mashes = rz && rz.mode === 'mash' ? this.totalLaps : 0;
     const mashScore = this.rollbackLog.filter(x => x.mode === 'mash').reduce((a, x) => a + 300 * Math.min(1, x.bonus / ((ROLLBACK.mashTimeout - 2) * ROLLBACK.bonusPerSec)), 0); // 2초 안에 오르면 만점
-    const max = gates * SCORE.gate.perfect + curves * (SCORE.balancePerCurve + SCORE.balancePerfect) + mashes * 300;
-    const got = this.scoreBreakdown.gate + this.scoreBreakdown.balance + this.scoreBreakdown.balancePerfect + mashScore;
+    const max = gates * SCORE.gate.perfect + curves * SCORE.balancePerCurve + mashes * 300;
+    const got = this.scoreBreakdown.gate + this.scoreBreakdown.balance + mashScore;
     const ratio = max ? got / max : 1;
     return { ratio, rank: ratio >= RANK_THRESHOLDS.S ? 'S' : ratio >= RANK_THRESHOLDS.A ? 'A' : ratio >= RANK_THRESHOLDS.B ? 'B' : 'C', curves, gates };
   }

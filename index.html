@@ -297,19 +297,29 @@
   @keyframes judgePop { 0% { opacity: 0; transform: scale(.4); } 25% { opacity: 1; transform: scale(1.1); } 70% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: translateY(-20px); } }
   .judge.perfect { color: var(--yellow); } .judge.good { color: var(--green); } .judge.miss { color: var(--red); }
 
-  /* 밸런스 가이드(커브 구간) / 게이트 타이밍 가이드 */
-  .guide { position: absolute; left: 50%; transform: translateX(-50%); width: min(240px, 64vw); pointer-events: none; opacity: 0; transition: opacity .2s ease; }
-  .guide.on { opacity: 1; }
-  .guide-label { text-align: center; color: #fff; font-size: 13px; margin-bottom: 5px; -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; }
-  .guide-bar { position: relative; height: 14px; border-radius: 999px; background: rgba(20,26,51,.6); border: 2px solid rgba(255,255,255,.7); overflow: hidden; }
-  .guide-zone { position: absolute; top: 0; bottom: 0; background: rgba(255,184,13,.85); }
-  .guide-marker { position: absolute; top: -3px; width: 8px; height: 16px; margin-left: -4px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 2px var(--navy); }
-  .guide.balance { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); } /* 엄지 패드(150px) 바로 위 */
-  .guide-zone.perfect { background: var(--green); }
-  .guide-zone.ok { background: rgba(255,184,13,.55); }
-  .guide-minline { position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1.5px; background: #fff; box-shadow: 0 0 0 1px var(--navy); }
+  /* 밸런스 게이지(13번): ◀ ▶ 바로 위 — 회색 바(−1~+1), 초록 목표 띠, 진한 초록 Perfect 띠, 아래를 가리키는 삼각형 커서 + 세로선,
+     아래 막대 = 연속 유지 진행도. 커서가 띠 안이면 띠가 밝아짐 */
+  .bal-gauge { position: relative; width: 156px; height: 58px; opacity: 0; transition: opacity .2s ease; pointer-events: none; }
+  .bal-gauge.on { opacity: 1; }
+  .bal-dir { position: absolute; left: 0; top: -6px; font-size: 26px; line-height: 26px; color: #5dff9a; -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; animation: dirNudgeL .6s ease-in-out infinite; }
+  .bal-dir.right { left: auto; right: 0; animation-name: dirNudgeR; }
+  @keyframes dirNudgeL { 50% { transform: translateX(-4px); } } @keyframes dirNudgeR { 50% { transform: translateX(4px); } }
+  .bal-bar { position: absolute; left: 0; right: 0; top: 26px; height: 16px; border-radius: 6px; background: #6b7390; border: 2px solid var(--navy); overflow: hidden; }
+  .bal-band { position: absolute; top: 0; bottom: 0; background: #3f9f68; transition: background .1s ease; }
+  .bal-gauge.in .bal-band { background: #5dff9a; box-shadow: 0 0 10px #5dff9a; }
+  .bal-perfect { position: absolute; top: 3px; bottom: 3px; border-radius: 3px; background: #0f6b3c; }
+  .bal-gauge.perfect .bal-perfect { background: #0a8a47; box-shadow: inset 0 0 0 2px #e8fff1; }
+  .bal-zero { position: absolute; left: 50%; bottom: 0; width: 2px; height: 5px; margin-left: -1px; background: rgba(20,26,51,.7); }
+  .bal-cursor { position: absolute; top: 14px; left: 50%; width: 0; height: 0; margin-left: -8px; pointer-events: none;
+    border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 11px solid var(--yellow); filter: drop-shadow(0 0 1px var(--navy)) drop-shadow(0 0 1px var(--navy)); }
+  .bal-cursor::after { content: ''; position: absolute; left: -1.5px; top: 0; width: 3px; height: 18px; background: var(--yellow); box-shadow: 0 0 0 1px var(--navy); }
+  .bal-prog { position: absolute; left: 0; right: 0; top: 47px; height: 7px; border-radius: 999px; background: rgba(20,26,51,.6); overflow: hidden; }
+  .bal-prog-fill { height: 100%; width: 0; background: linear-gradient(90deg, #5dff9a, var(--yellow)); }
+  .bal-gauge.done .bal-prog-fill { background: var(--yellow); }
+  .bal-result { position: absolute; left: 0; right: 0; top: -26px; text-align: center; font-size: 22px; white-space: nowrap; opacity: 0; -webkit-text-stroke: 5px var(--navy); paint-order: stroke fill; }
+  .bal-result.show { animation: judgePop .8s var(--ease-pop) forwards; }
+  .bal-result.perfect { color: var(--yellow); } .bal-result.good { color: var(--green); } .bal-result.miss { color: var(--red); }
   .judge.small { font-size: 30px; }
-  .guide-center { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: rgba(20,26,51,.7); }
 
   /* 부스트 타이밍 팝업(13번): 화면 위쪽 가운데 — 바깥 흰 원이 줄어들어 안쪽 원과 겹치는 순간이 정타 */
   .timing-pop { position: absolute; left: 50%; top: calc(146px + env(safe-area-inset-top, 0px)); width: 112px; height: 112px; margin-left: -56px;
