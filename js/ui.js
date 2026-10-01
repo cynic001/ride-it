@@ -108,9 +108,11 @@ const LOGO = (small = false) => `
     <div class="logo-en">RIDE IT</div>
   </div>`;
 
-const GATE_GUIDE_RANGE = 0.5; // 게이트 가이드 막대 한쪽 끝 = ±0.5초
+// 부스트 타이밍 팝업(13번): 바깥 원 반지름 = POP_R0 × (1 − err / POP_RANGE) — err(지금 누르면 판정될 오차, 초)가 0인 순간 안쪽 원(POP_R0)과 겹침.
+// Good/Perfect 띠는 안쪽 원 둘레에 ±good/±perfect초에 해당하는 두께로 그림 → 판정값과 그림이 같은 식이라 어긋날 수 없음
+const POP_R0 = 30, POP_RANGE = 0.8; // viewBox 120 기준 반지름, 팝업이 뜨는 시점 = 중심 도달 0.8초 전
 const JUDGE_LABEL = { perfect: 'PERFECT!', good: 'GOOD', miss: 'MISS' };
-const GATE_LABEL = { boost: '부스트 게이트', finish: '피니쉬!' };
+const GATE_LABEL = { boost: 'BOOST', finish: 'FINISH' };
 
 /** 스피드 라인 — 화면 중앙은 비우고 가장자리에서 바깥으로 흐르는 선(만화식 집중선). 2D 캔버스 1장, CSS 픽셀 해상도라
  * DPR 3 기기에서도 부담 없음. 개수는 그래픽 프리셋(speedLineCount)으로 차등 */
@@ -543,9 +545,16 @@ const UI = {
         <div class="judge" id="judgeToast"></div>
         <div class="rb-overlay" id="rbOverlay"><div class="rb-title" id="rbTitle"></div>
           <div class="rb-gauge" id="rbGauge"><div class="rb-gauge-fill" id="rbGaugeFill"></div></div><div class="rb-sub" id="rbSub"></div></div>
-        <div class="guide gate" id="gateGuide">
-          <div class="guide-label" id="gateGuideLabel"></div>
-          <div class="guide-bar"><div class="guide-zone" id="gateZone"></div><div class="guide-zone perfect" id="gatePerfect"></div><div class="guide-center"></div><div class="guide-marker" id="gateMarker"></div></div>
+        <div class="timing-pop" id="gatePop">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="tp-bg" cx="60" cy="60" r="56"/>
+            <circle class="tp-good" id="gatePopGood" cx="60" cy="60" r="${POP_R0}"/>
+            <circle class="tp-perfect" id="gatePopPerfect" cx="60" cy="60" r="${POP_R0}"/>
+            <circle class="tp-target" cx="60" cy="60" r="${POP_R0}"/>
+            <circle class="tp-ring" id="gatePopRing" cx="60" cy="60" r="${POP_R0 * 2}"/>
+          </svg>
+          <span class="tp-label" id="gatePopLabel">BOOST</span>
+          <div class="tp-result" id="gatePopResult"></div>
         </div>
         <div class="guide balance" id="balanceGuide">
           <div class="guide-label">밸런스!</div>
@@ -573,7 +582,7 @@ const UI = {
       speed: $('speedLabel'), speedo: $('speedo'), comboMult: $('comboMult'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'),
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
       balance: $('balanceGuide'), balanceZone: $('balanceZone'), balancePerfect: $('balancePerfect'), balanceMin: $('balanceMin'), balanceMarker: $('balanceMarker'),
-      gate: $('gateGuide'), gateLabel: $('gateGuideLabel'), gateZone: $('gateZone'), gatePerfect: $('gatePerfect'), gateMarker: $('gateMarker'),
+      pop: $('gatePop'), popLabel: $('gatePopLabel'), popGood: $('gatePopGood'), popPerfect: $('gatePopPerfect'), popRing: $('gatePopRing'), popResult: $('gatePopResult'), popKey: null, popResultUntil: 0,
       judge: $('judgeToast'),
       rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
     };
@@ -623,15 +632,11 @@ const UI = {
       this.flashSignal('◀ ▶ 버튼으로');
     };
     window.addEventListener('control-fallback', this._fallbackHandler);
-    // 게이트 탭 판정 토스트(게이트 없는 곳의 탭 = 'none'은 표시하지 않음)
+    // 게이트 판정 결과 = 타이밍 팝업 자리에 크게(게이트 없는 곳의 탭 = 'none'은 표시하지 않음)
     this._gateHandler = e => {
       const { result } = e.detail;
       if (!JUDGE_LABEL[result] || !this._hud) return;
-      const j = this._hud.judge;
-      j.textContent = JUDGE_LABEL[result];
-      j.className = 'judge';
-      void j.offsetWidth; // 애니메이션 재시작
-      j.className = `judge show ${result}`;
+      this._showPopResult(result);
     };
     window.addEventListener('pull-progress', this._pullProgressHandler);
     window.addEventListener('cart-launched', this._launchedHandler);
@@ -658,6 +663,19 @@ const UI = {
       </div>
       <div class="ctl-right" id="ctlRight"><button class="ctl-btn boost" id="boostBtn">BOOST</button></div>
     </div>`;
+  },
+
+  /** 타이밍 팝업 자리에 판정 결과를 크게(0.7초) — PERFECT! / GOOD / MISS */
+  _showPopResult(result) {
+    const h = this._hud;
+    if (!h || !h.pop) return;
+    h.popKey = null;
+    h.popResult.textContent = JUDGE_LABEL[result];
+    h.popResult.className = `tp-result ${result}`;
+    h.pop.classList.add('on', 'result');
+    void h.popResult.offsetWidth;
+    h.popResult.classList.add('show');
+    h.popResultUntil = performance.now() + 700;
   },
 
   /** 게임을 멈추지 않는 짧은 신호(한두 단어) — 판정 토스트 자리 */
@@ -717,22 +735,28 @@ const UI = {
         h.balance.classList.remove('on');
       }
 
-      // 게이트 가이드(시간축): 가운데 = 게이트 중심 도달 순간, 좌우 끝 = ±GATE_GUIDE_RANGE초. 노랑 = Good(±good초),
-      // 초록 = Perfect(±perfect초), 마커 = "지금 탭하면 판정될 오차"(cart.gateTiming().err, 터치 지연 보정 포함) —
-      // 판정 함수와 같은 값을 그대로 그리므로 표시와 판정이 어긋날 수 없음
+      // 부스트 타이밍 팝업: 다가오는 게이트(중심까지 POP_RANGE초 이내)에서 등장, 바깥 원이 줄어 안쪽 원과 겹치는 순간 = 정타.
+      // err는 판정 함수(cart.gateTiming, 터치 지연 보정 포함)와 같은 값
       const g = cart.launched && !cart.rollback ? cart.gateTiming() : null;
-      if (g && g.timeTo <= GATE_GUIDE_RANGE * 1.6 && g.err <= GATE_ATTEMPT_RANGE) {
-        const toPct = sec => 50 + (sec / GATE_GUIDE_RANGE) * 50;
-        h.gateLabel.textContent = GATE_LABEL[g.type] || '';
-        h.gateZone.style.left = `${toPct(-g.good)}%`;
-        h.gateZone.style.right = `${100 - toPct(g.good)}%`;
-        h.gatePerfect.style.left = `${toPct(-g.perfect)}%`;
-        h.gatePerfect.style.right = `${100 - toPct(g.perfect)}%`;
-        h.gateMarker.style.left = `${Math.max(0, Math.min(100, toPct(g.err))).toFixed(1)}%`;
-        h.gate.classList.toggle('ready', Math.abs(g.err) <= g.good);
-        h.gate.classList.add('on');
+      const now = performance.now();
+      if (g && -g.err <= POP_RANGE + INPUT_LATENCY_OFFSET && g.err <= GATE_ATTEMPT_RANGE) {
+        const k = 2 * POP_R0 / POP_RANGE; // 초 → 띠 두께
+        h.popLabel.textContent = GATE_LABEL[g.type] || '';
+        h.popGood.setAttribute('stroke-width', (k * g.good).toFixed(2));
+        h.popPerfect.setAttribute('stroke-width', (k * g.perfect).toFixed(2));
+        const r = Math.max(3, POP_R0 * (1 - g.err / POP_RANGE));
+        h.popRing.setAttribute('r', r.toFixed(2));
+        h.pop.dataset.err = g.err.toFixed(4);
+        h.pop.classList.toggle('ready', Math.abs(g.err) <= g.good);
+        h.pop.classList.toggle('finish', g.type === 'finish');
+        if (h.popKey && h.popKey !== g.key && !cart._resolvedGates.has(h.popKey)) this._showPopResult('miss'); // 앞 게이트를 놓치고 바로 다음 게이트
+        if (now >= h.popResultUntil) { h.pop.classList.add('on'); h.pop.classList.remove('result'); }
+        h.popKey = g.key;
       } else {
-        h.gate.classList.remove('on');
+        // 팝업에 떠 있던 게이트를 누르지 않고 지나침 → MISS
+        if (h.popKey && !cart._resolvedGates.has(h.popKey) && cart.launched && !cart.rollback) this._showPopResult('miss');
+        h.popKey = null;
+        if (now >= h.popResultUntil) h.pop.classList.remove('on', 'result');
       }
     }
     // 뒤로 떨어지기 안내: 멈칫/뒤로 = 경고, 연타 = "연타!" + 힘 게이지, 자동 발사 = 부스터

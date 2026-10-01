@@ -305,13 +305,34 @@
   .guide-zone { position: absolute; top: 0; bottom: 0; background: rgba(255,184,13,.85); }
   .guide-marker { position: absolute; top: -3px; width: 8px; height: 16px; margin-left: -4px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 2px var(--navy); }
   .guide.balance { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); } /* 엄지 패드(150px) 바로 위 */
-  .guide.gate { top: calc(150px + env(safe-area-inset-top, 0px)); } /* 상단 버튼 줄(92~136px) 아래 */
   .guide-zone.perfect { background: var(--green); }
   .guide-zone.ok { background: rgba(255,184,13,.55); }
   .guide-minline { position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1.5px; background: #fff; box-shadow: 0 0 0 1px var(--navy); }
   .judge.small { font-size: 30px; }
   .guide-center { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: rgba(20,26,51,.7); }
-  .guide.gate.ready .guide-bar { border-color: var(--green); box-shadow: 0 0 10px rgba(61,220,132,.8); }
+
+  /* 부스트 타이밍 팝업(13번): 화면 위쪽 가운데 — 바깥 흰 원이 줄어들어 안쪽 원과 겹치는 순간이 정타 */
+  .timing-pop { position: absolute; left: 50%; top: calc(146px + env(safe-area-inset-top, 0px)); width: 112px; height: 112px; margin-left: -56px;
+    pointer-events: none; opacity: 0; transform: scale(.7); transition: opacity .15s ease, transform .2s var(--ease-pop); }
+  .timing-pop.on { opacity: 1; transform: none; }
+  .timing-pop svg { width: 100%; height: 100%; overflow: visible; }
+  .tp-bg { fill: rgba(20,26,51,.7); stroke: rgba(255,255,255,.5); stroke-width: 2; }
+  .tp-good { fill: none; stroke: rgba(255,184,13,.75); }
+  .tp-perfect { fill: none; stroke: var(--green); }
+  .tp-target { fill: none; stroke: #fff; stroke-width: 1.5; stroke-dasharray: 3 3; }
+  .tp-ring { fill: none; stroke: #fff; stroke-width: 4; filter: drop-shadow(0 0 2px rgba(20,26,51,.9)); }
+  .timing-pop.ready .tp-ring { stroke: var(--yellow); }
+  .timing-pop.ready .tp-bg { stroke: var(--green); stroke-width: 4; }
+  .timing-pop.finish .tp-bg { fill: rgba(80,20,60,.6); }
+  .tp-label { position: absolute; left: -20px; right: -20px; top: 100%; margin-top: 2px; text-align: center; font-size: 15px; line-height: 18px; color: #fff;
+    -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; }
+  .tp-result { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-size: 38px; opacity: 0;
+    -webkit-text-stroke: 6px var(--navy); paint-order: stroke fill; }
+  .tp-result.show { animation: judgePopC .7s var(--ease-pop) forwards; }
+  .tp-result.perfect { color: var(--yellow); } .tp-result.good { color: var(--green); } .tp-result.miss { color: var(--red); }
+  .timing-pop.result svg, .timing-pop.result .tp-label { opacity: 0; }
+  @keyframes judgePopC { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.4); } 25% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+    70% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(1); } }
 
   /* 스타트 바: 엄지가 닿는 하단 중앙 세로 레일 — 아래로 당겨 충전, 위로 튕겨 발사 */
   .start-bar {

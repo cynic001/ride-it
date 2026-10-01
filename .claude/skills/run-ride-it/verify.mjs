@@ -296,16 +296,20 @@ async function main() {
           if (c.isFinished) return null;
         }
         UI.updateHUD(c, Game.track);
-        const L = id => parseFloat(document.getElementById(id).style.left);
-        return { err: g.err, type: g.type, marker: L('gateMarker'), expMarker: 50 + g.err / 0.5 * 50, zone: L('gateZone'), expZone: 50 - g.good / 0.5 * 50,
-          perf: L('gatePerfect'), expPerf: 50 - g.perfect / 0.5 * 50, on: document.getElementById('gateGuide').classList.contains('on'), n: c._gateResults.length };
+        const A = (id, k) => parseFloat(document.getElementById(id).getAttribute(k));
+        return { err: g.err, type: g.type, good: g.good, perfect: g.perfect, ring: A('gatePopRing', 'r'), expRing: 30 * (1 - g.err / 0.8),
+          goodW: A('gatePopGood', 'stroke-width'), perfW: A('gatePopPerfect', 'stroke-width'), on: document.getElementById('gatePop').classList.contains('on'), n: c._gateResults.length };
       });
       if (gg) {
+        if (s === STAGES[0]) await shot(`${tag}_2c_timing_pop`);
         await page.mouse.click(px, py);
         const res = await page.evaluate(() => { const r = Game.cart._gateResults; return r.length ? r[r.length - 1].result : 'none'; });
-        check(`${tag} gate guide matches timing judge`, gg.on && Math.abs(gg.marker - gg.expMarker) < 0.6 && Math.abs(gg.zone - gg.expZone) < 0.2 && Math.abs(gg.perf - gg.expPerf) < 0.2,
-          `err=${gg.err.toFixed(3)}s marker=${gg.marker}%/${gg.expMarker.toFixed(1)}% good=${gg.zone}%/${gg.expZone.toFixed(1)}% perfect=${gg.perf}%/${gg.expPerf.toFixed(1)}%`);
-        check(`${tag} tap at guide center → perfect`, res === 'perfect', `${gg.type} → ${res}`);
+        await sleep(120);
+        const shown = await page.evaluate(() => document.getElementById('gatePopResult').textContent);
+        if (s === STAGES[0]) await shot(`${tag}_2d_pop_result`);
+        check(`${tag} timing popup matches timing judge`, gg.on && Math.abs(gg.ring - gg.expRing) < 0.05 && Math.abs(gg.goodW - 75 * gg.good) < 0.02 && Math.abs(gg.perfW - 75 * gg.perfect) < 0.02,
+          `err=${gg.err.toFixed(3)}s ring=${gg.ring}/${gg.expRing.toFixed(2)} good=${gg.goodW} perfect=${gg.perfW}`);
+        check(`${tag} BOOST at ring overlap → perfect, shown in popup`, res === 'perfect' && shown === 'PERFECT!', `${gg.type} → ${res} / "${shown}"`);
       }
       await page.evaluate(() => { if (!Game.cart.isFinished) { Game.lastTime = performance.now(); Game.engine.runRenderLoop(() => Game._loop()); } });
 
