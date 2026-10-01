@@ -282,7 +282,7 @@ const AudioManager = {
     osc2.start();
   },
 
-  /** main.js가 매 고정 스텝마다 (currentSegment.airtimeZone && cart.airtimeHolding)로 호출 */
+  /** 손 들기(에어타임) 지속음 — 13번에서 손 들기 제거로 호출하는 곳 없음(소리 합성 코드는 보관) */
   setAirtimeHold(active) {
     if (!this._ready() || !this._airtimeGain || active === this._airtimeActive) return;
     this._airtimeActive = active;

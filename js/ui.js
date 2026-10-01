@@ -348,26 +348,23 @@ const UI = {
   showHowTo(onClose) {
     const item = (ico, title, desc) => `<div class="howto-item"><span class="ico">${ico}</span><span><b>${title}</b><span>${desc}</span></span></div>`;
     const mode = ControlSettings.mode;
-    const drive = {
-      onehand: item(ICONS.swipe, '한손 모드(현재)', '하단 패드를 좌우로 밀면 밸런스 · 톡 = 부스트 · 꾹 = 손 들기'),
-      tilt: item(ICONS.swipe, '한손 + 기울기(현재)', '폰을 좌우로 기울여 밸런스 · 패드 톡 = 부스트 · 꾹 = 손 들기'),
-      twohand: item(ICONS.swipe, '양손 모드(현재)', '왼쪽 ◀ ▶ = 밸런스 · 오른쪽 BOOST = 부스트 · 손 들기 버튼 = 에어타임'),
-    }[mode];
+    const drive = mode === 'tilt'
+      ? item(ICONS.swipe, '기울기(현재)', '양손으로 폰을 잡고 좌우로 기울여 밸런스 · 오른쪽 아래 BOOST = 부스트')
+      : item(ICONS.swipe, '양손 버튼', '왼쪽 아래 ◀ ▶ = 밸런스(누르고 있으면 0.3초에 끝까지, 톡톡 = 중간) · 오른쪽 아래 BOOST = 부스트');
     const el = this._modal('howtoOverlay', `
       <h2>조작법</h2>
       <div class="howto-list">
         ${item(ICONS.arrowUp, '출발', '하단 바를 아래로 당겼다가 위로 휙 밀어 올리기 — 많이 당기고 빨리 올릴수록 세게')}
         ${drive}
         ${item(ICONS.tap, '부스트 게이트', '링을 지나는 순간 부스트 — 게이지 가운데 초록일 때 Perfect, 오래 세게 가속')}
-        ${item(ICONS.hand, '손 들기', '무중력 구간·체인 리프트에서 누르고 있으면 보너스')}
         ${item(ICONS.retry, '뒤로 떨어지기', '가파른 언덕에서 뒤로 미끄러질 수 있어요! 1단계는 부스터가 다시 쏴 주고, 4단계는 부스트 연타(톡톡·BOOST·↑)로 올라가요')}
         ${item(ICONS.camera, '시점', '3인칭(기본)은 부스트·급하강 때 자동으로 1인칭 — 설정에서 1인칭 고정도 가능, 카메라 버튼은 잠깐 전환')}
         <div class="howto-item legend"><span><b>바닥 표시</b><span class="legend-row">
-          <i style="background:#ffc61a"></i>부스트 <i style="background:#73d1ff"></i>손 들기 <i style="background:#59ff8c"></i>커브 방향
+          <i style="background:#ffc61a"></i>부스트 <i style="background:#59ff8c"></i>커브 방향
           <i style="background:#ff801a"></i>급하강·물 <i style="background:#ff4099"></i>뒤로 떨어짐(2랩부터)</span></span></div>
-        ${item(ICONS.sparkle, '키보드', '출발 ↓ 누르고 있다가 ↑ · 주행 ← → 밸런스, ↑ 부스트, Space 손 들기')}
+        ${item(ICONS.sparkle, '키보드', '출발 ↓ 누르고 있다가 ↑ · 주행 ← → 밸런스, ↑ 또는 Space 부스트')}
       </div>
-      <p class="field-desc">조작 방식(한손 / 한손+기울기 / 양손)은 설정(톱니바퀴)에서 바꿀 수 있어요.</p>
+      <p class="field-desc">밸런스를 기울기로 하려면 설정(톱니바퀴) → 밸런스 조작 → 기울기</p>
       <div class="actions"><button id="howtoCloseBtn" class="btn primary wide">알겠어요!</button></div>
     `, { solid: true });
     document.getElementById('howtoCloseBtn').addEventListener('click', () => {
@@ -546,7 +543,6 @@ const UI = {
         <div class="judge" id="judgeToast"></div>
         <div class="rb-overlay" id="rbOverlay"><div class="rb-title" id="rbTitle"></div>
           <div class="rb-gauge" id="rbGauge"><div class="rb-gauge-fill" id="rbGaugeFill"></div></div><div class="rb-sub" id="rbSub"></div></div>
-        <div class="lift-hint" id="liftHint">체인 리프트 · 꾹 눌러 손 들기 보너스!</div>
         <div class="guide gate" id="gateGuide">
           <div class="guide-label" id="gateGuideLabel"></div>
           <div class="guide-bar"><div class="guide-zone" id="gateZone"></div><div class="guide-zone perfect" id="gatePerfect"></div><div class="guide-center"></div><div class="guide-marker" id="gateMarker"></div></div>
@@ -578,7 +574,7 @@ const UI = {
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
       balance: $('balanceGuide'), balanceZone: $('balanceZone'), balancePerfect: $('balancePerfect'), balanceMin: $('balanceMin'), balanceMarker: $('balanceMarker'),
       gate: $('gateGuide'), gateLabel: $('gateGuideLabel'), gateZone: $('gateZone'), gatePerfect: $('gatePerfect'), gateMarker: $('gateMarker'),
-      judge: $('judgeToast'), liftHint: $('liftHint'),
+      judge: $('judgeToast'),
       rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
     };
 
@@ -753,28 +749,21 @@ const UI = {
         h.rbSub.textContent = ControlSettings.mode === 'twohand' ? `BOOST 연타! ${left.toFixed(1)}초` : `톡톡 연타! (↑ 연타) ${left.toFixed(1)}초`;
       } else h.rbSub.textContent = rb.phase === 'launch' ? '' : '꽉 잡아!';
     }
-    if (h.liftHint) h.liftHint.classList.toggle('on', cart.launched && cart.onChainLift); // 멈칫(정상)은 랩 아치 직후라 LAP 표시와 겹치지 않게 제외
     h.cameraBtn.disabled = !cart.launched;
     h.pauseBtn.disabled = !cart.launched;
   },
 
-  /** 결과 판정 요약 — 랭크는 "판정 점수"(게이트+커브 밸런스 기본 점수) ÷ 그 스테이지 만점 비율.
-   * 에어타임은 초당 점수라 느리게 갈수록 쌓여(완벽 플레이보다 평균 플레이가 높아지는 역전) 랭크에서 제외하고,
-   * 콤보/피니쉬 배율도 제외해 순수 판정 실력만 반영. 기준은 score-sim.mjs 시뮬레이션으로 정함(개발기록 27번) */
+  /** 결과 판정 요약 — 랭크는 cart.judgeSummary()(판정 항목만 만점 대비 비율, score-sim과 같은 함수) */
   _summarize(cart, stageData) {
     const bt = cart.balanceTicks;
     const bTotal = bt.perfect + bt.good + bt.miss;
     const balanceAcc = bTotal ? (bt.perfect + bt.good) / bTotal : 1;
     const gates = { perfect: 0, good: 0, miss: 0 };
     cart._gateResults.forEach(g => { gates[g.result] += 1; });
-    const gateCount = cart.track.gateCenters().length * cart.totalLaps; // 못 누른 게이트도 실패로 취급(뒤로 떨어지기 구간 안 게이트는 제외)
-    const curveCount = stageData.segments.filter(s => s.requiredLean > 0).length * cart.totalLaps;
-    const judgeMax = gateCount * SCORE.gate.perfect + curveCount * SCORE.balancePerCurve;
-    const judgeRatio = judgeMax ? (cart.scoreBreakdown.gate + cart.scoreBreakdown.balance) / judgeMax : 1;
-    const rank = judgeRatio >= 0.9 ? 'S' : judgeRatio >= 0.7 ? 'A' : judgeRatio >= 0.45 ? 'B' : 'C';
+    const j = cart.judgeSummary();
     return {
-      rank, balanceAcc, gates, judgeRatio, curveCount, curvesCleared: cart.curvesCleared || 0,
-      gateMissed: Math.max(0, gateCount - gates.perfect - gates.good - gates.miss),
+      rank: j.rank, balanceAcc, gates, judgeRatio: j.ratio, curveCount: j.curves, curvesCleared: cart.curvesCleared || 0,
+      gateMissed: Math.max(0, j.gates - gates.perfect - gates.good - gates.miss),
     };
   },
 
@@ -799,7 +788,6 @@ const UI = {
               ['게이트', bd.gate],
               [`밸런스 (커브 ${sum.curvesCleared}/${sum.curveCount})`, bd.balance],
               [`밸런스 Perfect ×${cart.balancePerfects}`, bd.balancePerfect],
-              ['에어타임', bd.airtime],
               ['콤보 보너스', bd.comboBonus],
               ...(bd.finishBonus > 0 ? [['피니쉬 보너스', bd.finishBonus]] : []),
               ...(bd.mashBonus > 0 ? [['연타 보너스', bd.mashBonus]] : []),

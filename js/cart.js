@@ -37,7 +37,6 @@ const SCORE = {
   balanceClearRatio: 0.7,   // 그 커브 구간 틱 중 성공(최소 기울기 이상) 비율이 이 이상이면 성공
   balancePerfect: 50,       // 목표 기울기 ±perfectRange를 구간의 balancePerfectRatio 이상 유지하면 추가(랭크 계산에서는 제외)
   balancePerfectRatio: 0.6,
-  airtimePerMeter: 4.4,     // 홀드한 채 달린 거리 1m당 — 완벽 플레이 에어타임 총량(전 스테이지 합 약 8,400)이 시간 기준(초당 120) 시절과 같도록 맞춘 계수
 };
 // 게이트 판정(시간 기준): 모바일 터치 지연 보정 — 탭 이벤트가 실제 손가락 접촉보다 약 이만큼 늦게 도착한다고 보고
 // 판정 시각을 앞당겨 계산. 기기별 체감이 다르면 이 값 하나만 조정
@@ -45,6 +44,8 @@ const INPUT_LATENCY_OFFSET = 0.05; // 초
 // 게이트 중심 도달 시각과의 차이가 이 범위(초) 밖인 탭은 판정 자체를 하지 않음(엉뚱한 탭으로 게이트를 날리지 않도록)
 const GATE_ATTEMPT_RANGE = 0.4;
 const FINISH_MULTIPLIER = { perfect: 1.5, good: 1.2, miss: 1.0 };
+// 랭크 기준(판정 비율, judgeSummary) — score-sim.mjs 평균 실력 분포로 정함(개발기록)
+const RANK_THRESHOLDS = { S: 0.9, A: 0.7, B: 0.45 };
 
 class Cart {
   /**
@@ -65,7 +66,6 @@ class Cart {
     this.combo = 0;
     this.score = 0;
     this.leanInput = 0;        // -1(좌) ~ 1(우), input.js에서 갱신
-    this.airtimeHolding = false; // 손들기 입력 상태
 
     this._lastHeight = null;
     this._gateResults = [];    // 게이트 판정 기록 (디버그/리더보드용)
@@ -81,10 +81,9 @@ class Cart {
     this.assistTime = 0;      // 보조 추진이 걸린 시간(초) — 결과 화면 통계
     this.rideTime = 0;
     this.lowSpeedTime = 0;    // 기본 속도 70% 미만으로 달린 시간(밸런싱 지표)
-    this.airtimeDistance = 0;
     this.atSpeedCap = false;  // HUD 강조용
     // 점수 원천별 내역 — 콤보 배율로 늘어난 몫은 comboBonus로 따로 집계(합계 = score)
-    this.scoreBreakdown = { gate: 0, balance: 0, balancePerfect: 0, airtime: 0, comboBonus: 0, finishBonus: 0, mashBonus: 0 };
+    this.scoreBreakdown = { gate: 0, balance: 0, balancePerfect: 0, comboBonus: 0, finishBonus: 0, mashBonus: 0 };
     this.balancePerfects = 0;
     // 스테이지별 밸런스 난이도 — 없으면 캐주얼 기본값
     this.balanceRule = track.stageData.balance || { minLean: 0.2, perfectRange: 0.15 };
@@ -118,7 +117,6 @@ class Cart {
   _startRollback(rz) {
     this._rbLap = this.currentLap;
     this.boostRemaining = 0; this.boostAccel = 0;
-    this.airtimeHolding = false;
     this.rollback = { phase: 'stall', time: 0, mode: rz.mode, zone: rz, gauge: 0, taps: 0, mashTime: 0 };
     window.dispatchEvent(new CustomEvent('rollback', { detail: { phase: 'stall', mode: rz.mode } }));
   }
@@ -274,7 +272,7 @@ class Cart {
     if (this.rollback) {
       this._updateRollback(dt, trackLength);
       this.rideTime += dt;
-      return; // 뒤로 떨어지는 동안은 밸런스/게이트/에어타임 판정 없음(억울한 실패 방지)
+      return; // 뒤로 떨어지는 동안은 밸런스/게이트 판정 없음(억울한 실패 방지)
     }
     const currentHeight = this.track.getHeightAt(this.t);
 
@@ -361,14 +359,6 @@ class Cart {
     this.maxCombo = Math.max(this.maxCombo, this.combo);
     this.maxSpeed = Math.max(this.maxSpeed, this.speed);
 
-    // 에어타임(손들기) 보너스
-    // 에어타임(손들기) 보너스 — 홀드한 채 달린 거리 기준(시간 기준이면 느리게 갈수록 점수가 쌓이는 역전이 생김)
-    // 체인 리프트에서도 손 들기 보너스(오르막 볼거리)
-    if ((seg.airtimeZone || this.onChainLift) && this.airtimeHolding) {
-      this._addScore('airtime', SCORE.airtimePerMeter * this._stepDistance);
-      this.airtimeDistance += this._stepDistance;
-    }
-
     // 게이트 판정은 input.js의 탭 이벤트에서 별도 처리 (타이밍 윈도우 대조)
   }
 
@@ -443,6 +433,21 @@ class Cart {
       this.scoreBreakdown.finishBonus += this.score * (multiplier - 1);
       this.score *= multiplier;
     }
+  }
+
+  /** 랭크용 판정 비율(UI 결과 화면·score-sim 공용 단일 소스) — 실력이 드러나는 판정 항목만 만점 대비로:
+   * 게이트(부스트·피니쉬, 개당 Perfect 300) + 커브 밸런스(Good 100 / Perfect 150) + 뒤로 떨어지기 연타(빨리 오를수록 0~300, 2초 이내 만점, 도움 받으면 0).
+   * 콤보는 같은 판정에서 파생되는 배율이라, 피니쉬 배율·연타 보너스 점수 자체는 총점을 키우는 쪽이라 비율에는 넣지 않음(13번) */
+  judgeSummary() {
+    const curves = this.track.stageData.segments.filter(s => s.requiredLean > 0 && !this.track.inRollbackZone(s.tStart)).length * this.totalLaps;
+    const gates = this.track.gateCenters().length * this.totalLaps;
+    const rz = this.track.rollbackZone;
+    const mashes = rz && rz.mode === 'mash' ? this.totalLaps : 0;
+    const mashScore = this.rollbackLog.filter(x => x.mode === 'mash').reduce((a, x) => a + 300 * Math.min(1, x.bonus / ((ROLLBACK.mashTimeout - 2) * ROLLBACK.bonusPerSec)), 0); // 2초 안에 오르면 만점
+    const max = gates * SCORE.gate.perfect + curves * (SCORE.balancePerCurve + SCORE.balancePerfect) + mashes * 300;
+    const got = this.scoreBreakdown.gate + this.scoreBreakdown.balance + this.scoreBreakdown.balancePerfect + mashScore;
+    const ratio = max ? got / max : 1;
+    return { ratio, rank: ratio >= RANK_THRESHOLDS.S ? 'S' : ratio >= RANK_THRESHOLDS.A ? 'A' : ratio >= RANK_THRESHOLDS.B ? 'B' : 'C', curves, gates };
   }
 
   get isFinished() {

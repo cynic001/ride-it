@@ -68,8 +68,8 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
         curveIn = seg.requiredLean > 0 && !tr.inRollbackZone(seg.tStart) ? { i: tr.segmentRanges.indexOf(seg), t0: time } : null;
         segKey = key;
         plan = model === 'perfect'
-          ? { good: true, hold: seg.airtimeZone }
-          : { good: r() < 0.75, hold: seg.airtimeZone && r() < 0.6 };
+          ? { good: true }
+          : { good: r() < 0.75 };
         plan.modulate = model === 'perfect' || r() < 0.2; // 버튼/키: 톡톡 눌러 목표 근처를 맞추는 커브 비율
         plan.pressOn = true; plan.pressUntil = 0;
       }
@@ -107,7 +107,6 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
         const follow = DEVICE === 'tilt' ? 6 : 18;
         cart.leanInput = model === 'perfect' ? desired : cart.leanInput + (desired - cart.leanInput) * (1 - Math.exp(-follow / 60));
       }
-      cart.airtimeHolding = plan.hold;
       if (cart.rollback && cart.rollback.phase === 'mash') { mashAcc += mashRate / 60; while (mashAcc >= 1) { mashAcc -= 1; cart.mashTap(); } }
       cart.update(1 / 60);
       if (cart._crestHold > 0 && !wasHold) crests += 1; wasHold = cart._crestHold > 0; // 체인 리프트 정상 멈칫 횟수
@@ -116,7 +115,6 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
       if (cart.speed <= 2.05) stag += 1 / 60;
       if (tr.getTangentAt(cart.t).y > 0.12) climb += 1 / 60; // 오르막 체류 시간
     }
-    const judgeMax = (tr.gateCenters().length * 300 + sd.segments.filter(g => g.requiredLean > 0).length * 100) * LAPS;
     const gTotal = tr.gateCenters().length * LAPS;
     const gc = { perfect: 0, good: 0, miss: 0 };
     cart._gateResults.forEach(x => { gc[x.result] += 1; });
@@ -125,7 +123,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
     for (let k = 1; k < hits.length; k++) minGap = Math.min(minGap, hits[k] - hits[k - 1]);
     const mash = cart.rollbackLog.filter(x => x.mode === 'mash');
     const curveN = sd.segments.filter(g => g.requiredLean > 0).length * LAPS;
-    return { curveSecs, crests, curveRate: (cart.curvesCleared || 0) / curveN, perfectRate: cart.balancePerfects / curveN, mashSec: mash.length ? mash[0].climbSec : null, mashAssisted: mash.some(x => x.assisted), mashBonus: cart.scoreBreakdown.mashBonus, climb, minGap, gc, gTotal, jr: (cart.scoreBreakdown.gate + cart.scoreBreakdown.balance) / judgeMax, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, airDist: cart.airtimeDistance, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
+    return { curveSecs, crests, curveRate: (cart.curvesCleared || 0) / curveN, perfectRate: cart.balancePerfects / curveN, mashSec: mash.length ? mash[0].climbSec : null, mashAssisted: mash.some(x => x.assisted), mashBonus: cart.scoreBreakdown.mashBonus, climb, minGap, gc, gTotal, jr: cart.judgeSummary().ratio, rank: cart.judgeSummary().rank, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
   }
 
   return STAGES.map((sd, i) => {
@@ -140,7 +138,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
     const round = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Math.round(v)]));
     return {
       stage: i + 1, climbs,
-      perfect: { curveSecs: perfect.curveSecs.map(x => x.sec), crests: perfect.crests, curveRate: +perfect.curveRate.toFixed(2), perfectRate: +perfect.perfectRate.toFixed(2), mashSec: perfect.mashSec === null ? null : +perfect.mashSec.toFixed(2), climbSec: +perfect.climb.toFixed(1), minEventGapSec: +perfect.minGap.toFixed(2), gatePGM: [perfect.gc.perfect, perfect.gc.good, perfect.gc.miss], judgeRatio: +perfect.jr.toFixed(2), lowRatio: +perfect.low.toFixed(3), assistRatio: +perfect.assist.toFixed(3), airDist: Math.round(perfect.airDist), score: Math.round(perfect.score), bd: round(perfect.bd), timeSec: +perfect.time.toFixed(1), stagSec: +perfect.stag.toFixed(1), vmaxKmh: Math.round(perfect.vmax), capKmh: Math.round(perfect.cap), maxCombo: perfect.maxCombo },
+      perfect: { curveSecs: perfect.curveSecs.map(x => x.sec), crests: perfect.crests, curveRate: +perfect.curveRate.toFixed(2), perfectRate: +perfect.perfectRate.toFixed(2), mashSec: perfect.mashSec === null ? null : +perfect.mashSec.toFixed(2), climbSec: +perfect.climb.toFixed(1), minEventGapSec: +perfect.minGap.toFixed(2), gatePGM: [perfect.gc.perfect, perfect.gc.good, perfect.gc.miss], judgeRatio: +perfect.jr.toFixed(2), lowRatio: +perfect.low.toFixed(3), assistRatio: +perfect.assist.toFixed(3), score: Math.round(perfect.score), bd: round(perfect.bd), timeSec: +perfect.time.toFixed(1), stagSec: +perfect.stag.toFixed(1), vmaxKmh: Math.round(perfect.vmax), capKmh: Math.round(perfect.cap), maxCombo: perfect.maxCombo },
       average: {
         score: Math.round(mean(x => x.score)),
         min: Math.round(Math.min(...avgRuns.map(x => x.score))),
@@ -148,10 +146,10 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
         ratio: +(mean(x => x.score) / perfect.score).toFixed(2),
         gatePGM: ['perfect', 'good', 'miss'].map(k => +(avgRuns.reduce((a, x) => a + x.gc[k], 0) / avgRuns.reduce((a, x) => a + x.gTotal, 0)).toFixed(2)),
         judgeRatio: +mean(x => x.jr).toFixed(2), judgeRatioP: (() => { const v = avgRuns.map(x => x.jr).sort((a, b) => a - b); return [0.2, 0.5, 0.8].map(q => +v[Math.min(v.length - 1, Math.floor(q * v.length))].toFixed(2)); })(), // p20/p50/p80
-        rankDist: (() => { const c = { S: 0, A: 0, B: 0, C: 0 }; avgRuns.forEach(x => { c[x.jr >= 0.9 ? 'S' : x.jr >= 0.7 ? 'A' : x.jr >= 0.45 ? 'B' : 'C'] += 1; }); return c; })(),
+        rankDist: (() => { const c = { S: 0, A: 0, B: 0, C: 0 }; avgRuns.forEach(x => { c[x.rank] += 1; }); return c; })(),
         ratioMin: +(Math.min(...avgRuns.map(x => x.score)) / perfect.score).toFixed(2),
         ratioMax: +(Math.max(...avgRuns.map(x => x.score)) / perfect.score).toFixed(2),
-        bd: round({ gate: mean(x => x.bd.gate), balance: mean(x => x.bd.balance), airtime: mean(x => x.bd.airtime), comboBonus: mean(x => x.bd.comboBonus), finishBonus: mean(x => x.bd.finishBonus) }),
+        bd: round({ gate: mean(x => x.bd.gate), balance: mean(x => x.bd.balance), mashBonus: mean(x => x.bd.mashBonus), balancePerfect: mean(x => x.bd.balancePerfect), comboBonus: mean(x => x.bd.comboBonus), finishBonus: mean(x => x.bd.finishBonus) }),
         lowRatio: +mean(x => x.low).toFixed(3), lowRatioMax: +Math.max(...avgRuns.map(x => x.low)).toFixed(3), assistRatio: +mean(x => x.assist).toFixed(3), overPerfect: avgRuns.filter(x => x.score > perfect.score).length,
         climbSec: +mean(x => x.climb).toFixed(1), crests: +mean(x => x.crests).toFixed(2), curveSecMin: +Math.min(...avgRuns.flatMap(x => x.curveSecs.map(c => c.sec))).toFixed(2),
         curveRate: +mean(x => x.curveRate).toFixed(2), perfectRate: +mean(x => x.perfectRate).toFixed(2),

@@ -344,7 +344,6 @@ class Track {
     makeGroup('drop', 'stripes', [1, 0.5, 0.1], [1.4, 1.2], false);
     makeGroup('curveL', 'left', [0.35, 1, 0.55], [1.2, 1.0], false);
     makeGroup('curveR', 'right', [0.35, 1, 0.55], [1.2, 1.0], false);
-    makeGroup('air', 'hand', [0.45, 0.82, 1], [1.4, 1.2], false);
 
     const occupied = [];
     const up = isHanging ? -0.08 : railTopY + 0.05;
@@ -362,7 +361,7 @@ class Track {
       this._meshes.push(inst);
     };
     const step = (t0, t1, spacing, g) => { for (let s = t0 * L; s <= t1 * L; s += spacing) add(g, s / L); };
-    // 우선순위 순서대로 배치: 부스트 > 뒤로 떨어지기 > 급하강/물 > 커브 > 에어타임
+    // 우선순위 순서대로 배치: 부스트 > 뒤로 떨어지기 > 급하강/물 > 커브 (손 들기 하늘색 띠는 13번에서 제거)
     this.gateCenters().filter(x => x.type === 'boost').forEach(({ t }) => step(t - 20 / L, t + 40 / L, 3, groups.boost));
     if (this.rollbackZone) step(this.rollbackZone.tValley, this.rollbackZone.tPeak, 3, groups.rollback);
     const S = this._sampleLoop(2.5);
@@ -371,7 +370,6 @@ class Track {
     this.segmentRanges.forEach(seg => {
       if (seg.requiredLean > 0) step(seg.tStart, Math.min(seg.tEnd, seg.tStart + 30 / L), 4, seg.curveDirection === 'left' ? groups.curveL : groups.curveR);
     });
-    this.segmentRanges.forEach(seg => { if (seg.airtimeZone) step(seg.tStart, seg.tEnd, 6, groups.air); });
     groups.rollback.list.forEach(({ inst }) => inst.setEnabled(false)); // 매 플레이 첫 랩은 숨김
     this._markerGroups = Object.values(groups);
     this._rollbackMarkers = groups.rollback.list.map(x => x.inst);

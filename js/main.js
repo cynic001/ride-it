@@ -92,7 +92,6 @@ const Game = {
     this.paused = true;
     this.engine.stopRenderLoop();
     AudioManager.updateWind(0);
-    AudioManager.setAirtimeHold(false);
     AudioManager.setBgmMode('pause');
     SpeedLines.draw(0, 0);
     if (this._vignette) this._vignette.style.opacity = '0';
@@ -114,7 +113,6 @@ const Game = {
     this.paused = false;
     this.engine.stopRenderLoop();
     AudioManager.updateWind(0);
-    AudioManager.setAirtimeHold(false);
     if (this.cartMesh) {
       this.cartMesh.dispose();
       this.cartMesh = null;
@@ -355,8 +353,6 @@ const Game = {
 
     const diveNow = Math.max(0, -this.track.getTangentAt(this.cart.t).y - 0.2);
     AudioManager.updateWind(this.cart.speed / this.cart.maxSpeedMs, Math.min(1, diveNow * 1.6));
-    const currentSeg = this.track.getSegmentAt(this.cart.t);
-    AudioManager.setAirtimeHold(currentSeg.airtimeZone && this.cart.airtimeHolding);
 
     this._updateRideSounds();
     const ty = this.track.getTangentAt(this.cart.t).y;
@@ -370,7 +366,6 @@ const Game = {
       SpeedLines.draw(0, 0);
       if (this._vignette) this._vignette.style.opacity = '0';
       AudioManager.updateWind(0);
-      AudioManager.setAirtimeHold(false);
       this.camera.unlockToggle(); // 이미 풀려있겠지만 안전장치
       AudioManager.setBgmMode('menu');
       UI.showResult(this.cart, this.currentStageIndex);

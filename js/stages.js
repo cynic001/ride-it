@@ -20,7 +20,8 @@
  *   커브 진입과 0.3초 차이로 겹쳐 반응할 수 없었음(최소 간격 0.6초 기준). 중앙이면 앞뒤로 0.6초 이상 확보.
  *   피니쉬 게이트는 전부 timingWindow {0.6, 0.8}(중심 0.7) — 예전 값(중심 0.925~0.95)은 트랙 끝까지 0.1초 남짓이라
  *   늦게 누를 여유가 없어 시간 기준 판정에서 늦은 탭이 전부 Miss가 됐음
- * segment.airtimeZone: boolean (해당 구간에서 손들기 입력 시 에어타임 보너스)
+ * segment.airtimeZone: boolean — 무중력(에어타임) 언덕 구간 표시. 손 들기 점수는 13번에서 제거, 지금은 체인 리프트 검출에서
+ *   짧은 에어타임 언덕을 빼는 데만 씀(track.js _findLiftZones)
  *
  * railType: 'mouse' | 'hanging' | 'monorail' | 'steel' | 'wood' — Kenney Coaster Kit(CC0)의 트랙 패밀리.
  *   track.js가 assets/vendor/kenney-coaster-kit/coaster-<type>-track.glb(1m 반복 타일)를 커브를 따라
