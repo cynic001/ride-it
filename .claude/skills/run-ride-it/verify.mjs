@@ -486,6 +486,28 @@ async function multiTouchTest(browser, base, pageErrors) {
     const f = await st();
     await tp.keyboard.up('ArrowLeft');
     check('keys: hold ← + press ↑ → lean left kept, 1 boost', f.lean < -0.99 && f.boosts === n0 + 1, JSON.stringify(f));
+    // H) 회전(13번 2-6): ▶를 누른 채 가로로 → 눌려 있던 입력 안전 해제, 조작은 양쪽 끝(가운데 150px 이상 비움), 겹침·화면 밖 없음, 회전 안내 없음
+    const layout = () => tp.evaluate(() => {
+      const r = el => { const b = (typeof el === 'string' ? document.querySelector(el) : el).getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
+      const box = { L: r('#leanLeftBtn'), R: r('#leanRightBtn'), B: r('#boostBtn'), G: r('#balGauge'), P: r('#gatePop'), C: r('.hud-controls'), T: r('.hud-row') };
+      const W = innerWidth, H = innerHeight;
+      const hit = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+      const inView = Object.values(box).every(x => x.l >= 0 && x.t >= 0 && x.r <= W && x.b <= H);
+      const overlaps = [['P', 'C'], ['P', 'T'], ['G', 'B'], ['R', 'B'], ['G', 'P']].filter(([a, b]) => hit(box[a], box[b])).map(x => x.join(''));
+      return { W, H, gap: Math.round(box.B.l - box.R.r), inView, overlaps, rotate: !!document.getElementById('rotateWarning') };
+    });
+    await down(0, ...R); await sleep(350);
+    await tp.setViewportSize({ width: 667, height: 375 }); await sleep(600);
+    const h1 = await st();
+    const lay = await layout();
+    await tp.evaluate(() => { const c = Game.cart, g = Game.track.gateCenters()[0]; c.t = g.t - 0.006; Cart.speedScale = 0; c.leanInput = 0.6; Game._fixedUpdate(1 / 60); UI.updateHUD(c, Game.track); });
+    await sleep(250);
+    await tp.screenshot({ path: path.join(OUT, 'touch_landscape.png') });
+    check('rotate: held ▶ released on rotation, landscape layout OK', Math.abs(h1.lean) < 0.01 && !h1.pressed && lay.inView && !lay.overlaps.length && lay.gap >= 150 && !lay.rotate, `${JSON.stringify(h1)} ${JSON.stringify(lay)}`);
+    await up(0);
+    await tp.setViewportSize({ width: 375, height: 667 }); await sleep(500);
+    const lay2 = await layout();
+    check('rotate back: portrait layout OK', lay2.inView && !lay2.overlaps.length && lay2.gap >= 60, JSON.stringify(lay2));
     await tp.screenshot({ path: path.join(OUT, 'touch_multi.png') });
   } catch (err) {
     check('multi-touch flow', false, err.message.split('\n')[0]);

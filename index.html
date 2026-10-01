@@ -464,16 +464,20 @@
     font-family: inherit; font-size: 14px; box-shadow: 0 4px 0 var(--yellow-deep), 0 8px 18px rgba(0,0,0,.3); cursor: pointer;
     animation: screenIn .3s ease both;
   }
-  .rotate-warning {
-    display: none; position: fixed; inset: 0; z-index: 9999;
-    flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-    background: var(--navy); color: #fff; text-align: center; font-family: 'Jua', sans-serif; font-size: 18px;
-  }
-  .rotate-icon { width: 64px; height: 64px; color: var(--yellow); animation: rotate-hint 1.6s ease-in-out infinite; }
-  @keyframes rotate-hint { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(90deg); } }
-  /* 폰 세로 전용 UI(스타트 바/게이트 탭 영역 비율) 기준 — 가로 폭이 넓은 태블릿/데스크톱 창은 제외 */
+  /* 가로 화면(13번: 회전 안내 오버레이 제거, 가로·세로 모두 플레이) — 폰 가로(높이 500 이하)에서 HUD를 납작하게,
+     조작은 양쪽 엄지 위치(아래 양 끝), 노치·홈 인디케이터는 safe-area로 피함 */
   @media (orientation: landscape) and (max-height: 500px) {
-    .rotate-warning { display: flex; }
+    .hud-top { top: 6px; left: calc(12px + env(safe-area-inset-left, 0px)); right: calc(170px + env(safe-area-inset-right, 0px)); gap: 4px; }
+    .speedo .num { font-size: 28px; }
+    .hud-controls { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(12px + env(safe-area-inset-right, 0px)); }
+    .timing-pop { top: calc(58px + env(safe-area-inset-top, 0px)); width: 96px; height: 96px; margin-left: -48px; }
+    .drive-controls { padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+    .drive-controls.twohand { padding-left: calc(20px + env(safe-area-inset-left, 0px)); padding-right: calc(20px + env(safe-area-inset-right, 0px)); }
+    .start-bar { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); gap: 4px; }
+    .start-bar-track { height: 150px; }
+    .start-bar-label { font-size: 15px; }
+    .lap-banner { top: 28%; }
+    .rb-overlay { top: 22%; }
   }
   @media (max-height: 620px) { /* 아주 낮은 화면: 타이틀/목록 간격 축소 */
     .logo-ko { font-size: 54px; } .stage-btn { min-height: 56px; padding: 9px 12px; }
@@ -488,10 +492,6 @@
   <canvas id="speedLines" aria-hidden="true"></canvas>
   <div id="vignette" aria-hidden="true"></div>
   <div id="uiRoot"></div>
-  <div class="rotate-warning" id="rotateWarning">
-    <svg class="rotate-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-    <p>세로로 돌려주세요</p>
-  </div>
 
   <!-- Babylon.js CDN (UMD 빌드, 버전 고정) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babylonjs/7.25.0/babylon.js"></script>

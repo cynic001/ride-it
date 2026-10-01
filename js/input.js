@@ -271,6 +271,8 @@ class InputController {
 
   /** 모든 입력 해제(회전/백그라운드/포커스 잃음) */
   releaseAll() {
+    if (this.state === 'pulling') this._onPullUp(); // 스타트 바를 당기던 중 회전 → 발사 취소(바 복귀)
+    this._keyCharging = false;
     this._btnPointers.clear();
     this._leanOrder = [];
     this._keys.clear();
