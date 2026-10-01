@@ -1,7 +1,8 @@
 /**
  * camera.js
  * - 스타트 구간: 항상 3인칭 고정(움직임 없음)
- * - 시점 설정(ViewSettings): 'third'(기본) — 부스트 가속 중·급하강 구간에서 자동으로 1인칭, 끝나면 3인칭 복귀
+ * - 시점 설정(ViewSettings): 'third'(기본) — 부스트 성공 순간·큰 급하강(25m 이상) 진입 순간에만 짧게(1.2/1.5초) 1인칭 펄스 후 복귀,
+ *                            복귀 뒤 3초는 다시 전환하지 않음(13번: 3·4·5단계가 부스트·에어타임 언덕 연속으로 1인칭 고정처럼 보이던 문제)
  *                            'first'       — 발사 직후 카트 좌석으로 부드럽게 이동해 1인칭 유지
  * - 전환: 3인칭/1인칭 목표(위치·시선·FOV·롤)를 매 프레임 둘 다 계산해 blend(0=3인칭, 1=1인칭)로 섞음 — 0.65초 smoothstep,
  *   위치만 옮기면 시선이 뚝 끊기므로 시선/FOV까지 함께 보간. 자동 전환은 최소 유지 시간으로 왔다 갔다 방지
@@ -12,10 +13,9 @@
 // 흔들림 진폭(m) — 1인칭은 멀미를 피하려고 더 약하게
 const SHAKE = { speed: 0.12, curve: 0.08, dive: 0.18, firstPersonScale: 0.45 };
 const VIEW_BLEND_SEC = 0.65;     // 3인칭↔1인칭 전환 시간
-const AUTO_FIRST_MIN_SEC = 1.5;  // 자동 1인칭은 들어가면 최소 이만큼 유지
-const AUTO_FIRST_GRACE_SEC = 0.8; // 조건이 끝나도 이만큼 더 기다렸다 3인칭 복귀(연달아 오는 짧은 구간 사이에서 튀지 않게)
+// 자동 1인칭 펄스(3인칭 설정): "조건이 이어지는 동안"이 아니라 순간 이벤트마다 짧게 — 연속 부스트·연속 언덕에서 계속 1인칭이던 문제(13번 진단)
+const AUTO_FIRST = { boostSec: 1.2, dropSec: 1.5, cooldownSec: 3 };
 const MANUAL_VIEW_SEC = 6;       // 카메라 버튼으로 바꾼 시점 유지 시간
-const DIVE_SLOPE = -0.35;        // 접선 y가 이보다 작으면 급하강
 
 const CAMERA_MODES = { THIRD_PERSON: 'third', FIRST_PERSON: 'first' };
 
@@ -41,9 +41,9 @@ class CoasterCamera {
     this.forceMode = null; // 테스트/스크린샷용 강제 시점('third'|'first') — 게임 흐름에서는 쓰지 않음
 
     this._blendLin = 0;  // 0=3인칭 ~ 1=1인칭 (선형 진행값, 화면에는 smoothstep 적용)
-    this._autoOn = false;
-    this._autoSince = 0;
-    this._autoOffAt = null;
+    this._autoUntil = 0;     // 자동 1인칭 펄스 끝나는 시각(_clock 기준)
+    this._autoCooldown = 0;  // 이 시각 전엔 새 펄스 무시
+    this.autoLog = [];       // { at, reason } — 진단/테스트용
     this._manualUntil = 0;
     this._manualTarget = 0;
     this._clock = 0;
@@ -99,17 +99,16 @@ class CoasterCamera {
     if (!cart.launched) return 0; // 스타트 화면은 항상 3인칭
     if (this._clock < this._manualUntil) return this._manualTarget;
     if (ViewSettings.mode === 'first') return 1;
-    // 3인칭 설정: 부스트 가속 중·급하강에서 자동 1인칭(뒤로 미끄러지는 구간 제외)
-    const want = !cart.rollback && (cart.boostRemaining > 0 || tangent.y < DIVE_SLOPE);
-    if (want) {
-      if (!this._autoOn) { this._autoOn = true; this._autoSince = this._clock; }
-      this._autoOffAt = null;
-    } else if (this._autoOn) {
-      if (this._autoOffAt === null) this._autoOffAt = this._clock;
-      const held = this._clock - this._autoSince >= AUTO_FIRST_MIN_SEC;
-      if (held && this._clock - this._autoOffAt >= AUTO_FIRST_GRACE_SEC) this._autoOn = false;
-    }
-    return this._autoOn ? 1 : 0;
+    return this._clock < this._autoUntil ? 1 : 0; // 3인칭 설정: 펄스 동안만 1인칭
+  }
+
+  /** 자동 1인칭 펄스 요청(3인칭 설정에서만 의미) — 쿨다운 중이거나 뒤로 떨어지는 중이면 무시 */
+  autoFirst(sec, reason, cart) {
+    if (!cart || !cart.launched || cart.rollback || this._clock < this._autoCooldown) return;
+    if (this._clock < this._autoUntil) { this._autoUntil = Math.max(this._autoUntil, this._clock + sec); }
+    else this._autoUntil = this._clock + sec;
+    this._autoCooldown = this._autoUntil + VIEW_BLEND_SEC + AUTO_FIRST.cooldownSec; // 복귀(블렌드) 후 3초
+    this.autoLog.push({ at: +this._clock.toFixed(2), reason });
   }
 
   /**
@@ -149,6 +148,14 @@ class CoasterCamera {
     const fov1 = 0.82 + speedRatio * 0.33 + this._dive * 0.2;
 
     // ── 시점 blend ──
+    // 큰 급하강(트랙이 미리 계산한 25m 이상 연속 낙하) 시작점을 지나는 순간 1인칭 펄스 — 에어타임 언덕·물(착수)은 해당 없음
+    // (4·5단계는 낙하가 t=0에서 바로 시작 — 발사 첫 틱은 직전 위치를 t 바로 앞으로, 랩이 넘어갈 때(t 1→0)는 감아넘김으로 판정)
+    if (cart.launched && !cart.rollback && track.bigDrops) {
+      const p = this._prevT === undefined ? -1e-6 : this._prevT, t = cart.t;
+      const wrapped = t < p - 0.5;
+      for (const d of track.bigDrops) if (wrapped ? (d > p || d <= t) : (p < d && t >= d)) this.autoFirst(AUTO_FIRST.dropSec, 'drop', cart);
+    }
+    if (cart.launched) this._prevT = cart.t;
     const target = this._desiredBlend(cart, tangent);
     this._lastTarget = target;
     const step = dt / VIEW_BLEND_SEC;
@@ -197,5 +204,6 @@ class CoasterCamera {
 }
 
 window.CAMERA_MODES = CAMERA_MODES;
+window.AUTO_FIRST = AUTO_FIRST;
 window.CoasterCamera = CoasterCamera;
 window.ViewSettings = ViewSettings;

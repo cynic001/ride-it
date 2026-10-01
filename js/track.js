@@ -117,6 +117,7 @@ class Track {
       });
       this.splash = { t: best.t, pos: best.pos, level: stageData.splash.level, tangent: this.getTangentAt(best.t) };
     }
+    this.bigDrops = this._findBigDrops();
     this.liftZones = this._findLiftZones().filter(z => !this.rollbackZone || z.t1 < this.rollbackZone.tValley || z.t0 > this.rollbackZone.tPeak);
   }
 
@@ -124,6 +125,22 @@ class Track {
   inRollbackZone(t) {
     const z = this.rollbackZone;
     return !!z && t >= z.tValley - 0.01 && t <= z.tPeak + 0.02;
+  }
+
+  /** 큰 급하강 시작점(t) 목록 — 경사 < -0.35가 이어지는 동안 25m 이상 떨어지는 구간(카메라 자동 1인칭 펄스용).
+   * 5단계 에어타임 언덕(15~20m)·짧은 딥은 제외 */
+  _findBigDrops() {
+    const S = this._sampleLoop(2), out = [];
+    let st = null;
+    S.forEach((p, k) => {
+      const down = p.tangent.y < -0.35;
+      if (down && st === null) st = k;
+      if ((!down || k === S.length - 1) && st !== null) {
+        if (S[st].pos.y - p.pos.y >= 25) out.push(S[st].t);
+        st = null;
+      }
+    });
+    return out;
   }
 
   /** 체인 리프트: 경사 > 0.15가 50m 이상 이어지는 긴 오르막(에어타임 언덕은 상승 25m 미만이면 제외 — 5단계 복귀 리프트는 포함).

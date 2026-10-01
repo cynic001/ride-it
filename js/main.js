@@ -543,6 +543,7 @@ window.Game = Game;
 window.addEventListener('gate-result', e => {
   if (e.detail.type === 'boost' && (e.detail.result === 'perfect' || e.detail.result === 'good')) {
     Game._onBoostMoment(e.detail.result === 'perfect' ? 1 : 0.7);
+    if (Game.camera) Game.camera.autoFirst(AUTO_FIRST.boostSec, 'boost', Game.cart); // 3인칭 설정: 부스트 성공 순간 짧게 1인칭
   }
 });
 window.addEventListener('booster-assist', () => Game._onBoostMoment(0.45));
