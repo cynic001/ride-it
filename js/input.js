@@ -5,12 +5,13 @@
  * 입력 레이어 분리 (SE2 등 작은 화면에서 겹치지 않도록 영역 분리):
  *  - 스타트 전: 화면 하단 중앙 "스타트 바" DOM 안에서만 — 아래로 당겨(pull, 힘 게이지) 위로 빠르게 밀어 올리면 발사.
  *    힘 = 당긴 거리 × 밀어 올린 속도(flick). 위로 밀지 않고 손을 떼면 발사 취소(바가 제자리로). 키보드: ↓ 누르고 있기 = 충전, ↑ = 발사
- *  - 주행 중(설정의 조작 방식, ui.js ControlSettings):
- *    onehand(기본): 하단 가로 전체 "엄지 패드" — 좌우로 밀기 = 밸런스(민 거리 비례, 떼면 중립 복귀),
- *                   톡(0.12초 미만) = 부스트, 꾹(0.12초 이상) = 손 들기(에어타임). 밀면서 누르고 있어도 손 들기 유지
- *    tilt:          폰 좌우 기울기 = 밸런스(출발 순간 각도 기준, 데드존 3°), 패드는 톡/꾹만. 센서 없음/권한 거부 시 onehand로 자동 전환
- *    twohand:       왼쪽 ◀ ▶(누르는 동안 기울임), 오른쪽 BOOST(누르는 순간 판정)·손 들기(누르고 있기)
- *    키보드(항상):  ← → 밸런스, ↑ 부스트, Space 손 들기(누르고 있기)
+ *  - 주행 중(양손 조작으로 통일, 13번): 왼쪽 아래 ◀ ▶ = 밸런스(누르는 동안 0.3초 램프로 ±1.0, 떼면 0.3초에 0 — 톡톡 눌러 중간 값),
+ *    오른쪽 아래 BOOST = 부스트(누르는 순간 시간 기준 판정, 뒤로 떨어지기 연타 구간에선 연타).
+ *    설정에서 "기울기"를 켜면 ◀ ▶ 대신 폰 좌우 기울기 = 밸런스(출발 순간 각도 기준, 데드존 3°) — 센서 없음/권한 거부 시 ◀ ▶로 자동 전환.
+ *    키보드(항상): ← → 밸런스, ↑ 또는 Space 부스트
+ *  - 멀티터치: 손가락마다 pointerId로 따로 추적하고, 터치가 시작된 버튼에만 묶음(버튼 단위 setPointerCapture — 살짝 밖으로
+ *    미끄러져도 유지). 한 손가락을 떼도 다른 손가락 입력은 그대로. 캡처가 실패해도 window의 pointerup/cancel이 그 pointerId만 해제
+ *  - 손 들기(에어타임)와 한손 엄지 패드는 13번에서 제거 — 패드 코드는 legacy/onehand-pad.js에 보관
  *  - 캔버스 자체는 입력을 받지 않음(예전 "캔버스 탭=게이트 / 길게 누르기=에어타임" 방식은 대체됨)
  */
 
@@ -22,16 +23,13 @@ const LAUNCH_UP_DISTANCE = 28;     // 최저점에서 이만큼(px) 위로 올�
 const LAUNCH_UP_VELOCITY = 0.35;   // 이 속도(px/ms) 이상이면 즉시 발사(손을 뗄 필요 없음)
 const KEY_CHARGE_SECONDS = 0.8;    // 키보드 ↓를 이만큼 누르면 최대 충전
 const KEY_FLICK_MULTIPLIER = 1.25; // 키보드 발사 flick(속도 정보가 없어 고정)
-const TAP_MAX_SECONDS = 0.12;      // 이보다 짧게 누르고 떼면 "톡"(부스트), 길면 "꾹"(손 들기)
-const TAP_MAX_MOVE = 14;           // px — 이보다 많이 움직이면 탭이 아니라 밀기(밸런스)
-const PAD_FULL_LEAN_PX = 90;       // 패드에서 이만큼 밀면 최대 기울기
 const TILT = { deadzone: 3, full: 22, fallbackSec: 1.2 }; // 도(°) — 데드존 이하 무시, full°에서 최대 기울기
-const LEAN_FOLLOW = { direct: 18 }; // 패드/기울기 leanInput 추종 속도(1/초) — 거의 즉시
+const LEAN_FOLLOW = { direct: 18 }; // 기울기 leanInput 추종 속도(1/초) — 거의 즉시
 const LEAN_RAMP_SEC = 0.3; // 버튼(◀▶)/키보드(← →): 누르고 있으면 이 시간에 걸쳐 0→1.0, 떼면 같은 속도로 0 — 톡톡 눌러 중간 값 가능
 
 class InputController {
   /** @param {HTMLElement} startBarElement - 스타트 전 드래그를 받는 전용 DOM(ui.js가 렌더) */
-  constructor(canvas, cart, camera, startBarElement, mode = 'onehand') {
+  constructor(canvas, cart, camera, startBarElement, mode = 'twohand') {
     this.canvas = canvas;
     this.cart = cart;
     this.camera = camera;
@@ -48,13 +46,13 @@ class InputController {
     this._lowestY = 0;
     this._moveSamples = [];       // pull 중 {x,y,t} 샘플 — release 시 flick 속도 계산용
 
-    this.mode = mode;
+    this.mode = mode === 'tilt' ? 'tilt' : 'twohand';
     this._leanTarget = 0;
     this._leanRate = LEAN_FOLLOW.direct;
-    this._pointers = new Map();   // 패드 위 손가락별 상태 {x0, t0, moved, hold, gate}
+    this._btnPointers = new Map(); // pointerId → 'left'|'right'|'boost' — 손가락마다 그 손가락이 누른 버튼만 기억
+    this._leanOrder = [];          // 눌려 있는 ◀/▶ 손가락(pointerId) 순서 — 둘 다 누르면 나중에 누른 쪽
     this._keys = new Set();
-    this._btnLean = 0;            // 양손 모드 ◀▶ 버튼
-    this._handsBtn = false;
+    this.lastInputKind = null;     // 'touch' | 'mouse' | 'keyboard' — 튜토리얼 안내 문구 기준
 
     this._bindEvents();
   }
@@ -84,28 +82,48 @@ class InputController {
     window.addEventListener('keydown', e => this._onStartKey(e, true), opt);
     window.addEventListener('keyup', e => this._onStartKey(e, false), opt);
 
-    // 주행 조작: 엄지 패드(한손/기울기) 또는 양손 버튼 — ui.js가 렌더한 DOM
-    const pad = document.getElementById('thumbPad');
-    if (pad) {
-      pad.addEventListener('pointerdown', e => this._onPadDown(e), opt);
-      pad.addEventListener('pointermove', e => this._onPadMove(e), opt);
-      pad.addEventListener('pointerup', e => this._onPadUp(e), opt);
-      pad.addEventListener('pointercancel', e => this._onPadUp(e, true), opt);
-    }
-    const hold = (id, on, off) => {
+    // 주행 버튼: ◀ ▶(누르고 있기) · BOOST(누르는 순간) — 손가락(pointerId)마다 따로
+    const bindBtn = (id, name) => {
       const el = document.getElementById(id);
       if (!el) return;
-      el.addEventListener('pointerdown', e => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (err) { /* iOS */ } el.classList.add('pressed'); on(); }, opt);
-      const up = () => { el.classList.remove('pressed'); off(); };
+      el.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        if (this.state !== 'launched') return;
+        this.lastInputKind = e.pointerType === 'mouse' ? 'mouse' : 'touch';
+        try { el.setPointerCapture(e.pointerId); } catch (err) { /* iOS Safari 대응 */ }
+        this._press(e.pointerId, name);
+      }, opt);
+      const up = e => this._release(e.pointerId, name);
       el.addEventListener('pointerup', up, opt);
       el.addEventListener('pointercancel', up, opt);
+      el.addEventListener('lostpointercapture', up, opt);
+      el.addEventListener('contextmenu', e => e.preventDefault(), opt);
     };
-    hold('leanLeftBtn', () => { this._btnLean = -1; }, () => { if (this._btnLean < 0) this._btnLean = 0; });
-    hold('leanRightBtn', () => { this._btnLean = 1; }, () => { if (this._btnLean > 0) this._btnLean = 0; });
-    hold('boostBtn', () => this._boost(), () => {});
-    hold('handsBtn', () => { this._handsBtn = true; }, () => { this._handsBtn = false; });
+    bindBtn('leanLeftBtn', 'left');
+    bindBtn('leanRightBtn', 'right');
+    bindBtn('boostBtn', 'boost');
+    // 캡처가 실패해 다른 곳에서 손가락을 뗀 경우의 안전장치 — 그 pointerId만 해제(다른 손가락은 그대로)
+    const anyUp = e => { if (this._btnPointers.has(e.pointerId)) this._release(e.pointerId); };
+    window.addEventListener('pointerup', anyUp, opt);
+    window.addEventListener('pointercancel', anyUp, opt);
+    // 회전·앱 전환·창 포커스 잃음: 눌려 있던 입력을 모두 안전하게 해제(손가락이 화면에서 떨어진 걸 못 받는 경우)
+    window.addEventListener('blur', () => this.releaseAll(), opt);
+    window.addEventListener('orientationchange', () => this.releaseAll(), opt);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) this.releaseAll(); }, opt);
+    this._orient = window.innerWidth > window.innerHeight;
+    window.addEventListener('resize', () => {
+      const o = window.innerWidth > window.innerHeight;
+      if (o !== this._orient) { this._orient = o; this.releaseAll(); }
+    }, opt);
+    // 두 손가락 핀치 확대(iOS gesture 이벤트)·길게 누르기 메뉴 차단
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false, signal: this._abort.signal }));
+    const dc = document.getElementById('driveControls');
+    if (dc) {
+      dc.addEventListener('contextmenu', e => e.preventDefault(), opt);
+      dc.addEventListener('touchstart', e => { if (e.cancelable) e.preventDefault(); }, { passive: false, signal: this._abort.signal }); // 텍스트 선택·돋보기·스크롤
+    }
 
-    // 주행 키보드: ← → 밸런스, ↑ 부스트, Space 손 들기
+    // 주행 키보드: ← → 밸런스, ↑ 또는 Space 부스트
     window.addEventListener('keydown', e => this._onDriveKey(e, true), opt);
     window.addEventListener('keyup', e => this._onDriveKey(e, false), opt);
 
@@ -116,7 +134,7 @@ class InputController {
       InputController._tiltSeenAt = performance.now();
     }, opt);
 
-    // iOS Safari 더블탭 줌 방지 (JS 레벨) — 조작 영역 전체
+    // iOS Safari 더블탭 줌 방지 (JS 레벨) — 조작 영역 전체(두 손가락을 거의 동시에 떼는 경우도 포함)
     let lastTouchEnd = 0;
     const controls = document.getElementById('driveControls') || this.canvas;
     controls.addEventListener('touchend', e => {
@@ -234,48 +252,44 @@ class InputController {
     }
   }
 
-  _onPadDown(e) {
-    if (this.state !== 'launched') return;
-    e.preventDefault();
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* iOS Safari 대응 */ }
-    // 탭 판정은 손가락이 닿은 순간 기준 — 떼는 순간(최대 0.12초 뒤)이 아니라 지금의 게이트 타이밍을 저장해 둠
-    const p = { x0: e.clientX, y0: e.clientY, t0: performance.now(), moved: false, hold: false, gate: this.cart.gateTiming() };
-    p.timer = setTimeout(() => { p.hold = true; this._syncHold(); }, TAP_MAX_SECONDS * 1000);
-    this._pointers.set(e.pointerId, p);
-    this._leanPointer = e.pointerId;
-    window.dispatchEvent(new CustomEvent('pad-touch', { detail: { x: e.clientX, y: e.clientY, down: true } }));
+  /** 버튼 누름 — pointerId별로 기억. BOOST는 누르는 순간 판정 */
+  _press(pointerId, name) {
+    this._btnPointers.set(pointerId, name);
+    if (name === 'boost') this._boost();
+    else { this._leanOrder = this._leanOrder.filter(id => id !== pointerId); this._leanOrder.push(pointerId); }
+    this._syncPressed();
   }
 
-  _onPadMove(e) {
-    const p = this._pointers.get(e.pointerId);
-    if (!p) return;
-    const dx = e.clientX - p.x0;
-    if (Math.abs(dx) > TAP_MAX_MOVE || Math.abs(e.clientY - p.y0) > TAP_MAX_MOVE) p.moved = true;
-    if (this.mode === 'onehand' && e.pointerId === this._leanPointer) {
-      this._leanTarget = Math.max(-1, Math.min(1, dx / PAD_FULL_LEAN_PX));
-      this._leanRate = LEAN_FOLLOW.direct;
+  /** 버튼 뗌 — 그 손가락(pointerId)만. name을 주면 그 버튼에 묶인 손가락일 때만 */
+  _release(pointerId, name) {
+    const cur = this._btnPointers.get(pointerId);
+    if (!cur || (name && cur !== name)) return;
+    this._btnPointers.delete(pointerId);
+    this._leanOrder = this._leanOrder.filter(id => id !== pointerId);
+    this._syncPressed();
+  }
+
+  /** 모든 입력 해제(회전/백그라운드/포커스 잃음) */
+  releaseAll() {
+    this._btnPointers.clear();
+    this._leanOrder = [];
+    this._keys.clear();
+    this._syncPressed();
+  }
+
+  /** 눌린 버튼 표시 + 현재 ◀▶ 방향 */
+  _syncPressed() {
+    const held = new Set(this._btnPointers.values());
+    for (const [id, name] of [['leanLeftBtn', 'left'], ['leanRightBtn', 'right'], ['boostBtn', 'boost']]) {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('pressed', held.has(name));
     }
-    window.dispatchEvent(new CustomEvent('pad-touch', { detail: { x: e.clientX, y: e.clientY, down: true } }));
   }
 
-  _onPadUp(e, cancelled = false) {
-    const p = this._pointers.get(e.pointerId);
-    if (!p) return;
-    clearTimeout(p.timer);
-    this._pointers.delete(e.pointerId);
-    const dur = (performance.now() - p.t0) / 1000;
-    if (!cancelled && !p.moved && dur < TAP_MAX_SECONDS) this._boost(p.gate);
-    if (e.pointerId === this._leanPointer) {
-      this._leanPointer = null;
-      if (this.mode === 'onehand') this._leanTarget = 0; // 떼면 중립 복귀
-    }
-    this._syncHold();
-    if (!this._pointers.size) window.dispatchEvent(new CustomEvent('pad-touch', { detail: { down: false } }));
-  }
-
-  _syncHold() {
-    const padHold = [...this._pointers.values()].some(p => p.hold);
-    this.cart.airtimeHolding = padHold || this._handsBtn || this._keys.has(' ');
+  get _btnLean() {
+    const last = this._leanOrder[this._leanOrder.length - 1];
+    const name = last === undefined ? null : this._btnPointers.get(last);
+    return name === 'left' ? -1 : name === 'right' ? 1 : 0;
   }
 
   _onDriveKey(e, down) {
@@ -283,45 +297,43 @@ class InputController {
     const k = e.key;
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', ' '].includes(k)) return;
     e.preventDefault();
+    this.lastInputKind = 'keyboard';
     if (down) {
-      if (k === 'ArrowUp' && !e.repeat) this._boost();
+      if ((k === 'ArrowUp' || k === ' ') && !e.repeat) this._boost();
       this._keys.add(k);
     } else {
       this._keys.delete(k);
     }
-    this._syncHold();
   }
 
-  /** 부스트 입력(톡/BOOST 버튼/↑) — 실제 시간 기준 게이트 판정. gate: 손가락이 닿은 순간 저장해 둔 타이밍(패드 탭) */
-  _boost(gate) {
+  /** 부스트 입력(BOOST 버튼/↑/Space) — 실제 시간 기준 게이트 판정 */
+  _boost() {
     // 뒤로 떨어지기: 연타 구간에선 부스트 입력 = 연타, 그 밖의 뒤로 가는 동안은 무시
     if (this.cart.rollback) {
       if (this.cart.mashTap()) window.dispatchEvent(new CustomEvent('mash-tap'));
       return;
     }
-    const result = this.cart.resolveGate(gate);
+    const result = this.cart.resolveGate();
     window.dispatchEvent(new CustomEvent('gate-result', { detail: { type: this.cart.lastGateType, result } }));
   }
 
-  /** main.js 고정 스텝마다(cart.update 전) — 기울기/버튼/키보드를 leanInput으로 합성하고 부드럽게 추종 */
+  /** main.js 고정 스텝마다(cart.update 전) — 버튼/키보드/기울기를 leanInput으로 합성 */
   update(dt) {
     if (this.state !== 'launched') return;
-    if (this.mode === 'tilt') this._updateTilt();
     const keyLean = (this._keys.has('ArrowRight') ? 1 : 0) - (this._keys.has('ArrowLeft') ? 1 : 0);
     const held = keyLean || this._btnLean;
-    const padActive = this._leanPointer !== null && this._leanPointer !== undefined;
-    // 버튼/키: 일정 속도(1/LEAN_RAMP_SEC)로 선형 램프 — 누르면 0.3초에 1.0, 떼면 0.3초에 0(패드를 잡고 있지 않을 때)
-    if (held || this.mode === 'twohand' || (this._rampOn && !padActive && this.mode !== 'tilt')) {
-      const goal = held || 0;
-      const stepAmt = dt / LEAN_RAMP_SEC;
-      const cur = this.cart.leanInput;
-      this.cart.leanInput = goal > cur ? Math.min(goal, cur + stepAmt) : Math.max(goal, cur - stepAmt);
-      this._rampOn = held !== 0 || Math.abs(this.cart.leanInput) > 1e-3;
-      if (!this._rampOn) this._leanTarget = 0;
-    } else {
-      this.cart.leanInput += (this._leanTarget - this.cart.leanInput) * (1 - Math.exp(-dt * this._leanRate));
+    if (this.mode === 'tilt' && !held) {
+      this._updateTilt();
+      if (this.mode === 'tilt') { // 기울기: 지수 추종(거의 즉시)
+        this.cart.leanInput += (this._leanTarget - this.cart.leanInput) * (1 - Math.exp(-dt * this._leanRate));
+        return;
+      }
     }
-    this._syncHold();
+    // 버튼/키: 일정 속도(1/LEAN_RAMP_SEC)로 선형 램프 — 누르면 0.3초에 1.0, 떼면 0.3초에 0
+    const goal = held || 0;
+    const stepAmt = dt / LEAN_RAMP_SEC;
+    const cur = this.cart.leanInput;
+    this.cart.leanInput = goal > cur ? Math.min(goal, cur + stepAmt) : Math.max(goal, cur - stepAmt);
   }
 
   _updateTilt() {
@@ -329,8 +341,8 @@ class InputController {
     if (!this._tiltInit) { this._tiltInit = true; this._tiltBase = InputController._gamma; this._tiltStart = now; } // 출발 순간 각도 = 정면
     const stale = !InputController._tiltSeenAt || now - InputController._tiltSeenAt > TILT.fallbackSec * 1000;
     if (InputController._tiltPermission === 'denied' || (stale && now - this._tiltStart > TILT.fallbackSec * 1000)) {
-      this.mode = 'onehand'; // 센서를 쓸 수 없음 → 한손 모드로 자동 전환(패드 밀기로 밸런스)
-      window.dispatchEvent(new CustomEvent('control-fallback', { detail: 'onehand' }));
+      this.mode = 'twohand'; // 센서를 쓸 수 없음 → ◀ ▶ 버튼으로 자동 전환
+      window.dispatchEvent(new CustomEvent('control-fallback', { detail: 'twohand' }));
       return;
     }
     if (this._tiltBase === undefined || this._tiltBase === null) this._tiltBase = InputController._gamma; // 첫 센서 값이 출발 후 도착한 경우

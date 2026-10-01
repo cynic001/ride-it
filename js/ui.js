@@ -14,14 +14,14 @@ const LapsManager = {
 };
 window.LapsManager = LapsManager;
 
-// 조작 방식 — 'onehand'(기본: 하단 엄지 패드) / 'tilt'(기울기 밸런스 + 패드 탭/홀드) / 'twohand'(좌 ◀▶ + 우 BOOST/손 들기)
+// 조작 방식(13번: 양손 조작으로 통일) — 'twohand'(기본: 왼쪽 아래 ◀ ▶ + 오른쪽 아래 BOOST) / 'tilt'(◀ ▶ 대신 폰 기울기로 밸런스).
+// 예전 저장값 'onehand'(엄지 패드, legacy/onehand-pad.js로 이동)는 'twohand'로 읽음
 const CONTROL_MODES = {
-  onehand: { label: '한손', desc: '하단 패드에서 좌우로 밀면 밸런스, 톡 = 부스트, 꾹 = 손 들기' },
-  tilt: { label: '한손 + 기울기', desc: '폰을 좌우로 기울여 밸런스, 패드 톡 = 부스트, 꾹 = 손 들기' },
-  twohand: { label: '양손', desc: '왼쪽 ◀ ▶ 로 밸런스, 오른쪽 BOOST 버튼과 손 들기 버튼' },
+  twohand: { label: '버튼 ◀ ▶', desc: '왼쪽 아래 ◀ ▶ 로 밸런스, 오른쪽 아래 BOOST — 양손으로 폰을 잡고 엄지로' },
+  tilt: { label: '기울기', desc: '양손으로 잡은 폰을 좌우로 기울여 밸런스, 부스트는 오른쪽 아래 BOOST' },
 };
 const ControlSettings = {
-  mode: CONTROL_MODES[localStorage.getItem('rc_control')] ? localStorage.getItem('rc_control') : 'onehand',
+  mode: localStorage.getItem('rc_control') === 'tilt' ? 'tilt' : 'twohand',
   set(mode) {
     if (!CONTROL_MODES[mode]) return;
     this.mode = mode;
@@ -307,7 +307,7 @@ const UI = {
       <div class="field"><span class="field-label">사운드</span>
         ${seg('audio', [['on', '켜기'], ['off', '끄기']], AudioManager.enabled ? 'on' : 'off')}
         <p class="field-desc">소리가 안 나면 아이폰 무음 모드를 꺼주세요</p></div>
-      <div class="field"><span class="field-label">조작 방식</span>
+      <div class="field"><span class="field-label">밸런스 조작</span>
         ${seg('control', Object.entries(CONTROL_MODES).map(([k, v]) => [k, v.label]), ControlSettings.mode)}
         <p class="field-desc" id="controlDesc">${CONTROL_MODES[ControlSettings.mode].desc}</p></div>
       <div class="actions row">
@@ -578,7 +578,7 @@ const UI = {
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
       balance: $('balanceGuide'), balanceZone: $('balanceZone'), balancePerfect: $('balancePerfect'), balanceMin: $('balanceMin'), balanceMarker: $('balanceMarker'),
       gate: $('gateGuide'), gateLabel: $('gateGuideLabel'), gateZone: $('gateZone'), gatePerfect: $('gatePerfect'), gateMarker: $('gateMarker'),
-      judge: $('judgeToast'), padLean: $('padLeanMark'), liftHint: $('liftHint'),
+      judge: $('judgeToast'), liftHint: $('liftHint'),
       rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
     };
 
@@ -620,23 +620,12 @@ const UI = {
       const dc = $('driveControls');
       if (dc) dc.classList.add('on');
     };
-    if (this._padHandler) window.removeEventListener('pad-touch', this._padHandler);
     if (this._fallbackHandler) window.removeEventListener('control-fallback', this._fallbackHandler);
-    const thumb = $('padThumb');
-    this._padHandler = e => {
-      if (!thumb) return;
-      const { x, y, down } = e.detail;
-      thumb.classList.toggle('on', !!down);
-      if (down) {
-        const r = $('thumbPad').getBoundingClientRect();
-        thumb.style.transform = `translate(${x - r.left - 30}px, ${y - r.top - 30}px)`;
-      }
+    this._fallbackHandler = () => { // 기울기 센서 불가 → ◀ ▶ 버튼 표시 + 짧은 신호
+      const dc = $('driveControls');
+      if (dc) dc.classList.remove('tilt');
+      this.flashSignal('◀ ▶ 버튼으로');
     };
-    this._fallbackHandler = () => {
-      const hint = document.querySelector('.pad-hint');
-      if (hint) hint.textContent = '기울기 센서를 쓸 수 없어 한손 모드로 바꿨어요 · 좌우로 밀어 밸런스';
-    };
-    window.addEventListener('pad-touch', this._padHandler);
     window.addEventListener('control-fallback', this._fallbackHandler);
     // 게이트 탭 판정 토스트(게이트 없는 곳의 탭 = 'none'은 표시하지 않음)
     this._gateHandler = e => {
@@ -663,26 +652,26 @@ const UI = {
     window.addEventListener('balance-perfect', this._balPerfectHandler);
   },
 
-  /** 주행 조작 DOM — 조작 방식별. 발사 전에는 숨겨 두고(스타트 바가 하단 중앙 사용) cart-launched에서 표시 */
+  /** 주행 조작 DOM — 왼쪽 아래 ◀ ▶(기울기 모드면 숨김), 오른쪽 아래 BOOST. 발사 전에는 숨겨 두고(스타트 바가 하단 중앙 사용)
+   * cart-launched에서 표시. 두 영역은 화면 양 끝(엄지 위치)에 붙이고 가운데를 비워 손가락이 겹치지 않게 */
   _driveControlsHTML() {
-    const mode = ControlSettings.mode;
-    const keys = '<div class="key-hint">← → 밸런스 · ↑ 부스트 · Space 손 들기</div>';
-    if (mode === 'twohand') {
-      return `<div class="drive-controls twohand" id="driveControls">
-        <div class="lean-btns"><button class="ctl-btn" id="leanLeftBtn" aria-label="왼쪽으로 기울이기">◀</button><button class="ctl-btn" id="leanRightBtn" aria-label="오른쪽으로 기울이기">▶</button></div>
-        ${keys}
-        <div class="action-btns"><button class="ctl-btn hands" id="handsBtn">손 들기</button><button class="ctl-btn boost" id="boostBtn">BOOST</button></div>
-      </div>`;
-    }
-    const hint = mode === 'tilt' ? '폰 기울이기 = 밸런스 · 톡 = 부스트 · 꾹 = 손 들기' : '← 밀기 = 밸런스 → · 톡 = 부스트 · 꾹 = 손 들기';
-    return `<div class="drive-controls" id="driveControls">
-      <div class="thumb-pad" id="thumbPad">
-        <div class="pad-lean"><div class="pad-lean-mark" id="padLeanMark"></div></div>
-        <div class="pad-hint">${hint}</div>
-        ${keys}
-        <div class="pad-thumb" id="padThumb"></div>
+    const tilt = ControlSettings.mode === 'tilt';
+    return `<div class="drive-controls twohand${tilt ? ' tilt' : ''}" id="driveControls">
+      <div class="ctl-left" id="ctlLeft">
+        <div class="lean-btns"><button class="ctl-btn lean" id="leanLeftBtn" aria-label="왼쪽으로 기울이기">◀</button><button class="ctl-btn lean" id="leanRightBtn" aria-label="오른쪽으로 기울이기">▶</button></div>
       </div>
+      <div class="ctl-right" id="ctlRight"><button class="ctl-btn boost" id="boostBtn">BOOST</button></div>
     </div>`;
+  },
+
+  /** 게임을 멈추지 않는 짧은 신호(한두 단어) — 판정 토스트 자리 */
+  flashSignal(text, cls = 'good small') {
+    const j = this._hud && this._hud.judge;
+    if (!j) return;
+    j.textContent = text;
+    j.className = 'judge';
+    void j.offsetWidth;
+    j.className = `judge show ${cls}`;
   },
 
   updateHUD(cart, track) {
@@ -765,7 +754,6 @@ const UI = {
       } else h.rbSub.textContent = rb.phase === 'launch' ? '' : '꽉 잡아!';
     }
     if (h.liftHint) h.liftHint.classList.toggle('on', cart.launched && cart.onChainLift); // 멈칫(정상)은 랩 아치 직후라 LAP 표시와 겹치지 않게 제외
-    if (h.padLean) h.padLean.style.left = `${((Math.max(-1, Math.min(1, cart.leanInput)) + 1) * 50).toFixed(1)}%`; // 패드 기울기 표시
     h.cameraBtn.disabled = !cart.launched;
     h.pauseBtn.disabled = !cart.launched;
   },

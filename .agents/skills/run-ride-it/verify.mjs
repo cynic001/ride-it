@@ -3,7 +3,7 @@
  * verify.mjs — 전체 화면 흐름 검증 (실제 pointer 이벤트 기반, SE2 뷰포트 375x667@2x)
  *
  * 흐름: (최초 방문) 조작법 → 닫기 → 스테이지 선택 → [크레딧] → 스테이지별:
- *   로딩 → 스타트 바 드래그/플릭(page.mouse) → 주행(하단 스와이프, 상단 탭) → 1인칭 토글 →
+ *   로딩 → 스타트 바 드래그/플릭(page.mouse) → 주행(◀ ▶ 누르고 있기, BOOST 탭) → 1인칭 토글 →
  *   일시정지/재개 → 결과 화면(cart.t를 끝 근처로 점프) → 스테이지 선택 복귀
  * 각 단계 스크린샷을 --out 디렉터리에 저장하고, pageerror가 1건이라도 있으면 exit 1.
  *
@@ -217,19 +217,19 @@ async function main() {
       check(`${tag} booster assist`, asg.at > 0 && asg.r >= 0.6, `assist=${asg.at.toFixed(2)}s speed=${(asg.r * 100).toFixed(0)}% of base`);
       if (!launched) continue;
 
-      // 엄지 패드(한손 모드 기본): 좌우로 밀기 = 밸런스, 떼면 중립 복귀
+      // 양손 조작(13번): 왼쪽 아래 ▶ 누르고 있기 = 밸런스(0.3초 램프), 떼면 중립 복귀
       await page.waitForSelector('#driveControls.on');
-      const pad = await page.locator('#thumbPad').boundingBox();
-      const px = pad.x + pad.width / 2, py = pad.y + pad.height / 2;
-      await page.mouse.move(px, py); await page.mouse.down();
-      for (let i = 1; i <= 6; i++) { await page.mouse.move(px + i * 13, py); await sleep(16); }
-      await sleep(150);
+      const rb_ = await page.locator('#leanRightBtn').boundingBox();
+      const bb = await page.locator('#boostBtn').boundingBox();
+      const px = bb.x + bb.width / 2, py = bb.y + bb.height / 2; // 부스트 버튼 중심(아래 게이트 정타 탭에 사용)
+      await page.mouse.move(rb_.x + rb_.width / 2, rb_.y + rb_.height / 2); await page.mouse.down();
+      await sleep(450);
       const lean = await page.evaluate(() => Game.cart.leanInput);
-      if (s === STAGES[0]) await shot(`${tag}_2b_pad_swipe`);
+      if (s === STAGES[0]) await shot(`${tag}_2b_lean_btn`);
       await page.mouse.up();
-      await sleep(250);
+      await sleep(450);
       const leanAfter = await page.evaluate(() => Game.cart.leanInput);
-      check(`${tag} pad swipe = balance, release = neutral`, lean > 0.5 && Math.abs(leanAfter) < 0.1, `lean=${lean.toFixed(2)} → ${leanAfter.toFixed(2)}`);
+      check(`${tag} ▶ hold = balance, release = neutral`, lean > 0.95 && Math.abs(leanAfter) < 0.01, `lean=${lean.toFixed(2)} → ${leanAfter.toFixed(2)}`);
       if (s === STAGES[0]) {
         // 키보드 →: 0.3초 램프로 1.0, 짧게 톡 = 중간 값, 떼면 부드럽게 0
         await page.keyboard.down('ArrowRight'); await sleep(90);
@@ -245,17 +245,13 @@ async function main() {
         const g = await page.evaluate(() => ['#balanceZone', '#balancePerfect', '#balanceMin'].map(q => !!document.querySelector(q)));
         check(`${tag} balance guide has min line + perfect zone`, g.every(Boolean), JSON.stringify(g));
       }
-      // 톡 = 부스트(게이트 판정 이벤트), 꾹 = 손 들기
+      // BOOST 버튼 = 부스트(게이트 판정 이벤트) — 누를 때마다 1회
       await page.evaluate(() => { window.__gates = 0; if (!window.__gateHooked) { window.__gateHooked = true; window.addEventListener('gate-result', () => window.__gates++); } });
-      await page.mouse.click(px - 80, py);
-      await page.mouse.click(px + 80, py);
+      await page.mouse.click(px, py);
+      await page.mouse.click(px, py);
       const gates = await page.evaluate(() => window.__gates);
-      check(`${tag} pad taps = boost`, gates === 2, `gate-result=${gates}`);
-      await page.mouse.move(px, py); await page.mouse.down(); await sleep(300);
-      const holding = await page.evaluate(() => Game.cart.airtimeHolding);
-      await page.mouse.up(); await sleep(50);
-      const released = await page.evaluate(() => Game.cart.airtimeHolding);
-      check(`${tag} pad hold = hands up`, holding && !released, `hold=${holding} release=${released}`);
+      check(`${tag} BOOST taps = boost`, gates === 2, `gate-result=${gates}`);
+      check(`${tag} no hands-up / pad controls`, await page.evaluate(() => !document.getElementById('handsBtn') && !document.getElementById('thumbPad')));
       await sleep(900);
       await shot(`${tag}_2_ride_3rd`);
       // 한 프레임 드로우콜 실측(그림자/포스트프로세싱 패스 포함) — Babylon SceneInstrumentation
@@ -338,13 +334,15 @@ async function main() {
       await page.waitForSelector('#retryBtn', { timeout: 10000 });
       await sleep(700);
       await shot(`${tag}_5_result`);
-      const sc = await page.evaluate(() => { const b = Game.cart.scoreBreakdown; return { score: Game.cart.score, sum: b.gate + b.balance + (b.balancePerfect || 0) + b.airtime + b.comboBonus + b.finishBonus + (b.mashBonus || 0), rows: document.querySelectorAll('.bd-row').length }; });
+      const sc = await page.evaluate(() => { const b = Game.cart.scoreBreakdown; return { score: Game.cart.score, sum: b.gate + b.balance + (b.balancePerfect || 0) + (b.airtime || 0) + b.comboBonus + b.finishBonus + (b.mashBonus || 0), rows: document.querySelectorAll('.bd-row').length }; });
       check(`${tag} result screen + score breakdown`, Math.abs(sc.score - sc.sum) < 0.5 && sc.rows >= 4, `score=${sc.score.toFixed(1)} sum=${sc.sum.toFixed(1)} rows=${sc.rows}`);
       await page.locator('#stageSelectBtn').click();
       await page.waitForSelector('.stage-btn');
       await sleep(300);
     }
     await shot('09_stage_select_after');
+
+    await multiTouchTest(browser, base, pageErrors);
 
     // 진행 저장(D): 새로고침 후에도 클리어 배지/최고 기록이 남아 있어야 함
     const prog = await page.evaluate(() => JSON.parse(localStorage.getItem('rc_progress') || '{}'));
@@ -384,6 +382,91 @@ async function main() {
     const failed = results.filter(r => !r.ok).length + pageErrors.length;
     console.log(`[verify] ${results.length - results.filter(r => !r.ok).length}/${results.length} checks passed, pageErrors=${pageErrors.length} → ${OUT}`);
     process.exit(failed ? 1 : 0);
+  }
+}
+/** 양손 동시 터치(13번 2-5): 실제 터치 이벤트(CDP Input.dispatchTouchEvent → 브라우저가 pointer 이벤트로 변환)로
+ * 두 손가락 시나리오를 돌려 서로 끊거나 바꾸지 않는지 확인. 키보드 ← + ↑ 동시 입력도 */
+async function multiTouchTest(browser, base, pageErrors) {
+  const tctx = await browser.newContext({ viewport: { width: 375, height: 667 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+  await tctx.addInitScript(q => { localStorage.setItem('rc_quality', q); localStorage.setItem('rc_howto_seen', '1'); localStorage.setItem('rc_tutorial_done', '1'); localStorage.setItem('rc_tutorial_asked', '1'); }, QUALITY);
+  const tp = await tctx.newPage();
+  tp.on('pageerror', e => pageErrors.push('[touch] ' + e.message));
+  const cdp = await tctx.newCDPSession(tp);
+  const pts = new Map(); // 지금 화면에 닿아 있는 손가락 id → [x, y]
+  const send = type => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: [...pts].map(([id, [x, y]]) => ({ id, x, y, radiusX: 6, radiusY: 6, force: 1 })) });
+  const down = async (id, x, y) => { pts.set(id, [x, y]); await send('touchStart'); };
+  const move = async (id, x, y) => { pts.set(id, [x, y]); await send('touchMove'); };
+  // CDP touchEnd의 touchPoints = 이번에 떼는 손가락(남은 손가락을 넘기면 엉뚱한 손가락이 떼어짐 — 실측)
+  const up = async (...ids) => { const gone = ids.map(id => ({ id, x: pts.get(id)[0], y: pts.get(id)[1], radiusX: 6, radiusY: 6, force: 1 })); ids.forEach(i => pts.delete(i)); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: gone }); };
+  const center = async sel => { const b = await tp.locator(sel).boundingBox(); return [b.x + b.width / 2, b.y + b.height / 2]; };
+  const st = () => tp.evaluate(() => ({ lean: Game.cart.leanInput, boosts: window.__boosts, pressed: [...document.querySelectorAll('.ctl-btn.pressed')].map(e => e.id).join(','), zoom: visualViewport.scale }));
+  try {
+    await tp.goto(`${base}/index.html`, { waitUntil: 'load' });
+    if (await tp.locator('#titleScreen').count()) await tp.locator('#titleScreen').tap();
+    await tp.waitForSelector('.stage-btn');
+    await tp.locator('.stage-btn[data-index="0"]').tap();
+    await tp.locator('#stageStartBtn').tap();
+    await tp.waitForSelector('#startBar', { timeout: 30000 });
+    await sleep(600);
+    await tp.keyboard.down('ArrowDown'); await sleep(500); await tp.keyboard.up('ArrowDown'); await tp.keyboard.press('ArrowUp');
+    await tp.waitForSelector('#driveControls.on');
+    // 게이트/뒤로 떨어지기와 무관한 직선 구간에서 반복 테스트 — 진행을 멈춰 둠(입력·leanInput 램프는 그대로 돌아감)
+    await tp.evaluate(() => { window.__boosts = 0; window.addEventListener('gate-result', () => window.__boosts++); Game.cart.t = 0.001; Cart.speedScale = 0; });
+    const R = await center('#leanRightBtn'), L = await center('#leanLeftBtn'), B = await center('#boostBtn');
+    // A) ▶ 누른 채 BOOST 탭 → ▶ 유지, 부스트 1회
+    await down(0, ...R); await sleep(400);
+    await down(1, ...B); await sleep(60); await up(1); await sleep(300);
+    let a = await st();
+    check('touch A: hold ▶ + tap BOOST → lean kept, 1 boost', a.lean > 0.99 && a.boosts === 1 && a.pressed === 'leanRightBtn', JSON.stringify(a));
+    await up(0); await sleep(450);
+    a = await st();
+    check('touch A2: release ▶ → neutral, nothing stuck', Math.abs(a.lean) < 0.01 && !a.pressed, JSON.stringify(a));
+    // B) BOOST 누른 채 ◀ 누르기 → 왼쪽으로 기울고, ◀ 먼저 떼면 BOOST는 계속 눌린 상태(추가 부스트 없음)
+    await down(1, ...B); await sleep(60);
+    await down(0, ...L); await sleep(400);
+    let b = await st();
+    check('touch B: hold BOOST + hold ◀ → lean left, boost once', b.lean < -0.99 && b.boosts === 2 && b.pressed.includes('leanLeftBtn') && b.pressed.includes('boostBtn'), JSON.stringify(b));
+    await up(0); await sleep(450);
+    b = await st();
+    check('touch B2: release ◀ first → BOOST still pressed, lean neutral', Math.abs(b.lean) < 0.01 && b.pressed === 'boostBtn' && b.boosts === 2, JSON.stringify(b));
+    await up(1); await sleep(100);
+    // C) ▶ + BOOST를 같은 순간에 떼기
+    await down(0, ...R); await down(1, ...B); await sleep(400);
+    await up(0, 1); await sleep(450);
+    const c = await st();
+    check('touch C: release both at once → nothing stuck', Math.abs(c.lean) < 0.01 && !c.pressed && c.boosts === 3, JSON.stringify(c));
+    // D) ▶를 누른 채 버튼 밖으로 미끄러져도 유지(버튼 단위 캡처), 밖에서 떼면 해제
+    await down(0, ...R); await sleep(200);
+    await move(0, R[0] + 20, R[1] - 70); await sleep(300);
+    const d = await st();
+    await up(0); await sleep(450);
+    const d2 = await st();
+    check('touch D: slide off ▶ keeps input, release outside clears', d.lean > 0.99 && d.pressed === 'leanRightBtn' && Math.abs(d2.lean) < 0.01 && !d2.pressed, `${JSON.stringify(d)} → ${JSON.stringify(d2)}`);
+    // E) 두 손가락 벌리기(핀치) — 페이지 확대 없음
+    await down(0, ...L); await down(1, ...B);
+    for (let i = 1; i <= 6; i++) { await move(0, L[0] - i * 3, L[1] - i * 10); await move(1, B[0] + i * 3, B[1] - i * 10); await sleep(16); }
+    await up(0, 1); await sleep(300);
+    const e = await st();
+    check('touch E: two-finger spread → no zoom, nothing stuck', e.zoom === 1 && !e.pressed && Math.abs(e.lean) < 0.01, JSON.stringify(e));
+    // G) ◀ 누른 채 ▶를 눌렀다 떼면 다시 ◀로(예전 코드는 ◀ 입력이 사라짐 — 진단 1-2)
+    await down(0, ...L); await sleep(350);
+    await down(1, ...R); await sleep(700);
+    const g1 = await st();
+    await up(1); await sleep(700);
+    const g2 = await st();
+    await up(0); await sleep(450);
+    check('touch G: hold ◀, press/release ▶ → back to ◀', g1.lean > 0.99 && g2.lean < -0.99 && g2.pressed === 'leanLeftBtn', `${g1.lean.toFixed(2)} → ${g2.lean.toFixed(2)} ${g2.pressed}`);
+    // F) 키보드 ← 누른 채 ↑ → 왼쪽 유지 + 부스트 1회
+    const n0 = (await st()).boosts;
+    await tp.keyboard.down('ArrowLeft'); await sleep(400); await tp.keyboard.press('ArrowUp'); await sleep(200);
+    const f = await st();
+    await tp.keyboard.up('ArrowLeft');
+    check('keys: hold ← + press ↑ → lean left kept, 1 boost', f.lean < -0.99 && f.boosts === n0 + 1, JSON.stringify(f));
+    await tp.screenshot({ path: path.join(OUT, 'touch_multi.png') });
+  } catch (err) {
+    check('multi-touch flow', false, err.message.split('\n')[0]);
+  } finally {
+    await tctx.close();
   }
 }
 main();
