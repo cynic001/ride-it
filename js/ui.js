@@ -224,6 +224,14 @@ const UI = {
         </div>
         <div class="progress-summary">클리어 ${ProgressManager.clearedCount} / ${stages.length}</div>
         <div class="stage-list">
+          <button class="stage-btn tutorial-btn" id="tutorialStageBtn">
+            <span class="stage-num">연습</span>
+            <span class="stage-info">
+              <span class="stage-name">튜토리얼 · ${TUTORIAL_STAGE.name}</span>
+              <span class="stage-motif">${TUTORIAL_STAGE.motif}</span>
+            </span>
+            <span class="stage-side">${localStorage.getItem('rc_tutorial_done') ? '<span class="badge clear">완료</span>' : '<span class="badge">추천</span>'}</span>
+          </button>
           ${stages.map((s, i) => `
             <button class="stage-btn" data-index="${i}">
               <span class="stage-num">${i + 1}</span>
@@ -239,14 +247,15 @@ const UI = {
       </div>
     `);
 
-    this.root.querySelectorAll('.stage-btn').forEach(btn => {
+    this.root.querySelectorAll('.stage-btn[data-index]').forEach(btn => {
       btn.addEventListener('click', () => this.showStageDetail(Number(btn.dataset.index)));
     });
     document.getElementById('howtoBtn').addEventListener('click', () => this.showHowTo());
     document.getElementById('settingsBtn').addEventListener('click', () => this.showSettings());
+    document.getElementById('tutorialStageBtn').addEventListener('click', () => Game.loadTutorial());
 
-    // 최초 1회만 자동으로 조작법 안내 — 이후엔 ? 버튼으로만 접근
-    if (!localStorage.getItem('rc_howto_seen')) this.showHowTo();
+    // 처음 실행: "튜토리얼부터 해볼까요?" (예 / 건너뛰기) — 예전 "최초 1회 자동 조작법 안내"를 대체(조작법 화면은 ? 버튼으로 그대로)
+    if (!localStorage.getItem('rc_tutorial_asked') && !localStorage.getItem('rc_tutorial_done')) this.showTutorialAsk();
   },
 
   /** 스테이지 상세 — 모티브 설명, 최고 기록, 랩 수 선택, START */
@@ -316,6 +325,7 @@ const UI = {
         <button id="settingsHowtoBtn" class="btn">${ICONS.help}조작법</button>
         <button id="creditsBtn" class="btn">${ICONS.info}크레딧</button>
       </div>
+      <button id="settingsTutorialBtn" class="btn wide">${ICONS.play}튜토리얼 다시 하기</button>
       <div class="actions"><button id="settingsCloseBtn" class="btn primary wide">닫기</button></div>
     `, { solid: true });
     el.querySelectorAll('.seg').forEach(group => group.querySelectorAll('.seg-btn').forEach(b => b.addEventListener('click', () => {
@@ -333,6 +343,7 @@ const UI = {
     document.getElementById('graphicsBtn').addEventListener('click', () => this.showGraphics());
     document.getElementById('settingsHowtoBtn').addEventListener('click', () => this.showHowTo());
     document.getElementById('creditsBtn').addEventListener('click', () => this.showCredits());
+    document.getElementById('settingsTutorialBtn').addEventListener('click', () => { el.remove(); Game.loadTutorial(); });
     document.getElementById('settingsCloseBtn').addEventListener('click', () => el.remove());
   },
 
@@ -374,6 +385,75 @@ const UI = {
       localStorage.setItem('rc_howto_seen', '1');
       if (onClose) onClose();
     });
+  },
+
+  /** 처음 실행 권유 — 답하면(예/건너뛰기) 다시 묻지 않음 */
+  showTutorialAsk() {
+    const el = this._modal('tutorialAsk', `
+      <div class="ribbon">환영해요!</div>
+      <h2>튜토리얼부터 해볼까요?</h2>
+      <p>꼬마 열차 연습장에서 출발·밸런스·부스트를 하나씩 직접 해봐요. 1분이면 끝나요.</p>
+      <div class="actions">
+        <button id="tutAskYes" class="btn primary wide big">${ICONS.play}해볼래요</button>
+        <button id="tutAskNo" class="btn wide">건너뛰기</button>
+      </div>`);
+    const answer = () => { try { localStorage.setItem('rc_tutorial_asked', '1'); } catch (e) { /* 무시 */ } el.remove(); };
+    document.getElementById('tutAskYes').addEventListener('click', () => { answer(); Game.loadTutorial(); });
+    document.getElementById('tutAskNo').addEventListener('click', answer);
+  },
+
+  /** 튜토리얼 완료 — 기록 저장 없이, 1단계로 바로 */
+  showTutorialDone() {
+    this._setScreen(`
+      <div class="screen modal-overlay" id="tutorialDone">
+        <div class="card">
+          <div class="ribbon">준비 완료!</div>
+          <h2>이제 진짜 코스터로!</h2>
+          <p>출발 · 밸런스 · 부스트 · 연타 · 피니쉬 모두 해냈어요.</p>
+          <div class="actions">
+            <button id="tutGoStage1" class="btn primary wide big">${ICONS.play}1단계 출발</button>
+            <button id="tutToSelect" class="btn wide">${ICONS.list}스테이지 선택</button>
+          </div>
+        </div>
+      </div>`);
+    AudioManager.playSample('cheer', { volume: 0.7 });
+    document.getElementById('tutGoStage1').addEventListener('click', () => Game.loadStage(0));
+    document.getElementById('tutToSelect').addEventListener('click', () => this.showStageSelect(STAGES, i => Game.loadStage(i)));
+  },
+
+  /** 밸런스 게이지 읽는 법 그림(튜토리얼 카드·조작법 공용) — 오른쪽 커브 예시 */
+  gaugeDiagram() {
+    return `<svg class="diagram" viewBox="0 0 300 150" role="img" aria-label="밸런스 게이지 읽는 법">
+      <text x="268" y="34" font-size="24" fill="#3ddc84" stroke="#141a33" stroke-width="4" paint-order="stroke">▶</text>
+      <text x="206" y="18" font-size="12" fill="#141a33" text-anchor="end">커브 방향</text>
+      <rect x="20" y="50" width="260" height="20" rx="6" fill="#6b7390" stroke="#141a33" stroke-width="2"/>
+      <rect x="167" y="52" width="111" height="16" fill="#5dff9a"/>
+      <rect x="186" y="55" width="52" height="10" rx="3" fill="#0a8a47"/>
+      <polygon points="200,34 216,34 208,46" fill="#ffb80d" stroke="#141a33" stroke-width="1.5"/>
+      <rect x="206.5" y="44" width="3" height="28" fill="#ffb80d" stroke="#141a33" stroke-width="1"/>
+      <rect x="20" y="78" width="260" height="8" rx="4" fill="#c9d0e4"/><rect x="20" y="78" width="170" height="8" rx="4" fill="#3ddc84"/>
+      <line x1="150" y1="70" x2="150" y2="76" stroke="#141a33" stroke-width="2"/>
+      <text x="150" y="44" font-size="12" fill="#141a33" text-anchor="end">내 기울기 ▼</text>
+      <text x="20" y="104" font-size="12" fill="#141a33">아래 막대 = 1.5초 유지 진행도</text>
+      <text x="280" y="122" font-size="12" fill="#1f8a4c" text-anchor="end">밝은 초록 = 목표 범위(여기 안에서!)</text>
+      <text x="280" y="140" font-size="12" fill="#0a6b38" text-anchor="end">진한 초록 = Perfect(보너스)</text>
+    </svg>`;
+  },
+
+  /** 부스트 타이밍 팝업 그림 */
+  popupDiagram() {
+    return `<svg class="diagram" viewBox="0 0 300 140" role="img" aria-label="부스트 타이밍 팝업">
+      <g transform="translate(70 70)">
+        <circle r="56" fill="rgba(20,26,51,.75)"/><circle r="30" fill="none" stroke="rgba(255,184,13,.8)" stroke-width="16"/>
+        <circle r="30" fill="none" stroke="#3ddc84" stroke-width="8"/><circle r="30" fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="3 3"/>
+        <circle r="48" fill="none" stroke="#fff" stroke-width="4"/>
+        <path d="M0 -48 L0 -36 M-5 -42 L0 -36 L5 -42" stroke="#ffb80d" stroke-width="2.5" fill="none"/>
+      </g>
+      <text x="140" y="44" font-size="13" fill="#141a33">① 바깥 흰 원이 줄어들어요</text>
+      <text x="140" y="74" font-size="13" fill="#141a33">② 안쪽 원과 겹칠 때</text>
+      <text x="140" y="96" font-size="15" fill="#d99700">BOOST! = PERFECT</text>
+      <text x="140" y="122" font-size="11" fill="#5b6488">노란 띠 안 = GOOD</text>
+    </svg>`;
   },
 
   _viewDesc(m) {
@@ -526,7 +606,7 @@ const UI = {
     if (el) el.remove();
   },
 
-  showStartPrompt(name, motif) {
+  showStartPrompt(name, motif, { tutorial = false } = {}) {
     // 스테이지를 재도전/재선택할 때마다 새로 호출되므로, 직전 호출에서 등록해둔 window 리스너를
     // 먼저 정리 — 그대로 두면 "발사 전에 스테이지 선택으로 돌아가기"를 반복할 때마다 리스너가
     // 계속 쌓이는 누수가 생김
@@ -541,9 +621,11 @@ const UI = {
           <div class="hud-row">
             <span class="stage-chip stage-label">${name}</span>
             <span class="speedo" id="speedo"><span class="max-tag">MAX</span><span class="num" id="speedLabel">0</span><span class="unit">km/h</span><span class="sub turn-label" id="turnLabel"></span></span>
-            <span class="combo-chip" id="comboChip"><small>COMBO</small><b id="comboLabel">0</b><small class="mult" id="comboMult">×1.0</small></span>
+            <span class="combo-chip" id="comboChip"${tutorial ? ' hidden' : ''}><small>COMBO</small><b id="comboLabel">0</b><small class="mult" id="comboMult">×1.0</small></span>
+            ${tutorial ? '<button class="tut-skip" id="tutSkipBtn">건너뛰기</button>' : ''}
           </div>
         </div>
+        ${tutorial ? '<div class="tut-banner" id="tutBanner"></div>' : ''}
         <div class="judge" id="judgeToast"></div>
         <div class="rb-overlay" id="rbOverlay"><div class="rb-title" id="rbTitle"></div>
           <div class="rb-gauge" id="rbGauge"><div class="rb-gauge-fill" id="rbGaugeFill"></div></div><div class="rb-sub" id="rbSub"></div></div>
@@ -589,6 +671,7 @@ const UI = {
       if (Game.camera && !Game.camera.locked) Game.camera.toggleMode();
     });
     $('pauseBtn').addEventListener('click', () => Game.pauseGame());
+    if (tutorial) $('tutSkipBtn').addEventListener('click', () => Tutorial.skip());
     $('soundToggleBtn').addEventListener('click', () => {
       const next = !AudioManager.enabled;
       AudioManager.setEnabled(next);

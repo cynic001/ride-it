@@ -373,3 +373,45 @@ const STAGES = [
 
 // 전역 노출 (모듈 번들러 없이 script 태그로 로드하는 구조 전제)
 window.STAGES = STAGES;
+
+// ── 튜토리얼(13번): 꼬마 열차 연습장 — STAGES와 따로 둠(스테이지 번호·기록·검증 인덱스가 밀리지 않게) ──
+// 1단계와 같은 키트(mouse)의 짧고 완만한 오벌. 세그먼트 6개 = 단계 순서: 출발 직선 → 밸런스 커브 → 부스트 → 커브+부스트(동시 조작)
+// → 뒤로 떨어지기 언덕(연타) → 피니쉬. 제어점 13개, t(CPk) = (k−1)/13 — 언덕 골짜기 CP10(t .692)·꼭대기 CP11(t .769)이 세그먼트 4 안
+const TUTORIAL_STAGE = {
+  id: 'tutorial',
+  tutorial: true,
+  name: '꼬마 열차 연습장',
+  motif: '옛 놀이공원 꼬마 열차처럼 천천히 — 조작을 하나씩 직접 해봐요',
+  railType: 'mouse',
+  baseSpeedKmh: 40,
+  gateTiming: { perfect: 0.12, good: 0.25 }, // 연습용으로 넉넉하게
+  trackLengthM: 460,
+  rollback: { cp: 11, mode: 'mash' },
+  theme: '#3ddc84',
+  balance: { minLean: 0.12, perfectRange: 0.22, holdSec: 1.5 },
+  controlPoints: [
+    { x: 0,   y: 8,   z: 0 },    // 스테이션
+    { x: -10, y: 8,   z: 30 },   // 출발(t=0)
+    { x: -22, y: 7.5, z: 65 },
+    { x: -26, y: 7,   z: 100 },  // 밸런스 커브
+    { x: -20, y: 6.5, z: 135 },
+    { x: -8,  y: 6,   z: 162 },
+    { x: 8,   y: 6,   z: 172 },  // 원거리 턴 — 부스트 게이트
+    { x: 22,  y: 6,   z: 158 },
+    { x: 28,  y: 6,   z: 128 },  // 커브 + 부스트(동시 조작)
+    { x: 26,  y: 5.5, z: 98 },
+    { x: 24,  y: 4,   z: 72 },   // 언덕 골짜기
+    { x: 22,  y: 13,  z: 45 },   // 언덕 꼭대기 — 뒤로 떨어지기(연타)
+    { x: 10,  y: 9,   z: 16 },   // 피니쉬 → 스테이션
+  ],
+  segments: [
+    { type: 'straight', curveDirection: null,    requiredLean: 0,   leanWindow: 0, gate: null, airtimeZone: false },
+    { type: 'curve',    curveDirection: 'right', requiredLean: 0.3, leanWindow: 0, gate: null, airtimeZone: false },
+    { type: 'straight', curveDirection: null,    requiredLean: 0,   leanWindow: 0, gate: { type: 'boost', timingWindow: { start: 0.45, end: 0.55 } }, airtimeZone: false },
+    { type: 'curve',    curveDirection: 'right', requiredLean: 0.35, leanWindow: 0, gate: { type: 'boost', timingWindow: { start: 0.55, end: 0.65 } }, airtimeZone: false },
+    { type: 'straight', curveDirection: null,    requiredLean: 0,   leanWindow: 0, gate: null, airtimeZone: false },
+    { type: 'straight', curveDirection: null,    requiredLean: 0,   leanWindow: 0, gate: { type: 'finish', timingWindow: { start: 0.6, end: 0.8 } }, airtimeZone: false },
+  ],
+};
+window.TUTORIAL_STAGE = TUTORIAL_STAGE;
+

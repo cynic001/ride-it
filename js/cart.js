@@ -99,6 +99,10 @@ class Cart {
     this.onChainLift = false;
     this._crestHold = 0;
     this._liftArmed = null;
+    // 튜토리얼용: 트랙 위 진행만 이 배율로(0 = 그 자리에서 기다림, 0.5 = 슬로모션) — 물리 속도·판정 시간(초)은 그대로.
+    // gateTiming도 같은 배율을 써서 타이밍 팝업/판정이 어긋나지 않음
+    this.tScale = 1;
+    this.mashTimeout = ROLLBACK.mashTimeout; // 튜토리얼은 Infinity(연타로 직접 올라갈 때까지)
   }
 
   /** 현재 콤보 배율: 콤보 10마다 +0.1배, 최대 2배 */
@@ -166,7 +170,7 @@ class Cart {
         window.dispatchEvent(new CustomEvent('rollback', { detail: { phase: 'success', bonus, sec: rb.mashTime } }));
         return;
       }
-      if (rb.mashTime >= ROLLBACK.mashTimeout) { rb.assisted = true; this._rbPhase('launch'); }
+      if (rb.mashTime >= this.mashTimeout) { rb.assisted = true; this._rbPhase('launch'); }
       this._lastHeight = this.track.getHeightAt(this.t);
       return;
     } else if (rb.phase === 'launch') {
@@ -183,7 +187,7 @@ class Cart {
       }
     }
     this._capSpeed();
-    this._stepDistance = this.speed * Cart.speedScale * dt;
+    this._stepDistance = this.speed * Cart.speedScale * this.tScale * dt;
     this.t += dir * this._stepDistance / L;
     this._lastHeight = h0; // 일반 주행과 같이 "이동 전" 높이 — 다음 틱의 높이 차(에너지)가 이번 이동분이 됨
   }
@@ -306,7 +310,7 @@ class Cart {
     this._capSpeed();
 
     // 진행률 갱신 (속도 × 게임 배율 × dt / 트랙길이)
-    this._stepDistance = this.speed * Cart.speedScale * dt;
+    this._stepDistance = this.speed * Cart.speedScale * this.tScale * dt;
     const prevT = this.t;
     this.t += this._stepDistance / trackLength;
     const rz = this.track.rollbackZone;
@@ -406,7 +410,7 @@ class Cart {
   /** 가장 가까운 미판정 게이트의 시간 정보 — HUD 가이드와 판정이 같은 값을 쓰도록 단일 소스.
    * timeTo: 현재 속도로 중심 지점까지 남은 시간(초), err: 지금 탭하면 판정될 오차(초, 음수=이름/양수=늦음, 터치 지연 보정 포함) */
   gateTiming() {
-    const tPerSec = Math.max(0.1, this.speed * Cart.speedScale) / this.track.lengthM; // cart.t 진행 속도와 동일 모델
+    const tPerSec = Math.max(0.1, this.speed * Cart.speedScale * this.tScale) / this.track.lengthM; // cart.t 진행 속도와 동일 모델
     let best = null;
     for (const c of this._gateCandidates()) {
       if (this._resolvedGates.has(c.key)) continue;
@@ -426,6 +430,7 @@ class Cart {
     const g = snapshot && !this._resolvedGates.has(snapshot.key) ? snapshot : this.gateTiming();
     if (!g || Math.abs(g.err) > GATE_ATTEMPT_RANGE) return 'none';
     this._resolvedGates.add(g.key); // 게이트당(랩별) 판정 1회
+    this.lastGateKey = g.key;
     const e = Math.abs(g.err);
     const result = e <= g.perfect ? 'perfect' : e <= g.good ? 'good' : 'miss';
     this.lastGateType = g.type;

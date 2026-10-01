@@ -102,14 +102,21 @@ async function main() {
       await shot('00_title');
       await page.locator('#titleScreen').click();
     }
-    await page.waitForSelector('#howtoOverlay', { timeout: 10000 });
+    // 처음 실행: 튜토리얼 권유(예전 자동 조작법 안내 대체) → 건너뛰기. 조작법 화면은 ? 버튼으로
+    await page.waitForSelector('#tutorialAsk', { timeout: 10000 });
     await sleep(400);
+    await shot('01_tutorial_ask');
+    await page.locator('#tutAskNo').click();
+    check('first-run tutorial prompt answered once', await page.evaluate(() => localStorage.getItem('rc_tutorial_asked') === '1' && !document.getElementById('tutorialAsk')));
+    await page.locator('#howtoBtn').click();
+    await page.waitForSelector('#howtoOverlay');
+    await sleep(300);
     await shot('01_howto');
     await page.locator('#howtoCloseBtn').click();
     await page.waitForSelector('.stage-btn');
     await sleep(400);
     await shot('02_stage_select');
-    check('stage select', (await page.locator('.stage-btn').count()) === 5);
+    check('stage select (tutorial card + 5 stages)', (await page.locator('.stage-btn[data-index]').count()) === 5 && (await page.locator('#tutorialStageBtn').count()) === 1);
 
     // BGM(F): 첫 제스처 후 실제 출력이 나오는지(마스터 게인 RMS), 사운드 토글 버튼으로 무음 전환되는지
     const rms = () => page.evaluate(() => new Promise(resolve => {

@@ -383,6 +383,43 @@
   }
   .hud-icon-btn svg { width: 22px; height: 22px; }
 
+  /* ── 튜토리얼(13번) ── */
+  .tut-banner { position: absolute; left: 50%; bottom: calc(178px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(92vw, 420px);
+    padding: 8px 14px; border-radius: 16px; background: rgba(20,26,51,.85); color: #fff; font-size: 15px; line-height: 1.35; text-align: center;
+    pointer-events: none; opacity: 0; transition: opacity .2s ease; box-shadow: 0 4px 0 rgba(0,0,0,.25); }
+  .tut-banner.on { opacity: 1; }
+  .tut-banner small { display: block; font-size: 11px; letter-spacing: 1px; color: var(--yellow); }
+  .tut-banner b { color: var(--yellow); font-weight: normal; }
+  .tut-banner.hint { background: rgba(160,40,40,.9); }
+  .tut-banner.shake { animation: nudgeX .4s ease; }
+  .tut-skip { min-height: 44px; padding: 0 14px; border-radius: 12px; background: #fff; color: var(--navy); font-size: 15px; pointer-events: auto;
+    box-shadow: 0 4px 0 #b8c2dc; }
+  .tut-ring { position: fixed; z-index: 15; pointer-events: none; border-radius: 22px; border: 4px solid var(--yellow);
+    box-shadow: 0 0 0 4px rgba(20,26,51,.55), 0 0 18px rgba(255,184,13,.9); animation: tutBlink .9s ease-in-out infinite; }
+  @keyframes tutBlink { 50% { opacity: .25; } }
+  .tut-finger { position: fixed; z-index: 16; width: 36px; height: 36px; pointer-events: none; animation: tutTap 1s ease-in-out infinite; filter: drop-shadow(0 2px 2px rgba(0,0,0,.4)); }
+  .tut-finger svg { width: 100%; height: 100%; }
+  @keyframes tutTap { 0%, 100% { transform: translate(6px, 10px); } 50% { transform: translate(0, 0) scale(.92); } }
+  .card.tut-card { max-width: 400px; }
+  .card.tut-card p { font-size: 15px; } .tut-card p b { color: var(--navy); font-weight: normal; background: #fff1c2; padding: 0 3px; border-radius: 4px; }
+  .tut-step { font-size: 12px; letter-spacing: 2px; color: #5b6488; margin-bottom: -8px; }
+  .tut-pic { width: 100%; background: #f2f5fb; border-radius: 14px; padding: 6px; }
+  .diagram { display: block; width: 100%; height: auto; font-family: 'Jua', sans-serif; }
+  .stage-btn.tutorial-btn { background: #eafff2; box-shadow: 0 5px 0 #a8e6c1, 0 10px 18px rgba(20,26,51,.18); }
+  .tutorial-btn .stage-num { width: auto; padding: 0 8px; font-size: 15px; background: var(--green); color: #fff; box-shadow: inset 0 -3px 0 #23a862; }
+  @media (orientation: landscape) and (max-height: 500px) {
+    .tut-banner { bottom: calc(160px + env(safe-area-inset-bottom, 0px)); width: min(50vw, 420px); }
+    /* 가로: 카드가 화면 높이를 넘지 않게 2열(그림 | 설명+버튼) */
+    .tut-card-overlay { padding: 8px; }
+    .card.tut-card { max-width: 640px; display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 6px 14px; padding: 14px 18px; }
+    .card.tut-card .tut-step, .card.tut-card h2 { grid-column: 1 / -1; }
+    .card.tut-card h2 { font-size: 22px; }
+    .card.tut-card .tut-pic { grid-row: span 2; }
+    .card.tut-card p { font-size: 14px; line-height: 1.4; }
+    .card.tut-card .actions { margin-top: 0; }
+    .card.tut-card:not(:has(.tut-pic)) p, .card.tut-card:not(:has(.tut-pic)) .actions { grid-column: 1 / -1; }
+  }
+
   /* ── 모달(일시정지/로딩/에러/조작법/크레딧/결과) ── */
   .modal-overlay {
     position: absolute; inset: 0; z-index: 20; pointer-events: auto;
@@ -508,6 +545,7 @@
   <script src="js/camera.js"></script>
   <script src="js/input.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/tutorial.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

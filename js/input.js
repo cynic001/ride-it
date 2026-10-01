@@ -53,6 +53,7 @@ class InputController {
     this._leanOrder = [];          // 눌려 있는 ◀/▶ 손가락(pointerId) 순서 — 둘 다 누르면 나중에 누른 쪽
     this._keys = new Set();
     this.lastInputKind = null;     // 'touch' | 'mouse' | 'keyboard' — 튜토리얼 안내 문구 기준
+    this.blocked = false;          // 튜토리얼 설명 카드가 떠 있는 동안 주행 입력 무시
 
     this._bindEvents();
   }
@@ -88,7 +89,7 @@ class InputController {
       if (!el) return;
       el.addEventListener('pointerdown', e => {
         e.preventDefault();
-        if (this.state !== 'launched') return;
+        if (this.state !== 'launched' || this.blocked) return;
         this.lastInputKind = e.pointerType === 'mouse' ? 'mouse' : 'touch';
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* iOS Safari 대응 */ }
         this._press(e.pointerId, name);
@@ -147,6 +148,7 @@ class InputController {
   _onPullDown(e) {
     if (this.state !== 'idle') return;
     e.preventDefault();
+    this.lastInputKind = e.pointerType === 'mouse' ? 'mouse' : 'touch';
     try { this.startBar.setPointerCapture(e.pointerId); } catch (err) { /* iOS Safari 대응 */ }
     this.state = 'pulling';
     this._dragStart = { x: e.clientX, y: e.clientY };
@@ -206,6 +208,7 @@ class InputController {
 
   _onStartKey(e, down) {
     if (this.state === 'launched') return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') this.lastInputKind = 'keyboard';
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (down && !this._keyCharging) {
@@ -295,7 +298,7 @@ class InputController {
   }
 
   _onDriveKey(e, down) {
-    if (this.state !== 'launched') return;
+    if (this.state !== 'launched' || (this.blocked && down)) return;
     const k = e.key;
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', ' '].includes(k)) return;
     e.preventDefault();

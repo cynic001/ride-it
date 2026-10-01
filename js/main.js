@@ -45,7 +45,17 @@ const Game = {
   /** 스테이지 로드 (UI에서 스테이지 선택 시 호출) */
   loadStage(stageIndex) {
     this.currentStageIndex = stageIndex;
-    const stageData = STAGES[stageIndex];
+    this._load(STAGES[stageIndex], LapsManager.current, false);
+  },
+
+  /** 튜토리얼(13번) — 전용 연습 트랙, 1랩, 기록 저장 없음 */
+  loadTutorial() {
+    this._load(TUTORIAL_STAGE, 1, true);
+  },
+
+  _load(stageData, laps, tutorial) {
+    if (window.Tutorial) Tutorial.end();
+    this.tutorialMode = tutorial;
 
     if (this.track) {
       this.track.dispose(); // 이전 스테이지의 레일/지지대/스테이션 인스턴스 정리
@@ -56,7 +66,7 @@ const Game = {
     // 스테이지 배속: 기본 +10%/스테이지를 참고선으로 두되, 모티브별 baseSpeedKmh가 우선
     const stageMultiplier = stageData.baseSpeedKmh / 45; // 1단계(45km/h) 대비 배율로 정규화
 
-    this.cart = new Cart(this.track, stageMultiplier, LapsManager.current);
+    this.cart = new Cart(this.track, stageMultiplier, laps);
     if (this.input) this.input.dispose(); // 이전 스테이지 입력 리스너가 남아 탭이 중복 판정되던 문제 방지
     if (this.camera) this.camera.dispose(); // 이전 스테이지 카메라가 activeCamera로 남아 빈 하늘만 보이던 문제 방지
     this.camera = new CoasterCamera(this.scene, this.canvas);
@@ -73,8 +83,9 @@ const Game = {
         this._setupSplash();
         StyleManager.apply(this); // 새로 로드된 glb 재질에 단계형 음영 적용
         // showStartPrompt가 스타트 바 DOM을 먼저 만들어야 InputController가 그 엘리먼트에 바인딩 가능
-        UI.showStartPrompt(stageData.name, stageData.motif);
+        UI.showStartPrompt(stageData.name, stageData.motif, { tutorial });
         this.input = new InputController(this.canvas, this.cart, this.camera, UI.startBarEl, ControlSettings.mode);
+        if (tutorial) { this.track.setRollbackMarkersVisible(true); Tutorial.begin(this); }
 
         this.accumulator = 0;
         this.lastTime = performance.now();
@@ -82,7 +93,7 @@ const Game = {
       })
       .catch(err => {
         console.error('[Assets] 스테이지 에셋 로드 실패:', err);
-        UI.showLoadError(() => this.loadStage(stageIndex));
+        UI.showLoadError(() => this._load(stageData, laps, tutorial));
       });
   },
 
@@ -110,6 +121,8 @@ const Game = {
 
   /** 일시정지 메뉴 → 스테이지 선택으로 복귀 (재시도 로직과 동일한 dispose 패턴) */
   exitToStageSelect() {
+    if (window.Tutorial) Tutorial.end();
+    this.tutorialMode = false;
     this.paused = false;
     this.engine.stopRenderLoop();
     AudioManager.updateWind(0);
@@ -339,6 +352,11 @@ const Game = {
 
   _fixedUpdate(dt) {
     if (!this.cart) return;
+    if (this.tutorialMode) Tutorial.tick(dt);
+    if (this.tutorialMode && Tutorial.hold) { // 튜토리얼 설명 카드: 물리·입력 정지(화면은 그대로 렌더)
+      this.camera.update(this.track, this.cart, dt);
+      return;
+    }
     if (!this.cart.launched) {
       // 발사 전에도 카메라는 스타트 지점 3인칭 위치로 따라가야 함 — 안 하면 초기 좌표(0,10,-20)에서 엉뚱한 곳을 봄
       this.camera.update(this.track, this.cart, dt);
@@ -368,7 +386,8 @@ const Game = {
       AudioManager.updateWind(0);
       this.camera.unlockToggle(); // 이미 풀려있겠지만 안전장치
       AudioManager.setBgmMode('menu');
-      UI.showResult(this.cart, this.currentStageIndex);
+      if (this.tutorialMode) { this.tutorialMode = false; Tutorial.complete(); } // 튜토리얼: 기록 저장·결과 화면 없이 "준비 완료!"
+      else UI.showResult(this.cart, this.currentStageIndex);
       this.engine.stopRenderLoop();
     }
 
@@ -383,7 +402,7 @@ const Game = {
     const c = this.cart;
     if (c.currentLap !== this._lastLapSeen) { // 뒤로 떨어지기 경고는 매 플레이 두 번째 랩부터
       this._lastLapSeen = c.currentLap;
-      this.track.setRollbackMarkersVisible(c.currentLap >= 2);
+      this.track.setRollbackMarkersVisible(c.currentLap >= 2 || this.tutorialMode); // 튜토리얼은 처음부터 보여 줌
     }
     // 체인 리프트: 초당 약 12회 딸깍(멈칫하는 동안은 느리게) — 리프트를 벗어나면 멈춤
     if (c.onChainLift || c._crestHold > 0) {
@@ -409,7 +428,7 @@ const Game = {
     if (sp && !c.rollback && (this._prevT ?? c.t) < sp.t && c.t >= sp.t) this._triggerSplash();
     const markers = this.track.passMarkers || [];
     const prev = this._prevT ?? c.t;
-    const lookAhead = 0.35 * c.speed * Cart.speedScale / this.track.lengthM; // 소리는 통과 0.35초 전부터 차오름
+    const lookAhead = 0.35 * c.speed * Cart.speedScale * c.tScale / this.track.lengthM; // 소리는 통과 0.35초 전부터 차오름
     markers.forEach(m => {
       if (prev < m.t - lookAhead && c.t >= m.t - lookAhead) AudioManager.playPassBy(m.kind === 'tunnel' ? 1 : 0.6);
     });
