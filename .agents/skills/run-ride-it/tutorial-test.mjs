@@ -101,6 +101,7 @@ async function run(browser, mode) {
     await waitFor(() => !!document.getElementById('tutCard'));
     const c0 = await state(); await sleep(400); const c1 = await state();
     check(`${tag} 2 balance: card pauses the ride`, c0.hold && c1.t === c0.t && await page.locator('#tutCard svg.diagram').count() === 1);
+    await sleep(450);
     await shot('02_balance_card');
     await okCard();
     await sleep(300);
@@ -119,6 +120,7 @@ async function run(browser, mode) {
 
     // 3) 부스트 — 카드(팝업 그림), 일부러 일찍 눌러 실패 → 되감기 + 힌트, 정타 → 다음
     await waitFor(() => !!document.getElementById('tutCard'), 30000);
+    await sleep(450);
     await shot('03_boost_card');
     await okCard();
     await sleep(200);
@@ -137,6 +139,7 @@ async function run(browser, mode) {
 
     // 4) 동시 조작 — 밸런스 없이 부스트만 = 실패(되감기), 밸런스 유지하면서 부스트 = 다음
     await waitFor(() => !!document.getElementById('tutCard'), 30000);
+    await sleep(450);
     await shot('04_combo_card');
     await okCard();
     await boostAt(0);
@@ -153,6 +156,7 @@ async function run(browser, mode) {
 
     // 5) 뒤로 떨어지기 — 연타해야만 올라감(자동 도움 없음)
     await waitFor(() => !!document.getElementById('tutCard'), 30000);
+    await sleep(450);
     await shot('05_rollback_card');
     await okCard();
     await waitFor(() => Game.cart.rollback && Game.cart.rollback.phase === 'mash', 30000);
@@ -166,6 +170,7 @@ async function run(browser, mode) {
 
     // 6) 피니쉬 — 카드 → 아치 통과 → 준비 완료
     await waitFor(() => !!document.getElementById('tutCard'), 30000);
+    await sleep(450);
     await shot('06_finish_card');
     await okCard();
     await page.waitForSelector('#tutorialDone', { timeout: 30000 });

@@ -360,24 +360,25 @@ const UI = {
 
   showHowTo(onClose) {
     const item = (ico, title, desc) => `<div class="howto-item"><span class="ico">${ico}</span><span><b>${title}</b><span>${desc}</span></span></div>`;
-    const mode = ControlSettings.mode;
-    const drive = mode === 'tilt'
-      ? item(ICONS.swipe, '기울기(현재)', '양손으로 폰을 잡고 좌우로 기울여 밸런스 · 오른쪽 아래 BOOST = 부스트')
-      : item(ICONS.swipe, '양손 버튼', '왼쪽 아래 ◀ ▶ = 밸런스(누르고 있으면 0.3초에 끝까지, 톡톡 = 중간) · 오른쪽 아래 BOOST = 부스트');
+    const tilt = ControlSettings.mode === 'tilt';
     const el = this._modal('howtoOverlay', `
       <h2>조작법</h2>
       <div class="howto-list">
-        ${item(ICONS.arrowUp, '출발', '하단 바를 아래로 당겼다가 위로 휙 밀어 올리기 — 많이 당기고 빨리 올릴수록 세게')}
-        ${drive}
-        ${item(ICONS.tap, '부스트 게이트', '링을 지나는 순간 부스트 — 게이지 가운데 초록일 때 Perfect, 오래 세게 가속')}
-        ${item(ICONS.retry, '뒤로 떨어지기', '가파른 언덕에서 뒤로 미끄러질 수 있어요! 1단계는 부스터가 다시 쏴 주고, 4단계는 부스트 연타(톡톡·BOOST·↑)로 올라가요')}
-        ${item(ICONS.camera, '시점', '3인칭(기본)은 부스트·급하강 때 자동으로 1인칭 — 설정에서 1인칭 고정도 가능, 카메라 버튼은 잠깐 전환')}
+        ${item(ICONS.arrowUp, '출발', '하단 스타트 바를 아래로 당겼다가 위로 휙 밀어 올리기 — 많이 당기고 빨리 올릴수록 세게 (키보드 ↓ 누르고 있다가 ↑)')}
+        ${item(ICONS.swipe, tilt ? '밸런스 — 기울기(현재)' : '밸런스 — 왼쪽 아래 ◀ ▶', tilt
+          ? '양손으로 잡은 폰을 커브 방향으로 기울여요 (설정에서 버튼으로 바꿀 수 있어요)'
+          : '커브 방향 버튼을 누르고 있으면 0.3초에 걸쳐 끝까지 기울고, 떼면 돌아와요. 톡톡 누르면 조금씩 (키보드 ← →, 설정에서 기울기로도)')}
+        <div class="howto-item legend"><span><b>밸런스 게이지 읽는 법</b>
+          <span>▼ 커서(내 기울기)를 밝은 초록 띠(목표 범위)에 넣고 <b class="em">1.5초 연속</b> 버티면 성공 — 벗어나면 진행도가 0부터 다시. 진한 초록(Perfect) 안이면 보너스</span>
+          <div class="tut-pic">${this.gaugeDiagram()}</div></span></div>
+        ${item(ICONS.tap, '부스트 — 오른쪽 아래 BOOST', '게이트가 다가오면 위쪽에 원이 떠요. 바깥 원이 줄어들어 안쪽 원과 겹치는 순간 누르면 PERFECT (키보드 ↑ 또는 Space)')}
+        ${item(ICONS.retry, '뒤로 떨어지기', '가파른 언덕에서 뒤로 미끄러질 수 있어요! 1단계는 부스터가 다시 쏴 주고, 4단계는 BOOST 연타로 올라가요')}
+        ${item(ICONS.camera, '시점', '3인칭(기본)은 부스트 성공·큰 낙하 순간에만 잠깐 1인칭 — 설정에서 1인칭 고정도 가능, 카메라 버튼은 잠깐 전환')}
         <div class="howto-item legend"><span><b>바닥 표시</b><span class="legend-row">
           <i style="background:#ffc61a"></i>부스트 <i style="background:#59ff8c"></i>커브 방향
           <i style="background:#ff801a"></i>급하강·물 <i style="background:#ff4099"></i>뒤로 떨어짐(2랩부터)</span></span></div>
-        ${item(ICONS.sparkle, '키보드', '출발 ↓ 누르고 있다가 ↑ · 주행 ← → 밸런스, ↑ 또는 Space 부스트')}
       </div>
-      <p class="field-desc">밸런스를 기울기로 하려면 설정(톱니바퀴) → 밸런스 조작 → 기울기</p>
+      <p class="field-desc">처음이라면 스테이지 선택 맨 위 <b>튜토리얼</b>에서 직접 해볼 수 있어요. 가로·세로 모두 플레이 가능</p>
       <div class="actions"><button id="howtoCloseBtn" class="btn primary wide">알겠어요!</button></div>
     `, { solid: true });
     document.getElementById('howtoCloseBtn').addEventListener('click', () => {
