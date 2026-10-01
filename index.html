@@ -297,23 +297,28 @@
   @keyframes judgePop { 0% { opacity: 0; transform: scale(.4); } 25% { opacity: 1; transform: scale(1.1); } 70% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: translateY(-20px); } }
   .judge.perfect { color: var(--yellow); } .judge.good { color: var(--green); } .judge.miss { color: var(--red); }
 
-  /* 밸런스 게이지(13번): ◀ ▶ 바로 위 — 회색 바(−1~+1), 초록 목표 띠, 진한 초록 Perfect 띠, 아래를 가리키는 삼각형 커서 + 세로선,
+  /* 밸런스 게이지(13·14번): ◀ ▶ 바로 위 — 회색 바(−1~+1) = 범위 밖, 초록 성공 띠 = 최소선(진한 선 + 아래 눈금)부터 커브 쪽 끝까지 한 덩어리,
+     파란 Perfect 띠(흰 테두리) = 성공 띠 안의 보너스 구간 — 가운데 정렬이 아니어도 색·테두리로 구분. 아래를 가리키는 삼각형 커서 + 세로선,
      아래 막대 = 연속 유지 진행도. 커서가 띠 안이면 띠가 밝아짐 */
-  .bal-gauge { position: relative; width: 156px; height: 58px; opacity: 0; transition: opacity .2s ease; pointer-events: none; }
+  .bal-gauge { position: relative; width: 156px; height: 62px; opacity: 0; transition: opacity .2s ease; pointer-events: none; }
   .bal-gauge.on { opacity: 1; }
   .bal-dir { position: absolute; left: 0; top: -6px; font-size: 26px; line-height: 26px; color: #5dff9a; -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; animation: dirNudgeL .6s ease-in-out infinite; }
   .bal-dir.right { left: auto; right: 0; animation-name: dirNudgeR; }
   @keyframes dirNudgeL { 50% { transform: translateX(-4px); } } @keyframes dirNudgeR { 50% { transform: translateX(4px); } }
-  .bal-bar { position: absolute; left: 0; right: 0; top: 26px; height: 16px; border-radius: 6px; background: #6b7390; border: 2px solid var(--navy); overflow: hidden; }
-  .bal-band { position: absolute; top: 0; bottom: 0; background: #3f9f68; transition: background .1s ease; }
-  .bal-gauge.in .bal-band { background: #5dff9a; box-shadow: 0 0 10px #5dff9a; }
-  .bal-perfect { position: absolute; top: 3px; bottom: 3px; border-radius: 3px; background: #0f6b3c; }
-  .bal-gauge.perfect .bal-perfect { background: #0a8a47; box-shadow: inset 0 0 0 2px #e8fff1; }
+  .bal-bar { position: absolute; left: 0; right: 0; top: 26px; height: 18px; border-radius: 6px; background: #5d6584; border: 2px solid var(--navy); overflow: hidden; }
+  .bal-band { position: absolute; top: 0; bottom: 0; background: #34b06a; transition: background .1s ease; }
+  .bal-gauge.in .bal-band { background: #6dffa5; } /* 번짐(glow) 없이 밝기만 — 최소선 경계가 흐려지지 않게 */
+  .bal-perfect { position: absolute; top: 1px; bottom: 1px; border-radius: 4px; background: #2563eb; box-shadow: inset 0 0 0 2px #fff; }
+  .bal-gauge.perfect .bal-perfect { background: #4da3ff; box-shadow: inset 0 0 0 2px #fff; }
+  /* Perfect 범위 안: 커서도 파랗게 — 좁은 파란 띠를 커서가 가려도 상태가 보이게 */
+  .bal-gauge.perfect .bal-cursor { border-top-color: #4da3ff; } .bal-gauge.perfect .bal-cursor::after { background: #4da3ff; }
+  .bal-min { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: #0b3d22; } /* 성공 띠가 시작되는 최소선 */
+  .bal-min-tick { position: absolute; top: 48px; width: 0; height: 0; margin-left: -4px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 5px solid #5dff9a; }
   .bal-zero { position: absolute; left: 50%; bottom: 0; width: 2px; height: 5px; margin-left: -1px; background: rgba(20,26,51,.7); }
   .bal-cursor { position: absolute; top: 14px; left: 50%; width: 0; height: 0; margin-left: -8px; pointer-events: none;
     border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 11px solid var(--yellow); filter: drop-shadow(0 0 1px var(--navy)) drop-shadow(0 0 1px var(--navy)); }
-  .bal-cursor::after { content: ''; position: absolute; left: -1.5px; top: 0; width: 3px; height: 18px; background: var(--yellow); box-shadow: 0 0 0 1px var(--navy); }
-  .bal-prog { position: absolute; left: 0; right: 0; top: 47px; height: 7px; border-radius: 999px; background: rgba(20,26,51,.6); overflow: hidden; }
+  .bal-cursor::after { content: ''; position: absolute; left: -1px; top: 0; width: 2px; height: 20px; background: var(--yellow); box-shadow: 0 0 0 1px var(--navy); }
+  .bal-prog { position: absolute; left: 0; right: 0; top: 54px; height: 7px; border-radius: 999px; background: rgba(20,26,51,.6); overflow: hidden; }
   .bal-prog-fill { height: 100%; width: 0; background: linear-gradient(90deg, #5dff9a, var(--yellow)); }
   .bal-gauge.done .bal-prog-fill { background: var(--yellow); }
   .bal-result { position: absolute; left: 0; right: 0; top: -26px; text-align: center; font-size: 22px; white-space: nowrap; opacity: 0; -webkit-text-stroke: 5px var(--navy); paint-order: stroke fill; }

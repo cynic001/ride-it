@@ -369,7 +369,7 @@ const UI = {
           ? '양손으로 잡은 폰을 커브 방향으로 기울여요 (설정에서 버튼으로 바꿀 수 있어요)'
           : '커브 방향 버튼을 누르고 있으면 0.3초에 걸쳐 끝까지 기울고, 떼면 돌아와요. 톡톡 누르면 조금씩 (키보드 ← →, 설정에서 기울기로도)')}
         <div class="howto-item legend"><span><b>밸런스 게이지 읽는 법</b>
-          <span>▼ 커서(내 기울기)를 밝은 초록 띠(목표 범위)에 넣고 <b class="em">1.5초 연속</b> 버티면 성공 — 벗어나면 진행도가 0부터 다시. 진한 초록(Perfect) 안이면 보너스</span>
+          <span>▼ 커서(내 기울기)를 밝은 초록 띠(목표 범위)에 넣고 <b class="em">1.5초 연속</b> 버티면 성공 — 벗어나면 진행도가 0부터 다시. 파란 띠(Perfect) 안이면 보너스</span>
           <div class="tut-pic">${this.gaugeDiagram()}</div></span></div>
         ${item(ICONS.tap, '부스트 — 오른쪽 아래 BOOST', '게이트가 다가오면 위쪽에 원이 떠요. 바깥 원이 줄어들어 안쪽 원과 겹치는 순간 누르면 PERFECT (키보드 ↑ 또는 Space)')}
         ${item(ICONS.retry, '뒤로 떨어지기', '가파른 언덕에서 뒤로 미끄러질 수 있어요! 1단계는 부스터가 다시 쏴 주고, 4단계는 BOOST 연타로 올라가요')}
@@ -429,15 +429,16 @@ const UI = {
       <text x="206" y="18" font-size="12" fill="#141a33" text-anchor="end">커브 방향</text>
       <rect x="20" y="50" width="260" height="20" rx="6" fill="#6b7390" stroke="#141a33" stroke-width="2"/>
       <rect x="167" y="52" width="111" height="16" fill="#5dff9a"/>
-      <rect x="186" y="55" width="52" height="10" rx="3" fill="#0a8a47"/>
+      <rect x="165.5" y="52" width="3" height="16" fill="#0b3d22"/><polygon points="163,77 171,77 167,71" fill="#2fbf6b"/>
+      <rect x="186" y="53" width="52" height="14" rx="4" fill="#2563eb" stroke="#fff" stroke-width="2"/>
       <polygon points="200,34 216,34 208,46" fill="#ffb80d" stroke="#141a33" stroke-width="1.5"/>
       <rect x="206.5" y="44" width="3" height="28" fill="#ffb80d" stroke="#141a33" stroke-width="1"/>
       <rect x="20" y="78" width="260" height="8" rx="4" fill="#c9d0e4"/><rect x="20" y="78" width="170" height="8" rx="4" fill="#3ddc84"/>
       <line x1="150" y1="70" x2="150" y2="76" stroke="#141a33" stroke-width="2"/>
       <text x="150" y="44" font-size="12" fill="#141a33" text-anchor="end">내 기울기 ▼</text>
       <text x="20" y="104" font-size="12" fill="#141a33">아래 막대 = 1.5초 유지 진행도</text>
-      <text x="280" y="122" font-size="12" fill="#1f8a4c" text-anchor="end">밝은 초록 = 목표 범위(여기 안에서!)</text>
-      <text x="280" y="140" font-size="12" fill="#0a6b38" text-anchor="end">진한 초록 = Perfect(보너스)</text>
+      <text x="280" y="122" font-size="12" fill="#1f8a4c" text-anchor="end">초록 = 성공(최소선부터 끝까지, 더 기울여도 OK)</text>
+      <text x="280" y="140" font-size="12" fill="#2563eb" text-anchor="end">파란 띠 = Perfect(보너스)</text>
     </svg>`;
   },
 
@@ -662,7 +663,7 @@ const UI = {
     this._hud = {
       speed: $('speedLabel'), speedo: $('speedo'), comboMult: $('comboMult'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'),
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
-      bal: $('balGauge'), balDir: $('balDir'), balBand: $('balBand'), balPerfect: $('balPerfect'), balCursor: $('balCursor'), balProg: $('balProg'), balResult: $('balResult'),
+      bal: $('balGauge'), balDir: $('balDir'), balBand: $('balBand'), balPerfect: $('balPerfect'), balCursor: $('balCursor'), balMin: $('balMin'), balMinTick: $('balMinTick'), balProg: $('balProg'), balResult: $('balResult'),
       pop: $('gatePop'), popLabel: $('gatePopLabel'), popGood: $('gatePopGood'), popPerfect: $('gatePopPerfect'), popRing: $('gatePopRing'), popResult: $('gatePopResult'), popKey: null, popResultUntil: 0,
       judge: $('judgeToast'),
       rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
@@ -744,7 +745,8 @@ const UI = {
         <div class="bal-gauge" id="balGauge" aria-hidden="true">
           <div class="bal-dir" id="balDir"></div>
           <div class="bal-result" id="balResult"></div>
-          <div class="bal-bar"><div class="bal-band" id="balBand"></div><div class="bal-perfect" id="balPerfect"></div><i class="bal-zero"></i></div>
+          <div class="bal-bar"><div class="bal-band" id="balBand"></div><div class="bal-min" id="balMin"></div><div class="bal-perfect" id="balPerfect"></div><i class="bal-zero"></i></div>
+          <div class="bal-min-tick" id="balMinTick"></div>
           <div class="bal-cursor" id="balCursor"></div>
           <div class="bal-prog"><div class="bal-prog-fill" id="balProg"></div></div>
         </div>
@@ -803,7 +805,7 @@ const UI = {
       const overall = ((cart.currentLap - 1) + Math.min(1, cart.t)) / cart.totalLaps;
       h.progress.style.width = `${(overall * 100).toFixed(1)}%`;
 
-      // 밸런스 게이지(13번): 회색 바 = −1(왼쪽 끝)~+1(오른쪽 끝). 초록 띠 = 목표 범위(커브 방향 최소 기울기~끝), 진한 초록 = Perfect,
+      // 밸런스 게이지(13번): 회색 바 = −1(왼쪽 끝)~+1(오른쪽 끝). 초록 띠 = 성공 범위(최소선~커브 쪽 끝), 파란 띠(흰 테두리) = Perfect,
       // 삼각형 커서 + 세로선 = 지금 내 기울기, 아래 막대 = holdSec초 연속 유지 진행도(범위를 벗어나면 즉시 0)
       const pct = v => (Math.max(-1, Math.min(1, v)) + 1) * 50;
       const bs = cart.launched && !cart.rollback ? cart.balanceState : null;
@@ -814,6 +816,7 @@ const UI = {
         const p0 = pct(bs.dir * Math.max(bs.minLean, bs.target - bs.perfectRange)), p1 = pct(bs.dir * Math.min(1, bs.target + bs.perfectRange));
         h.balPerfect.style.left = `${Math.min(p0, p1).toFixed(1)}%`;
         h.balPerfect.style.right = `${(100 - Math.max(p0, p1)).toFixed(1)}%`;
+        h.balMin.style.left = h.balMinTick.style.left = `${a.toFixed(1)}%`;
         h.balCursor.style.left = `${pct(cart.leanInput).toFixed(1)}%`;
         h.balProg.style.width = `${(bs.progress * 100).toFixed(1)}%`;
         h.balDir.textContent = bs.dir < 0 ? '◀' : '▶';
