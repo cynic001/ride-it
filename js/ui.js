@@ -473,6 +473,8 @@ const UI = {
   /** 새 버전 안내 — 주행 중에도 방해되지 않게 화면 위 작은 토스트, 누르면 새로고침 */
   showUpdateToast() {
     if (document.getElementById('updateToast')) return;
+    const c = window.Game && Game.cart;
+    if (c && c.launched && !c.isFinished && !Game.paused && document.getElementById('speedLabel')) { setTimeout(() => this.showUpdateToast(), 2000); return; } // 주행 중엔 문장 안내를 띄우지 않음 — 끝나면 표시
     const el = document.createElement('button');
     el.id = 'updateToast';
     el.className = 'update-toast';
@@ -764,7 +766,7 @@ const UI = {
         if (now >= h.popResultUntil) h.pop.classList.remove('on', 'result');
       }
     }
-    // 뒤로 떨어지기 안내: 멈칫/뒤로 = 경고, 연타 = "연타!" + 힘 게이지, 자동 발사 = 부스터
+    // 뒤로 떨어지기 신호: 멈칫/뒤로 = 경고, 연타 = "연타!" + 힘 게이지 + 남은 초, 자동 발사 = 부스터
     const rb = cart.rollback;
     h.rb.classList.toggle('on', !!rb);
     if (rb) {
@@ -775,7 +777,7 @@ const UI = {
       if (mash) {
         h.rbFill.style.width = `${Math.round(rb.gauge * 100)}%`;
         const left = Math.max(0, 6 - rb.mashTime);
-        h.rbSub.textContent = ControlSettings.mode === 'twohand' ? `BOOST 연타! ${left.toFixed(1)}초` : `톡톡 연타! (↑ 연타) ${left.toFixed(1)}초`;
+        h.rbSub.textContent = left.toFixed(1); // 일반 스테이지는 짧은 신호만(13번) — 연타 방법 설명은 튜토리얼에서
       } else h.rbSub.textContent = rb.phase === 'launch' ? '' : '꽉 잡아!';
     }
     h.cameraBtn.disabled = !cart.launched;
