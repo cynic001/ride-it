@@ -323,9 +323,10 @@ class InputController {
   _onDriveKey(e, down) {
     if (this.state !== 'launched' || (this.blocked && down)) return;
     const k = e.key;
-    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', ' '].includes(k)) return;
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', ' ', 'c', 'C'].includes(k)) return;
     e.preventDefault();
     this.lastInputKind = 'keyboard';
+    if (k === 'c' || k === 'C') { if (down && !e.repeat) UI.toggleView(); return; } // 시점 바꾸기
     if (down) {
       if ((k === 'ArrowUp' || k === ' ') && !e.repeat) this._boost();
       this._keys.add(k);

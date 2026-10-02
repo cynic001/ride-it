@@ -192,7 +192,7 @@
 .hud-hearts .heart-ico.off { fill: none; color: var(--ink-disabled); stroke: var(--ink-disabled); stroke-dasharray: 3 2; }
 .hud-hearts .heart-ico.lose { animation: heartLose 400ms var(--ease-pop); } @keyframes heartLose { 0% { transform: scale(1.5); } 100% { transform: scale(1); } }
 .hud-controls { position: absolute; top: calc(88px + env(safe-area-inset-top, 0px)); right: var(--s-2); display: flex; align-items: center; gap: var(--s-1); pointer-events: auto; }
-.tut-skip { min-height: 40px; padding: 0 var(--s-2); border-radius: var(--r-md); font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; pointer-events: auto; }
+.tut-skip { min-height: 44px; padding: 0 var(--s-2); border-radius: var(--r-md); font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; pointer-events: auto; }
 
 /* ── 가로 화면 ── */
 @media (orientation: landscape) and (max-height: 500px) { .hud-controls { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(var(--s-2) + env(safe-area-inset-right, 0px)); } }
@@ -266,3 +266,14 @@ body.popup-open .tut-ring, body.popup-open .tut-finger { display: none !importan
   .timing-pop { top: calc(104px + env(safe-area-inset-top, 0px)); }
   .rb-overlay { top: 38%; }
 }
+
+/* ── 시점 버튼: 오른쪽 가장자리 화면 높이 약 36% — 오른손 엄지가 BOOST에서 닿기 쉽고, 타이밍 표시·균형 바·다른 HUD와 겹치지 않는 곳.
+   평소엔 반투명, 누르는 순간 불투명. 아이콘이 지금 시점(3인칭 = 카트 뒤, 1인칭 = 눈)을 알려줌 ── */
+.view-btn { position: absolute; right: calc(var(--s-2) + env(safe-area-inset-right, 0px)); top: 36%; width: 52px; height: 52px; opacity: .72; transition: opacity var(--t-press) var(--ease), transform var(--t-press) var(--ease); }
+.view-btn svg { width: 28px; height: 28px; }
+.view-btn:active, .view-btn.pressed { opacity: 1; }
+.view-btn:disabled { opacity: .5; }
+.view-flash { position: absolute; right: calc(var(--s-2) + env(safe-area-inset-right, 0px)); top: calc(36% + 60px); min-height: 32px; opacity: 0; pointer-events: none; }
+.view-flash.show { animation: viewFlash 1.4s var(--ease) both; }
+@keyframes viewFlash { 0% { opacity: 0; transform: translateY(-6px); } 12% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
+@media (orientation: landscape) and (max-height: 500px) { .view-btn { top: 34%; } .view-flash { top: calc(34% + 60px); } }

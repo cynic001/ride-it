@@ -378,6 +378,55 @@ section('fonts', async () => {
   await close();
 });
 
+// ── 5 시점 버튼 + HUD 겹침: 오른쪽 가장자리 약 36% 높이·터치 48~52px·반투명→누르면 불투명·아이콘이 지금 시점을 알려줌·키보드 C,
+//    그리고 모든 HUD 요소(칩·버튼·균형 바·부스트·타이밍 표시)가 서로 겹치지 않고 화면 안에 있음 (세로·가로·작은 폰·데스크톱)
+section('hud', async () => {
+  for (const [name, w, h] of [['세로', 375, 667], ['가로', 667, 375], ['데스크톱', 1280, 720]]) { // 작은 폰(320×568)은 4번(부스트 링) 이후 HUD 배치 정리 때 추가
+    const { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_derail: 'on', rc_quality: 'medium' } });
+    await loadStage(page, 0);
+    const pre = await page.evaluate(() => ({ dis: document.getElementById('cameraToggleBtn').disabled }));
+    await page.evaluate(() => { Game.engine.stopRenderLoop(); Game.input._launch(1, 1); Game.camera.unlockToggle(); }); // 실제 입력 경로로 발사(키보드 C가 발사 뒤에만 동작)
+    // 커브 안으로 옮겨 균형 바(목표·띠)를 켜고, 모든 HUD 표시를 한꺼번에 보이게
+    await page.evaluate(() => {
+      const c = Game.cart, seg = Game.track.segmentRanges.find(x => x.requiredLean > 0); c._finalizeCurve(); c.t = seg.tStart + (seg.tEnd - seg.tStart) * 0.3; Cart.speedScale = 0.02;
+      for (let i = 0; i < 30; i++) { c.leanInput = (seg.curveDirection === 'left' ? -1 : 1) * 0.5; Game._fixedUpdate(1 / 60); }
+      window.dispatchEvent(new CustomEvent('derail', { detail: { count: 1, left: 2 } })); c.derails = 1; c.combo = 12;
+      UI.updateHUD(c, Game.track); document.getElementById('gatePop').classList.add('on'); UI._showPopResult('perfect');
+      const bar = document.getElementById('balResult'); bar.textContent = 'GOOD'; bar.className = 'bal-result show good';
+    });
+    await page.waitForTimeout(200); // 활성화 전환(opacity) 끝난 뒤
+    const view0 = await page.evaluate(() => ({ dis: document.getElementById('cameraToggleBtn').disabled, op: getComputedStyle(document.getElementById('cameraToggleBtn')).opacity, icon: document.getElementById('cameraToggleBtn').innerHTML.length, mode: Game.camera.mode }));
+    await page.click('#cameraToggleBtn'); await page.waitForTimeout(110);
+    const view1 = await page.evaluate(() => ({ target: Game.camera._manualTarget, flash: document.getElementById('viewFlash').textContent, flashOp: getComputedStyle(document.getElementById('viewFlash')).opacity, pressedOp: getComputedStyle(document.getElementById('cameraToggleBtn')).opacity }));
+    await page.evaluate(() => { for (let i = 0; i < 60; i++) Game._fixedUpdate(1 / 60); UI.updateHUD(Game.cart, Game.track); }); // 전환(0.65초) 진행 후 아이콘 갱신
+    const view2 = await page.evaluate(() => ({ mode: Game.camera.mode, icon: document.getElementById('cameraToggleBtn').innerHTML }));
+    await page.evaluate(() => { document.getElementById('cameraToggleBtn').classList.remove('pressed'); }); await page.keyboard.press('c'); await page.waitForTimeout(100);
+    const view3 = await page.evaluate(() => ({ target: Game.camera._manualTarget, flash: document.getElementById('viewFlash').textContent }));
+    const box = await page.evaluate(() => { const b = document.getElementById('cameraToggleBtn').getBoundingClientRect(); return { w: b.width, h: b.height, rightGap: innerWidth - b.right, topRatio: b.top / innerHeight, cy: (b.top + b.bottom) / 2 / innerHeight }; });
+    check(`시점 버튼 ${name}: 발사 전 비활성, 발사 후 활성`, pre.dis && !view0.dis, JSON.stringify([pre, view0]));
+    check(`시점 버튼 ${name}: 터치 영역 48~52px, 오른쪽 가장자리, 화면 높이 30~40% 지점`, box.w >= 48 && box.w <= 52 && box.h >= 48 && box.h <= 52 && box.rightGap >= 8 && box.rightGap <= 24 && box.cy >= 0.28 && box.cy <= 0.45, JSON.stringify(box));
+    check(`시점 버튼 ${name}: 평소 반투명, 누르면 불투명`, parseFloat(view0.op) < 0.9 && parseFloat(view1.pressedOp) > 0.95, JSON.stringify([view0.op, view1.pressedOp]));
+    check(`시점 버튼 ${name}: 누르면 반대 시점으로 + 이름 표시, 아이콘이 지금 시점으로 바뀜`, view1.target === 1 && view1.flash === '1인칭' && parseFloat(view1.flashOp) > 0.5 && view2.mode === 'first' && view0.mode === 'third' && view2.icon.includes('circle'), JSON.stringify([view1, view2.mode]));
+    check(`시점 버튼 ${name}: 키보드 C로도 바뀜(3인칭 이름 표시)`, view3.target === 0 && view3.flash === '3인칭', JSON.stringify(view3));
+    await page.evaluate(() => { const f = document.getElementById('viewFlash'); f.classList.remove('show'); f.style.opacity = '1'; f.style.animation = 'none'; f.textContent = '1인칭'; }); // 겹침 검사: 이름 표시도 보이게
+    const lay = await page.evaluate(() => {
+      const R = sel => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return b.width ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
+      const els = { 바퀴칩: '#lapChip', 속도칩: '#speedo', 콤보칩: '#comboChip', 하트: '#hearts', 소리: '#soundToggleBtn', 일시정지: '#pauseBtn', 시점: '#cameraToggleBtn', 시점이름: '#viewFlash', 균형바: '#balGauge', 균형결과: '#balResult', 부스트: '#boostBtn', 타이밍표시: '#gatePop' };
+      const rects = Object.fromEntries(Object.entries(els).map(([k, q]) => [k, R(q)]));
+      const hit = (a, b) => a && b && a.l < b.r - 0.5 && b.l < a.r - 0.5 && a.t < b.b - 0.5 && b.t < a.b - 0.5;
+      const names = Object.keys(rects).filter(k => rects[k]); const bad = [];
+      for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) if (hit(rects[names[i]], rects[names[j]])) bad.push(`${names[i]}×${names[j]}`);
+      const W = innerWidth, H = innerHeight; const out = names.filter(k => rects[k].l < -0.5 || rects[k].t < -0.5 || rects[k].r > W + 0.5 || rects[k].b > H + 0.5);
+      const small = ['소리', '일시정지', '시점', '부스트'].filter(k => rects[k] && (rects[k].r - rects[k].l < 43.5 || rects[k].b - rects[k].t < 43.5));
+      return { bad, out, small, n: names.length, missing: Object.keys(rects).filter(k => !rects[k]) };
+    });
+    await page.screenshot({ path: `/tmp/ride-it-popups/hud_${BROWSER}_${name}.png` }).catch(() => {});
+    check(`HUD 겹침 ${name}: ${lay.n}개 요소가 서로 안 겹치고 화면 안(소리·일시정지·시점·부스트 44px 이상)`, !lay.bad.length && !lay.out.length && !lay.small.length && lay.n >= 11, JSON.stringify(lay));
+    check(`hud ${name} page error 0`, errors.length === 0, errors.join('|'));
+    await close();
+  }
+});
+
 for (const [name, fn] of sections) {
   if (ONLY && !ONLY.includes(name)) continue;
   try { await fn(); } catch (e) { check(`${name} 실행`, false, String(e.message).split('\n')[0]); }

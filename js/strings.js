@@ -70,7 +70,7 @@ const STRINGS = {
   'howto.rollback': '뒤로 미끄러짐',
   'howto.rollbackText': '언덕에서 카트가 뒤로 미끄러져요. 부스터가 밀어 주거나 BOOST를 마구 눌러 올라가요.',
   'howto.view': '시점 바꾸기',
-  'howto.viewText': '오른쪽 눈 모양 버튼을 누르면 잠깐 시점이 바뀌어요. (키보드: C)',
+  'howto.viewText': '오른쪽 가운데 시점 버튼을 누르면 잠깐 시점이 바뀌어요. (키보드: C)',
   'howto.derail': '탈선',
   'howto.derailText': '커브를 놓치면 탈선해요. 하트가 하나 줄고, {hearts}번 놓치면 실패예요.',
   'howto.floor': '바닥 표시',
@@ -96,6 +96,13 @@ const STRINGS = {
   'credits.font': '글꼴',
   'credits.fontText': 'Noto Sans KR · Jua — SIL Open Font License 1.1',
   'credits.engine': '엔진',
+
+  // ── 시점 버튼 ──
+  'view.first': '1인칭',
+  'view.third': '3인칭',
+  'hud.view': '시점 바꾸기',
+  'hud.sound': '소리 켜기·끄기',
+  'hud.pause': '일시정지',
 
   // ── 그림 설명 ──
   'diagram.target': '목표',

@@ -91,6 +91,9 @@ const ICONS = {
   soundOn: svg('<path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a8.5 8.5 0 0 1 0 12"/>'),
   soundOff: svg('<path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><line x1="16" y1="9" x2="21" y2="14"/><line x1="21" y1="9" x2="16" y2="14"/>'),
   camera: svg('<path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/>'),
+  // 시점 버튼 아이콘 — 지금 보이는 시점을 알려줌: 3인칭 = 레일 위 카트를 뒤에서 본 모양, 1인칭 = 눈
+  viewThird: svg('<path d="M3 21L9 4M21 21L15 4"/><rect x="8" y="11" width="8" height="6" rx="2"/><circle cx="9.5" cy="19" r="1.2"/><circle cx="14.5" cy="19" r="1.2"/>'),
+  viewFirst: svg('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
   arrowUp: svg('<line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/>'),
   arrowRight: svg('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/>'),
   swipe: svg('<polyline points="7 8 3 12 7 16"/><polyline points="17 8 21 12 17 16"/><line x1="3" y1="12" x2="21" y2="12"/>'),
@@ -645,25 +648,24 @@ const UI = {
         </div>
         ${this._driveControlsHTML()}
         <div class="hud-controls">
-          <button class="hud-btn" id="soundToggleBtn" aria-label="사운드 켜기/끄기">${AudioManager.enabled ? ICONS.soundOn : ICONS.soundOff}</button>
-          <button class="hud-btn" id="pauseBtn" disabled aria-label="일시정지">${ICONS.pause}</button>
-          <button class="hud-btn camera-toggle" id="cameraToggleBtn" disabled aria-label="시점 전환">${ICONS.camera}</button>
+          <button class="hud-btn" id="soundToggleBtn" aria-label="${t('hud.sound')}">${AudioManager.enabled ? ICONS.soundOn : ICONS.soundOff}</button>
+          <button class="hud-btn" id="pauseBtn" disabled aria-label="${t('hud.pause')}">${ICONS.pause}</button>
         </div>
+        <button class="hud-btn view-btn" id="cameraToggleBtn" disabled aria-label="${t('hud.view')}">${ICONS.viewThird}</button>
+        <span class="hud-chip view-flash" id="viewFlash" aria-live="polite"></span>
       </div>
     `);
     const $ = id => document.getElementById(id);
     this._hud = {
       speed: $('speedLabel'), speedo: $('speedo'), comboMult: $('comboMult'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'), lap: $('lapLabel'),
-      progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
+      progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'), viewFlash: $('viewFlash'), viewMode: 'third',
       bal: $('balGauge'), balDir: $('balDir'), balBand: $('balBand'), balPerfect: $('balPerfect'), balKnob: $('balKnob'), balTarget: $('balTarget'), balRing: $('balRing'), balResult: $('balResult'), balLast: null,
       pop: $('gatePop'), popLabel: $('gatePopLabel'), popGood: $('gatePopGood'), popPerfect: $('gatePopPerfect'), popRing: $('gatePopRing'), popResult: $('gatePopResult'), popFlash: $('gatePopFlash'), popKey: null, popResultUntil: 0, popPrevErr: null, popTick: 0,
       judge: $('judgeToast'), hearts: $('hearts'), lastDerails: 0,
       rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
     };
 
-    $('cameraToggleBtn').addEventListener('click', () => {
-      if (Game.camera && !Game.camera.locked) Game.camera.toggleMode();
-    });
+    $('cameraToggleBtn').addEventListener('click', () => this.toggleView());
     $('pauseBtn').addEventListener('click', () => Game.pauseGame());
     if (tutorial) $('tutSkipBtn').addEventListener('click', () => Tutorial.skip());
     $('soundToggleBtn').addEventListener('click', () => {
@@ -745,6 +747,21 @@ const UI = {
       </div>
       <div class="ctl-right" id="ctlRight"><button class="ctl-btn boost" id="boostBtn">BOOST</button></div>
     </div>`;
+  },
+
+  /** 시점 바꾸기(버튼 · 키보드 C) — 지금 보이는 시점의 반대로 잠깐(6초). 바뀐 시점 이름을 버튼 아래에 짧게 보여 줌 */
+  toggleView() {
+    const cam = window.Game && Game.camera, h = this._hud;
+    if (!cam || cam.locked || !h) return false;
+    cam.toggleMode();
+    const f = h.viewFlash;
+    if (f) {
+      f.textContent = t(cam._manualTarget ? 'view.first' : 'view.third');
+      f.classList.remove('show'); void f.offsetWidth; f.classList.add('show');
+    }
+    const b = h.cameraBtn;
+    b.classList.add('pressed'); setTimeout(() => b.classList.remove('pressed'), 160);
+    return true;
   },
 
   /** 타이밍 팝업 자리에 판정 결과를 크게(0.7초) — PERFECT! / GOOD / MISS */
@@ -880,6 +897,8 @@ const UI = {
         el.classList.toggle('off', lost);
       });
     }
+    const vm = window.Game && Game.camera ? Game.camera.mode : 'third'; // 지금 화면에 보이는 시점 — 아이콘이 따라 바뀜
+    if (vm !== h.viewMode) { h.viewMode = vm; h.cameraBtn.innerHTML = vm === 'first' ? ICONS.viewFirst : ICONS.viewThird; }
     h.cameraBtn.disabled = !cart.launched;
     h.pauseBtn.disabled = !cart.launched;
   },
