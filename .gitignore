@@ -13,3 +13,7 @@ Thumbs.db
 # 에디터
 .vscode/
 .idea/
+
+# Claude Code 로컬 설정 / Headroom 런타임 파일
+.claude/settings.local.json
+.claude/.headroom_wrap_*
