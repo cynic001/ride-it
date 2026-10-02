@@ -327,7 +327,7 @@
   .judge.small { font-size: 30px; }
 
   /* 부스트 타이밍 팝업(13번): 화면 위쪽 가운데 — 바깥 흰 원이 줄어들어 안쪽 원과 겹치는 순간이 정타 */
-  .timing-pop { position: absolute; left: 50%; top: calc(146px + env(safe-area-inset-top, 0px)); width: 112px; height: 112px; margin-left: -56px;
+  .timing-pop { --pop: min(40vw, 190px); position: absolute; left: 50%; top: calc(146px + env(safe-area-inset-top, 0px)); width: var(--pop); height: var(--pop); margin-left: calc(var(--pop) / -2);
     pointer-events: none; opacity: 0; transform: scale(.7); transition: opacity .15s ease, transform .2s var(--ease-pop); }
   .timing-pop.on { opacity: 1; transform: none; }
   .timing-pop svg { width: 100%; height: 100%; overflow: visible; }
@@ -337,16 +337,24 @@
   .tp-target { fill: none; stroke: #fff; stroke-width: 1.5; stroke-dasharray: 3 3; }
   .tp-ring { fill: none; stroke: #fff; stroke-width: 4; filter: drop-shadow(0 0 2px rgba(20,26,51,.9)); }
   .timing-pop.ready .tp-ring { stroke: var(--yellow); }
+  /* Perfect 범위 안: 링이 초록으로 바뀌며 빛남(low 프리셋은 glow 대신 굵은 링만), 정타 순간(err 0)엔 짧은 반짝임 */
+  .timing-pop.perfect-now .tp-ring { stroke: #7dffb0; stroke-width: 6; filter: drop-shadow(0 0 6px #7dffb0) drop-shadow(0 0 12px rgba(125,255,176,.8)); }
+  .timing-pop.perfect-now.lowfx .tp-ring { stroke-width: 8; filter: none; }
+  .timing-pop.perfect-now .tp-bg { stroke: #7dffb0; stroke-width: 6; }
+  .tp-flash { fill: #fff; opacity: 0; pointer-events: none; }
+  .tp-flash.go { animation: tpFlash .18s ease-out; }
+  @keyframes tpFlash { 0% { opacity: .95; transform: scale(.6); } 100% { opacity: 0; transform: scale(1.5); } }
+  .tp-flash { transform-origin: 60px 60px; }
   .timing-pop.ready .tp-bg { stroke: var(--green); stroke-width: 4; }
   .timing-pop.finish .tp-bg { fill: rgba(80,20,60,.6); }
-  .tp-label { position: absolute; left: -20px; right: -20px; top: 100%; margin-top: 2px; text-align: center; font-size: 15px; line-height: 18px; color: #fff;
+  .tp-label { position: absolute; left: -20px; right: -20px; top: 100%; margin-top: 2px; text-align: center; font-size: 20px; line-height: 24px; color: #fff;
     -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; }
-  .tp-result { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-size: 38px; opacity: 0;
-    -webkit-text-stroke: 6px var(--navy); paint-order: stroke fill; }
+  .tp-result { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-size: 54px; line-height: 1; opacity: 0;
+    -webkit-text-stroke: 9px var(--navy); paint-order: stroke fill; }
   .tp-result.show { animation: judgePopC .7s var(--ease-pop) forwards; }
   .tp-result.perfect { color: var(--yellow); } .tp-result.good { color: var(--green); } .tp-result.miss { color: var(--red); }
   .timing-pop.result svg, .timing-pop.result .tp-label { opacity: 0; }
-  @keyframes judgePopC { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.4); } 25% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  @keyframes judgePopC { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.4); } 40% { transform: translate(-50%, -50%) scale(1.05); }
     70% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(1); } }
 
   /* 스타트 바: 엄지가 닿는 하단 중앙 세로 레일 — 아래로 당겨 충전, 위로 튕겨 발사 */
@@ -390,7 +398,7 @@
 
   /* ── 튜토리얼(13번) ── */
   /* 안내줄은 스타트 바·게이지·조작 버튼과 겹치지 않는 화면 가운데쯤(스타트 단계는 위쪽 — 스타트 바가 아래 절반을 차지) */
-  .tut-banner { position: absolute; left: 50%; top: 46%; transform: translateX(-50%); width: min(92vw, 420px);
+  .tut-banner { position: absolute; left: 50%; top: 50%; transform: translateX(-50%); width: min(92vw, 420px);
     padding: 10px 16px; border-radius: 16px; background: rgba(20,26,51,.9); color: #fff; font-size: 20px; line-height: 1.35; text-align: center;
     pointer-events: none; opacity: 0; transition: opacity .2s ease; box-shadow: 0 4px 0 rgba(0,0,0,.25); }
   .tut-banner.on { opacity: 1; }
@@ -416,7 +424,7 @@
   .stage-btn.tutorial-btn { background: #eafff2; box-shadow: 0 5px 0 #a8e6c1, 0 10px 18px rgba(20,26,51,.18); }
   .tutorial-btn .stage-num { width: auto; padding: 0 8px; font-size: 15px; background: var(--green); color: #fff; box-shadow: inset 0 -3px 0 #23a862; }
   @media (orientation: landscape) and (max-height: 500px) {
-    .tut-banner { top: 50%; width: min(46vw, 420px); font-size: 18px; } /* 왼쪽 게이지(~176px)와 오른쪽 BOOST 사이 */
+    .tut-banner { top: 64%; width: min(46vw, 420px); font-size: 18px; } /* 왼쪽 게이지(~176px)와 오른쪽 BOOST 사이 */
     .tut-banner.top { top: 70px; left: auto; right: calc(12px + env(safe-area-inset-right, 0px)); transform: none; width: 200px; } /* 스타트 단계: 가운데 스타트 바 오른쪽 */
     /* 가로: 카드가 화면 높이를 넘지 않게 2열(그림 | 설명+버튼) */
     .tut-card-overlay { padding: 8px; }
@@ -531,7 +539,7 @@
     .hud-top { top: 6px; left: calc(12px + env(safe-area-inset-left, 0px)); right: calc(170px + env(safe-area-inset-right, 0px)); gap: 4px; }
     .speedo .num { font-size: 28px; }
     .hud-controls { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(12px + env(safe-area-inset-right, 0px)); }
-    .timing-pop { top: calc(58px + env(safe-area-inset-top, 0px)); width: 96px; height: 96px; margin-left: -48px; }
+    .timing-pop { --pop: min(40vh, 150px); top: calc(58px + env(safe-area-inset-top, 0px)); }
     .drive-controls { padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
     .drive-controls.twohand { padding-left: calc(20px + env(safe-area-inset-left, 0px)); padding-right: calc(20px + env(safe-area-inset-right, 0px)); }
     .start-bar { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); gap: 4px; }

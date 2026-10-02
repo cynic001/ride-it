@@ -680,6 +680,7 @@ const UI = {
             <circle class="tp-perfect" id="gatePopPerfect" cx="60" cy="60" r="${POP_R0}"/>
             <circle class="tp-target" cx="60" cy="60" r="${POP_R0}"/>
             <circle class="tp-ring" id="gatePopRing" cx="60" cy="60" r="${POP_R0 * 2}"/>
+            <circle class="tp-flash" id="gatePopFlash" cx="60" cy="60" r="${POP_R0 + 4}"/>
           </svg>
           <span class="tp-label" id="gatePopLabel">BOOST</span>
           <div class="tp-result" id="gatePopResult"></div>
@@ -706,7 +707,7 @@ const UI = {
       speed: $('speedLabel'), speedo: $('speedo'), comboMult: $('comboMult'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'),
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
       bal: $('balGauge'), balDir: $('balDir'), balBand: $('balBand'), balPerfect: $('balPerfect'), balCursor: $('balCursor'), balMin: $('balMin'), balMinTick: $('balMinTick'), balProg: $('balProg'), balResult: $('balResult'),
-      pop: $('gatePop'), popLabel: $('gatePopLabel'), popGood: $('gatePopGood'), popPerfect: $('gatePopPerfect'), popRing: $('gatePopRing'), popResult: $('gatePopResult'), popKey: null, popResultUntil: 0,
+      pop: $('gatePop'), popLabel: $('gatePopLabel'), popGood: $('gatePopGood'), popPerfect: $('gatePopPerfect'), popRing: $('gatePopRing'), popResult: $('gatePopResult'), popFlash: $('gatePopFlash'), popKey: null, popResultUntil: 0, popPrevErr: null, popTick: 0,
       judge: $('judgeToast'), hearts: $('hearts'), lastDerails: 0,
       rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
     };
@@ -884,6 +885,17 @@ const UI = {
         h.popRing.setAttribute('r', r.toFixed(2));
         h.pop.dataset.err = g.err.toFixed(4);
         h.pop.classList.toggle('ready', Math.abs(g.err) <= g.good);
+        h.pop.classList.toggle('perfect-now', Math.abs(g.err) <= g.perfect);
+        h.pop.classList.toggle('lowfx', QualityManager.current === 'low');
+        // 박자 틱: 정타 0.5초 전·0.25초 전 "틱-틱", 정타 직전 "지금!"(출력 지연만큼 살짝 일찍) — 게이트마다 한 번씩
+        if (h.popKey !== g.key) { h.popTick = 0; h.popPrevErr = null; }
+        if (h.popTick < 1 && g.err >= -0.5) { h.popTick = 1; AudioManager.playTick(false); }
+        if (h.popTick < 2 && g.err >= -0.25) { h.popTick = 2; AudioManager.playTick(false); }
+        if (h.popTick < 3 && g.err >= -0.03) { h.popTick = 3; AudioManager.playTick(true); }
+        if (h.popPrevErr !== null && h.popPrevErr < 0 && g.err >= 0) { // 정타 순간 반짝
+          h.popFlash.classList.remove('go'); void h.popFlash.getBoundingClientRect(); h.popFlash.classList.add('go');
+        }
+        h.popPrevErr = g.err;
         h.pop.classList.toggle('finish', g.type === 'finish');
         if (h.popKey && h.popKey !== g.key && !cart._resolvedGates.has(h.popKey)) this._showPopResult('miss'); // 앞 게이트를 놓치고 바로 다음 게이트
         if (now >= h.popResultUntil) { h.pop.classList.add('on'); h.pop.classList.remove('result'); }

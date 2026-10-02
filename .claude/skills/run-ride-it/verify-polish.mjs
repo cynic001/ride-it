@@ -170,6 +170,47 @@ section('progress', async () => {
   await close();
 });
 
+// ── 1-2 부스트 타이밍 팝업: 화면 폭 40%(세로)/높이 40%(가로), Perfect 범위에서 perfect-now(글로우), 정타 순간 flash, 틱-틱-지금 소리 1회씩, 판정 글자 크게
+section('popup', async () => {
+  for (const [name, w, h] of [['세로', 375, 667], ['가로', 667, 375]]) {
+    const { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_derail: 'off' } });
+    await loadStage(page, 0);
+    const r = await page.evaluate(() => {
+      Game.engine.stopRenderLoop();
+      const ticks = []; let nowErr = null; const c = Game.cart;
+      AudioManager.playTick = f => ticks.push([f, +(c.gateTiming() ? c.gateTiming().err : 9).toFixed(3)]);
+      window.dispatchEvent(new CustomEvent('cart-launched', { detail: { strength: 1, flickMultiplier: 1 } }));
+      c.launch(1, 1);
+      const pop = document.getElementById('gatePop'), flash = document.getElementById('gatePopFlash');
+      let key = null, perfectSeen = false, perfectOutside = false, flashSeen = false, size = null, n = 0;
+      while (n++ < 60 * 100) {
+        c.leanInput = 0; Game._fixedUpdate(1 / 60);
+        const g = c.gateTiming();
+        if (!g) continue;
+        if (key === null && g.err > -0.78 && g.err < 0) key = g.key; // 다가오는 첫 게이트
+        if (key === null || g.key !== key) { if (key !== null) break; continue; }
+        const inP = Math.abs(g.err) <= g.perfect;
+        if (pop.classList.contains('perfect-now') && inP) perfectSeen = true;
+        if (pop.classList.contains('perfect-now') && !inP) perfectOutside = true;
+        if (flash.classList.contains('go')) flashSeen = true;
+        if (!size && pop.classList.contains('on')) { size = { w: pop.offsetWidth, h: pop.offsetHeight, vw: innerWidth, vh: innerHeight }; }
+      }
+      const res = document.getElementById('gatePopResult'); UI._showPopResult('perfect');
+      const fs = parseFloat(getComputedStyle(res).fontSize);
+      return { ticks, perfectSeen, perfectOutside, flashSeen, size, fs, quality: QualityManager.current };
+    });
+    const want = name === '세로' ? 0.4 * 375 : 0.4 * 375; // 세로 40vw = 150, 가로 40vh = 150
+    check(`popup ${name}: 크기 = 화면 짧은 변의 약 40%`, r.size && Math.abs(r.size.w - want) < 6 && Math.abs(r.size.h - want) < 6, JSON.stringify(r.size));
+    check(`popup ${name}: Perfect 범위 안에서만 perfect-now(글로우)`, r.perfectSeen && !r.perfectOutside, `seen=${r.perfectSeen} outside=${r.perfectOutside}`);
+    check(`popup ${name}: 정타 순간 flash`, r.flashSeen);
+    const t = r.ticks;
+    check(`popup ${name}: 틱-틱-지금 1회씩(−0.5s·−0.25s·−0.03s 부근)`, t.length === 3 && !t[0][0] && !t[1][0] && t[2][0] && t[0][1] >= -0.52 && t[0][1] < -0.4 && t[1][1] >= -0.27 && t[1][1] < -0.15 && t[2][1] >= -0.05 && t[2][1] < 0.03, JSON.stringify(t));
+    check(`popup ${name}: 판정 글자 48px 이상`, r.fs >= 48, String(r.fs));
+    check(`popup ${name} page error 0`, errors.length === 0, errors.join('|'));
+    await close();
+  }
+});
+
 for (const [name, fn] of sections) {
   if (ONLY && !ONLY.includes(name)) continue;
   try { await fn(); } catch (e) { check(`${name} 실행`, false, String(e.message).split('\n')[0]); }

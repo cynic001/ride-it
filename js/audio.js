@@ -164,6 +164,13 @@ const AudioManager = {
     if (finish) this.playSample('voice_congrats', { volume: 0.6, delay: 0.5 });
   },
 
+  /** 부스트 정타 박자 — 틱(짧고 낮음) 두 번 뒤 "지금!"(길고 높음). 사운드 토글은 masterGain이 따름 */
+  playTick(final) {
+    if (!this._ready()) return;
+    if (final) this._blip({ freq: 1320, duration: 0.12, type: 'triangle', peak: 0.25 });
+    else this._blip({ freq: 760, freqEnd: 600, duration: 0.05, type: 'square', peak: 0.1 });
+  },
+
   /** 레일 이탈 — 금속 긁히는 소리 + 낮은 충돌음, 0.9초 뒤 착지 "쿵" */
   playDerail() {
     if (!this._ready()) return;
