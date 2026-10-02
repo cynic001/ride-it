@@ -67,6 +67,7 @@ const Game = {
     const stageMultiplier = stageData.baseSpeedKmh / 45; // 1단계(45km/h) 대비 배율로 정규화
 
     this.cart = new Cart(this.track, stageMultiplier, laps);
+    this._lapBannerKey = null; this._lastLapSeen = undefined; this._prevT = undefined;
     if (this.input) this.input.dispose(); // 이전 스테이지 입력 리스너가 남아 탭이 중복 판정되던 문제 방지
     if (this.camera) this.camera.dispose(); // 이전 스테이지 카메라가 activeCamera로 남아 빈 하늘만 보이던 문제 방지
     this.camera = new CoasterCamera(this.scene, this.canvas);
@@ -397,11 +398,20 @@ const Game = {
     }
   },
 
+  /** 랩 배너 — 같은 문구는 랩당 1번(이탈 되감기로 아치를 다시 지나도 중복 없음) */
+  _lapBanner(label, big) {
+    const key = `${this.cart.currentLap}:${label}`;
+    if (this._lapBannerKey === key) return;
+    this._lapBannerKey = key;
+    UI.showLapBanner(label, big);
+  },
+
   /** 레일 이음새 "덜컹"(6m마다, 속도 비례 음량) + 터널/게이트 링 통과 "휙" */
   _updateRideSounds() {
     const c = this.cart;
     if (c.currentLap !== this._lastLapSeen) { // 뒤로 떨어지기 경고는 매 플레이 두 번째 랩부터
       this._lastLapSeen = c.currentLap;
+      if (c.totalLaps > 1 && c.currentLap === c.totalLaps) this._lapBanner('FINAL LAP', true); // 실제 마지막 랩에 들어선 뒤에만
       this.track.setRollbackMarkersVisible(c.currentLap >= 2 || this.tutorialMode); // 튜토리얼은 처음부터 보여 줌
     }
     // 체인 리프트: 초당 약 12회 딸깍(멈칫하는 동안은 느리게) — 리프트를 벗어나면 멈춤
@@ -417,11 +427,13 @@ const Game = {
     // 피니쉬 아치 통과 = 랩 기준점: LAP n/N · FINAL LAP · FINISH! 표시 + 배너 흔들림 + 효과음
     const ft = this.track.finishT;
     if (ft !== undefined && !c.rollback && (this._prevT ?? c.t) < ft && c.t >= ft) {
+      const finish = c.currentLap >= c.totalLaps;
       const next = c.currentLap + 1;
-      const label = c.currentLap >= c.totalLaps ? 'FINISH!' : next === c.totalLaps ? 'FINAL LAP' : `LAP ${next}/${c.totalLaps}`;
-      UI.showLapBanner(label, label === 'FINISH!' || label === 'FINAL LAP');
+      // 마지막 랩 진입(next === totalLaps)은 배너 없음 — 랩이 넘어간 뒤 FINAL LAP이 뜸. 그 외는 LAP n/N, 완주는 FINISH!
+      const label = finish ? 'FINISH!' : next < c.totalLaps ? `LAP ${next}/${c.totalLaps}` : null;
+      if (label) this._lapBanner(label, finish);
       this._bannerSwing = 1;
-      AudioManager.playLapChime(label === 'FINISH!');
+      AudioManager.playLapChime(finish);
       window.dispatchEvent(new CustomEvent('lap-pass', { detail: label }));
     }
     const sp = this.track.splash;

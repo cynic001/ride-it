@@ -3,8 +3,8 @@
 진행 순서: 0 → 1-4 → 1-3 → 2 → 3 → 4 → 1-2 → 5 → 1-1 → 6
 규칙: 항목마다 lint → verify → page error 0 → 커밋. 3회 실패 시 기록하고 되돌린 뒤 다음 항목. 파일 삭제 금지(legacy/로 이동).
 
-- [ ] 0. 도구 점검 (ffmpeg 이미 있음, WebKit 설치, gltf-transform은 용량 초과 시에만)
-- [ ] 1-4. 랩 문구: FINAL LAP/FINISH는 실제 마지막 랩에서만, 그 외 LAP n/N
+- [x] 0. 도구 점검 (ffmpeg 이미 있음, WebKit 설치, gltf-transform은 용량 초과 시에만)
+- [x] 1-4. 랩 문구: FINAL LAP/FINISH는 실제 마지막 랩에서만, 그 외 LAP n/N
 - [ ] 1-3. 설명 글 가독성 (16px 이상 / 핵심 20px 이상)
 - [ ] 2. 레일 이탈 (설정 ON/OFF, 하트 3개, 연출, score-sim 실패율)
 - [ ] 3. 튜토리얼 화면 (설명 글 위치, 이탈 안내 한 줄)
@@ -19,3 +19,4 @@
 기본 스타일 day(저장값 있으면 존중) / WebKit WebGL2 불가 시 UI·입력만 검증.
 
 ## 메모
+- 1-4: 기존엔 아치(t=0.95)가 랩 n-1 끝에서 FINAL LAP을 띄웠음 → 실제 마지막 랩에 들어선 뒤(랩 넘김 시점)에 표시. 검증은 새 `verify-polish.mjs`(--browser=chromium|webkit, 섹션 추가식)에 쌓는다.
