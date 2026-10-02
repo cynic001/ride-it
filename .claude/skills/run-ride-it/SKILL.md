@@ -1,6 +1,6 @@
 ---
 name: run-ride-it
-description: Build, run, and drive the ride-it (떨어진다!!!) Babylon.js browser game. Use when asked to run ride-it, start its dev server, load a stage, screenshot its scene, or verify track.js/cart.js/stages.js changes actually work in a browser.
+description: ride-it 게임 실행·스크린샷·전체 검증(verify/score-sim). 실행하거나 track/cart/stages 변경을 확인할 때 사용.
 ---
 
 No bundler — `index.html` loads Babylon.js from a CDN and each
@@ -85,8 +85,40 @@ No test suite exists yet (`package.json` has no `test` script). There
 is a lint script:
 
 ```bash
-npm run lint   # npx eslint js/ --no-eslintrc --env browser,es2021 --parser-options=ecmaVersion:2021
+npm run lint   # npx eslint js/
 ```
+
+## 전체 검증 (코드 변경 후 마무리 단계)
+
+순서대로 실행 (스킬 폴더 `.claude/skills/run-ride-it`에서, 긴 출력은 파일로 저장 후 `grep`/`tail`):
+
+```bash
+cd .claude/skills/run-ride-it
+npm run --prefix ../../.. lint                                   # 0. 문법 (exit 0)
+node verify.mjs --out=/tmp/ride-it-verify > /tmp/verify.log 2>&1; echo "verify exit=$?"
+node score-sim.mjs --runs=60 > /tmp/score-sim.log 2>&1; echo "score-sim exit=$?"
+grep -E "PASS|FAIL" /tmp/verify.log | tail -40; tail -40 /tmp/score-sim.log
+```
+
+통과 기준
+- lint: exit 0
+- verify.mjs: exit 0, 마지막 줄 `[verify] N/N checks passed, pageErrors=0`, `FAIL` 줄 0개 (CDP 터치 시나리오 A~G 전부 PASS)
+- score-sim.mjs: exit 0, `PAGEERROR`/`CONSOLE` 오류 없음, 5단계 모두 완주,
+  perfect 완주 시간 15초 이상, 연속 이벤트(게이트/커브 진입) 최소 간격 0.6초 이상,
+  perfect/average 점수 비율이 이전 `개발기록.md` 기록에서 크게 벗어나지 않음
+- 속도 배율·연출을 건드렸다면 위 시간·간격 기준을 특히 확인 (AGENTS.md "속도감 최우선")
+
+보고 형식 (표 하나 + 한 줄 결론)
+
+```
+| 항목 | 결과 | 비고 |
+| lint | PASS/FAIL | exit code |
+| verify.mjs | PASS n / FAIL m | 실패 이름·pageerror |
+| score-sim | PASS/FAIL | 단계별 완주 시간(최소~최대), 최소 이벤트 간격 |
+결론: 통과 / 실패 항목과 원인 한 줄
+```
+
+실패 시 로그의 해당 줄만 인용하고, 임의로 기준을 완화하지 말고 사용자에게 알린다.
 
 ---
 
