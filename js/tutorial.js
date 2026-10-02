@@ -70,17 +70,16 @@ const Tutorial = {
     const boost = k === 'keyboard' ? '<b>↑</b> 또는 <b>Space</b>' : '오른쪽 아래 <b>BOOST</b>';
     return {
       start: k === 'keyboard' ? '<b>↓</b>를 누르고 있다가 <b>↑</b>로 출발!' : '스타트 바를 <b>아래로 당겼다가 위로 휙</b> 밀어 올려요',
-      balanceCard: `커브에선 ${lean}${k === 'tilt' ? '서' : '로'} <b>▼ 커서</b>를 <b>초록 띠</b>(최소선부터 끝까지) 안에 넣고 <b>1.5초</b> 버텨요.` +
-        (k === 'tilt' ? ' 기울인 만큼 커서가 움직여요.' : ' 누르고 있으면 끝까지 기울고, 톡톡 누르면 조금씩 움직여요.') + ' 파란 띠(Perfect) 안이면 보너스!',
+      balanceCard: `커브에선 ${lean}${k === 'tilt' ? '서' : '로'} <b>▼ 커서</b>를 <b>초록 띠</b> 안에 넣고 <b>1.5초</b> 버텨요. 파란 띠(Perfect)면 보너스!`,
       balanceBanner: '초록 띠 안에서 1.5초!',
       balanceHint: `커서(▼)를 초록 띠 안으로! ${lean}`,
-      boostCard: `게이트가 다가오면 위쪽에 원이 떠요. <b>바깥 원이 줄어들어 안쪽 원과 겹치는 순간</b> ${boost}!`,
+      boostCard: `<b>바깥 원이 안쪽 원과 겹치는 순간</b> ${boost}!`,
       boostBanner: `원이 겹칠 때 ${boost}`,
-      comboCard: `이번엔 동시에! ${lean}${k === 'tilt' ? '서' : '로'} 밸런스를 유지하면서 원이 겹칠 때 ${boost}.` + (k === 'touch' ? ' 왼손은 ◀ ▶, 오른손은 BOOST.' : ''),
+      comboCard: `이번엔 동시에! 밸런스를 유지하면서 원이 겹칠 때 ${boost}.`,
       comboBanner: '밸런스 유지 + 부스트',
-      rollbackCard: `가파른 언덕에서는 <b>뒤로 미끄러질</b> 수 있어요! 뒤로 내려간 뒤 ${boost}를 <b>빠르게 연타</b>하면 다시 올라가요.`,
+      rollbackCard: `언덕에서 <b>뒤로 미끄러져요!</b> ${boost}를 <b>빠르게 연타</b>하면 올라가요.`,
       rollbackBanner: `${boost} 연타!`,
-      finishCard: '<b>피니쉬 게이트(아치)</b>가 한 바퀴의 기준점이에요. 아치를 지나면 완주! 원이 겹칠 때 누르면 보너스 점수도 있어요.',
+      finishCard: '<b>피니쉬 아치</b>를 지나면 완주! 원이 겹칠 때 누르면 보너스 점수!',
       finishBanner: '아치를 통과하면 완주!',
     }[key];
   },
