@@ -71,7 +71,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE, SLOPPY, D_S
         segKey = key;
         plan = model === 'perfect'
           ? { good: true }
-          : { good: r() >= sloppy };
+          : { good: r() < 1 - sloppy };
         plan.modulate = model === 'perfect' || r() < 0.2; // 버튼/키: 톡톡 눌러 목표 근처를 맞추는 커브 비율
         plan.pressOn = true; plan.pressUntil = 0;
       }

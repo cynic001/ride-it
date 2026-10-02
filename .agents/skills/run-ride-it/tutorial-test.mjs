@@ -7,7 +7,7 @@
  *   끝: "준비 완료!" + rc_tutorial_done, 점수 기록(rc_progress) 없음. 건너뛰기·스테이지 선택 카드·설정 버튼으로 재진입
  * Usage: node tutorial-test.mjs [--out=dir] [--runs=keyboard,touch,touch-land] [--port=8133]
  */
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -208,8 +208,9 @@ async function run(browser, mode) {
   await ctx.close();
 }
 
-const browser = await chromium.launch({ args: ['--use-angle=metal'] });
-for (const m of RUNS) await run(browser, m);
+const BROWSER = process.argv.includes('--browser=webkit') ? 'webkit' : 'chromium'; // WebKit(iPhone Safari 엔진) 검증용
+const browser = BROWSER === 'webkit' ? await webkit.launch() : await chromium.launch({ args: ['--use-angle=metal'] });
+for (const m of RUNS) { if (BROWSER === 'webkit' && m.startsWith('touch')) { console.log(`SKIP ${m} — CDP 터치는 Chromium 전용(WebKit은 verify-polish.mjs의 합성 PointerEvent 시나리오로 대체)`); continue; } await run(browser, m); }
 await browser.close();
 server.close();
 console.log('--- page errors ---\n' + (pageErrors.join('\n') || 'NONE'));

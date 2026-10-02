@@ -100,9 +100,19 @@ node score-sim.mjs --runs=60 > /tmp/score-sim.log 2>&1; echo "score-sim exit=$?"
 tail -1 /tmp/verify.log; grep -E "^FAIL" /tmp/verify.log
 ```
 
-소요 시간 (2026-10-02 실측): lint 1초 + verify 약 80초 + score-sim 약 1초 = **약 1분 30초**.
+소요 시간 (2026-10-02 실측, 이탈 시뮬 추가 전): lint 1초 + verify 약 80초 + score-sim 약 1초 = **약 1분 30초**. 이탈 시뮬(`derailSim`)이 들어간 score-sim은 `--runs=60`에서 약 15초, verify-polish는 Chromium 약 1분·WebKit 약 1분.
 20분을 한참 밑돌아 빠른 버전은 따로 두지 않음 — 20분을 넘기게 되면 `verify.mjs --stages=0,4`
 + `score-sim.mjs --runs=20`을 빠른 버전으로 쓸 것.
+
+### 항목별 검증과 WebKit (UI 폴리시 세션 추가, 2026-10-03)
+```bash
+node verify-polish.mjs                      # Chromium: lap(랩 문구)·derail(레일 이탈)·tutlayout·progress(기록)·popup(부스트 팝업)·overlap·input(합성 PointerEvent) — 약 1분
+node verify-polish.mjs --browser=webkit     # 같은 시나리오를 WebKit(iPhone Safari 엔진, 375×667 터치 프로필)에서
+node verify-polish.mjs --only=derail,input  # 일부만
+node tutorial-test.mjs --browser=webkit     # 튜토리얼 키보드 흐름(터치 흐름은 CDP 전용이라 WebKit에선 건너뜀 — 터치는 verify-polish input이 대신)
+```
+WebKit은 한 번만 `npx playwright install webkit`(이 폴더 안에서). 새 항목 검증은 `verify-polish.mjs`에 `section('이름', async () => {...})`로 추가.
+기존 흐름 검증(`verify.mjs`)은 `rc_derail=off`로 돌려 이탈이 흐름을 끊지 않게 하고, 이탈은 `verify-polish.mjs`의 `derail`이 따로 본다.
 
 ### 합격 기준 (하나라도 어기면 실패 — 안 바뀌어야 하는 것만)
 - lint exit 0
@@ -122,6 +132,17 @@ tail -1 /tmp/verify.log; grep -E "^FAIL" /tmp/verify.log
 | 3 | 15.3 | 18.3 | 5085 | 2404 | 0.000 / 0.035 | .47/.26/.26 | 2/14/40/4 | 0.88 |
 | 4 | 22.7 | 25.0 | 5982 | 2491 | 0.029 / 0.028 | .42/.26/.31 | 0/12/34/14 | 1.03 |
 | 5 | 22.0 | 22.6 | 7650 | 3138 | 0.027 / 0.025 | .36/.31/.33 | 1/10/40/9 | 0.75 |
+
+레일 이탈 시뮬(`derailSim`, 2026-10-03, `--runs=300`, 합격 기준 아님 — 설계 목표: 1~2단계 5% 미만, 5단계 20% 미만): 같은 시드의 평균 플레이어가 이탈 규칙을 알고 커브의 12%를 놓친다고 가정(`--dsloppy`, 기본 0.12).
+기존 평균 모델은 커브의 25%를 놓치는 느슨한 플레이(기준선 표)라 이탈 규칙 아래서는 "초보"로 따로 집계(`failRateNovice`). 엉성하게 누르는 입력은 minLean/holdSec로 구제되지 않아 밸런스 값은 그대로 둠.
+
+| 단계 | 평균 이탈 횟수 | 실패율(3번 이탈) | 초보(25%) 평균 이탈 | 초보 실패율 |
+|---|---|---|---|---|
+| 1 | 0.47 | 2.3% | 1.03 | 10% |
+| 2 | 0.53 | 3.0% | 1.10 | 11% |
+| 3 | 0.68 | 3.7% | 1.49 | 25% |
+| 4 | 0.34 | 1.3% | 0.91 | 10% |
+| 5 | 1.04 | 8.3% | 2.15 | 49% |
 
 기준선과 달라졌을 때
 - 의도한 변경이면: 이유를 `개발기록.md`에 적고 이 표를 새 측정값으로 갱신 (경고 아님).
