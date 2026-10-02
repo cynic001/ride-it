@@ -389,11 +389,13 @@
   .hud-icon-btn svg { width: 22px; height: 22px; }
 
   /* ── 튜토리얼(13번) ── */
-  .tut-banner { position: absolute; left: 50%; bottom: calc(178px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(92vw, 420px);
-    padding: 8px 14px; border-radius: 16px; background: rgba(20,26,51,.85); color: #fff; font-size: 15px; line-height: 1.35; text-align: center;
+  /* 안내줄은 스타트 바·게이지·조작 버튼과 겹치지 않는 화면 가운데쯤(스타트 단계는 위쪽 — 스타트 바가 아래 절반을 차지) */
+  .tut-banner { position: absolute; left: 50%; top: 46%; transform: translateX(-50%); width: min(92vw, 420px);
+    padding: 10px 16px; border-radius: 16px; background: rgba(20,26,51,.9); color: #fff; font-size: 20px; line-height: 1.35; text-align: center;
     pointer-events: none; opacity: 0; transition: opacity .2s ease; box-shadow: 0 4px 0 rgba(0,0,0,.25); }
   .tut-banner.on { opacity: 1; }
-  .tut-banner small { display: block; font-size: 11px; letter-spacing: 1px; color: var(--yellow); }
+  .tut-banner.top { top: calc(150px + env(safe-area-inset-top, 0px)); }
+  .tut-banner small { display: block; font-size: 14px; letter-spacing: 1px; color: var(--yellow); }
   .tut-banner b { color: var(--yellow); font-weight: normal; }
   .tut-banner.hint { background: rgba(160,40,40,.9); }
   .tut-banner.shake { animation: nudgeX .4s ease; }
@@ -407,13 +409,15 @@
   @keyframes tutTap { 0%, 100% { transform: translate(6px, 10px); } 50% { transform: translate(0, 0) scale(.92); } }
   .card.tut-card { max-width: 400px; }
   .card.tut-card p { font-size: 18px; line-height: 1.55; color: #2f3a63; } .tut-card p b { color: var(--navy); font-weight: normal; background: #fff1c2; padding: 0 3px; border-radius: 4px; }
+  .tut-note { display: block; margin-top: 8px; font-size: 16px; color: #c9382d; }
   .tut-step { font-size: 16px; letter-spacing: 2px; color: #5b6488; margin-bottom: -8px; }
   .tut-pic { width: 100%; background: #f2f5fb; border-radius: 14px; padding: 6px; }
   .diagram { display: block; width: 100%; height: auto; font-family: 'Jua', sans-serif; }
   .stage-btn.tutorial-btn { background: #eafff2; box-shadow: 0 5px 0 #a8e6c1, 0 10px 18px rgba(20,26,51,.18); }
   .tutorial-btn .stage-num { width: auto; padding: 0 8px; font-size: 15px; background: var(--green); color: #fff; box-shadow: inset 0 -3px 0 #23a862; }
   @media (orientation: landscape) and (max-height: 500px) {
-    .tut-banner { bottom: calc(160px + env(safe-area-inset-bottom, 0px)); width: min(50vw, 420px); }
+    .tut-banner { top: 50%; width: min(46vw, 420px); font-size: 18px; } /* 왼쪽 게이지(~176px)와 오른쪽 BOOST 사이 */
+    .tut-banner.top { top: 70px; left: auto; right: calc(12px + env(safe-area-inset-right, 0px)); transform: none; width: 200px; } /* 스타트 단계: 가운데 스타트 바 오른쪽 */
     /* 가로: 카드가 화면 높이를 넘지 않게 2열(그림 | 설명+버튼) */
     .tut-card-overlay { padding: 8px; }
     .card.tut-card { max-width: 640px; display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 6px 14px; padding: 14px 18px; }

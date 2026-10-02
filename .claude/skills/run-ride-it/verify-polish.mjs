@@ -88,6 +88,52 @@ section('derail', async () => {
   await tu.close();
 });
 
+// ── 3 튜토리얼 화면: 안내줄·설명 카드가 조작 버튼/게이지/팝업/스타트 바와 겹치지 않음 (세로·가로 × 모든 단계)
+section('tutlayout', async () => {
+  for (const [name, w, h] of [['세로', 375, 667], ['가로', 667, 375]]) {
+    const { page, errors, close } = await start({ browser: BROWSER, w, h });
+    await page.evaluate(() => Game.loadTutorial()); await page.waitForSelector('#startBar'); await page.waitForTimeout(400);
+    const res = await page.evaluate(() => {
+      const R = sel => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return b.width ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
+      const hit = (a, b) => a && b && a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+      const out = [];
+      const T = Tutorial;
+      const steps = ['start', 'balance', 'boost', 'combo', 'rollback', 'finish'];
+      for (const step of steps) {
+        if (step !== 'start') window.dispatchEvent(new CustomEvent('cart-launched', { detail: { strength: 0.5, flickMultiplier: 1 } }));
+        T.active = true; T._setStep(step);
+        // 이 단계에서 실제로 같이 보이는 요소만 강제로 켜서 비교(스타트 바는 발사 전 = start 단계에서만 보임)
+        const show = { start: ['startBar'], balance: ['gauge', 'lean'], boost: ['pop', 'boostBtn'], combo: ['gauge', 'lean', 'pop', 'boostBtn'], rollback: ['rb', 'boostBtn'], finish: ['pop', 'boostBtn'] }[step];
+        document.getElementById('balGauge')?.classList.toggle('on', show.includes('gauge')); document.getElementById('gatePop')?.classList.toggle('on', show.includes('pop')); document.getElementById('rbOverlay')?.classList.toggle('on', show.includes('rb'));
+        T.banner(T._text(step === 'start' ? 'start' : step + 'Banner'), false);
+        const B = R('#tutBanner');
+        const sel = { gauge: '#balGauge', lean: '.lean-btns', boostBtn: '#boostBtn', pop: '#gatePop', startBar: '#startBar', rb: '#rbOverlay > .rb-title' };
+        const bad = [...show.map(k => [k, sel[k]]), ['controls', '.hud-controls'], ['top', '.hud-row']].filter(([, q]) => hit(B, R(q))).map(([k]) => k);
+        if (step !== 'start' && !document.querySelector('#startBar:not(.hidden)')) { /* 발사 후 */ }
+        out.push({ step, B, bad, inView: !!B && B.l >= 0 && B.r <= innerWidth && B.t >= 0 && B.b <= innerHeight });
+      }
+      return out;
+    });
+    for (const r of res) check(`tutorial ${name} 안내줄 ${r.step}: 겹침 없음·화면 안`, r.inView && !r.bad.length, JSON.stringify(r));
+    // 설명 카드: 화면 안에 들어오고 안 잘림
+    const cards = await page.evaluate(() => {
+      const out = [];
+      for (const key of ['balanceCard', 'boostCard', 'comboCard', 'rollbackCard', 'finishCard']) {
+        Tutorial._stepLabel = key; Tutorial.card('제목', Tutorial._text(key), key === 'balanceCard' ? UI.gaugeDiagram() : null, () => {});
+        const c = document.querySelector('#tutCard .card'), b = c.getBoundingClientRect();
+        out.push({ key, top: Math.round(b.top), bottom: Math.round(b.bottom), H: innerHeight, scroll: c.scrollHeight > c.clientHeight, fs: parseFloat(getComputedStyle(c.querySelector('p')).fontSize) });
+        document.getElementById('tutCard').remove(); Tutorial.hold = false;
+      }
+      return out;
+    });
+    for (const c of cards) check(`tutorial ${name} 카드 ${c.key}: 화면 안, 글 16px 이상`, c.top >= 0 && c.bottom <= c.H && !c.scroll && c.fs >= 16, JSON.stringify(c));
+    const note = await page.evaluate(() => Tutorial._text('balanceCard').includes('레일에서 이탈할 수 있어요 (설정에서 끌 수 있어요)'));
+    check(`tutorial ${name} 밸런스 카드에 이탈 안내 한 줄`, note);
+    check(`tutorial ${name} page error 0`, errors.length === 0, errors.join('|'));
+    await close();
+  }
+});
+
 for (const [name, fn] of sections) {
   if (ONLY && !ONLY.includes(name)) continue;
   try { await fn(); } catch (e) { check(`${name} 실행`, false, String(e.message).split('\n')[0]); }

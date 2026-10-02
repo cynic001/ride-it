@@ -70,7 +70,7 @@ const Tutorial = {
     const boost = k === 'keyboard' ? '<b>↑</b> 또는 <b>Space</b>' : '오른쪽 아래 <b>BOOST</b>';
     return {
       start: k === 'keyboard' ? '<b>↓</b>를 누르고 있다가 <b>↑</b>로 출발!' : '스타트 바를 <b>아래로 당겼다가 위로 휙</b> 밀어 올려요',
-      balanceCard: `커브에선 ${lean}${k === 'tilt' ? '서' : '로'} <b>▼ 커서</b>를 <b>초록 띠</b> 안에 넣고 <b>1.5초</b> 버텨요. 파란 띠(Perfect)면 보너스!`,
+      balanceCard: `커브에선 ${lean}${k === 'tilt' ? '서' : '로'} <b>▼ 커서</b>를 <b>초록 띠</b> 안에 넣고 <b>1.5초</b> 버텨요. 파란 띠(Perfect)면 보너스!<small class="tut-note">실패하면 레일에서 이탈할 수 있어요 (설정에서 끌 수 있어요)</small>`,
       balanceBanner: '초록 띠 안에서 1.5초!',
       balanceHint: `커서(▼)를 초록 띠 안으로! ${lean}`,
       boostCard: `<b>바깥 원이 안쪽 원과 겹치는 순간</b> ${boost}!`,
@@ -236,6 +236,7 @@ const Tutorial = {
     if (!html) { el.classList.remove('on'); return; }
     el.innerHTML = `<small>${this._stepLabel || ''}</small>${html}`;
     el.classList.toggle('hint', hint);
+    el.classList.toggle('top', this.step === 'start');
     el.classList.add('on');
     if (hint) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
   },
