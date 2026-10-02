@@ -49,6 +49,7 @@ const STAGES = [
     // 뒤로 떨어지기(6번): cp = 언덕 꼭대기 제어점 인덱스(골짜기는 cp-1). auto = 뒤로 미끄러진 뒤 부스터가 자동 발사(입문)
     rollback: { cp: 9, mode: 'auto' },
     theme: '#ff5a4e', // 피니쉬 게이트 아치 등 스테이지 테마 색(8번)
+    palette: { grass: [1.15, 1.3, 0.85], haze: [0.88, 0.97, 0.85], accents: ['#ffe14d', '#9be34a', '#ffffff', '#ff8fb1'] }, // 밝은 낮 스타일의 스테이지 테마 색 — 1단계 연두/노랑: 잔디 색조(곱), 안개/하늘 지평선 색, 소품 강조색
     // 밸런스 판정(12·13번): 커브 방향으로 minLean 이상 = 목표 범위(과하게 기울여도 성공), holdSec초 연속 유지로 확정, 목표 ±perfectRange = Perfect
     balance: { minLean: 0.12, perfectRange: 0.22, holdSec: 1.5 },
     controlPoints: [
@@ -95,6 +96,7 @@ const STAGES = [
     trackLengthM: 1180,
     // 폐곡선 — 출발 직후 인버티드 루프, 이후 원거리 턴을 돌아 복귀. 스테이지1보다 기복/커브 밀도 상승.
     theme: '#23b5a5', // 피니쉬 게이트 아치 등 스테이지 테마 색(8번)
+    palette: { grass: [0.95, 1.25, 1.05], haze: [0.9, 0.93, 1.0], accents: ['#ff7eb6', '#ffd6e8', '#7fd8ff', '#fff27a'] }, // 밝은 낮 스타일의 스테이지 테마 색 — 2단계 민트/핑크: 잔디 색조(곱), 안개/하늘 지평선 색, 소품 강조색
     // 밸런스 판정(12·13번): 커브 방향으로 minLean 이상 = 목표 범위(과하게 기울여도 성공), holdSec초 연속 유지로 확정, 목표 ±perfectRange = Perfect
     balance: { minLean: 0.18, perfectRange: 0.18, holdSec: 1.5 },
     controlPoints: [
@@ -156,6 +158,7 @@ const STAGES = [
     // 물 착수(7번): cp = 수면 위를 스치는 골짜기 제어점, level 1~3 = 물보라 연출 단계(단계가 오를수록 화려하게)
     splash: { cp: 2, level: 1 },
     theme: '#8b5cf6', // 피니쉬 게이트 아치 등 스테이지 테마 색(8번)
+    palette: { grass: [0.85, 1.25, 1.15], haze: [0.82, 0.96, 1.0], accents: ['#2ed3c6', '#7fe9ff', '#ffffff', '#ffd84d'] }, // 밝은 낮 스타일의 스테이지 테마 색 — 3단계 하늘/청록: 잔디 색조(곱), 안개/하늘 지평선 색, 소품 강조색
     // 밸런스 판정(12·13번): 커브 방향으로 minLean 이상 = 목표 범위(과하게 기울여도 성공), holdSec초 연속 유지로 확정, 목표 ±perfectRange = Perfect
     balance: { minLean: 0.35, perfectRange: 0.1, holdSec: 1.2 },
     controlPoints: [
@@ -223,6 +226,7 @@ const STAGES = [
     // 물 착수(7번): cp = 수면 위를 스치는 골짜기 제어점, level 1~3 = 물보라 연출 단계(단계가 오를수록 화려하게)
     splash: { cp: 3, level: 2 },
     theme: '#2f6fd6', // 피니쉬 게이트 아치 등 스테이지 테마 색(8번)
+    palette: { grass: [1.15, 1.15, 0.8], haze: [1.0, 0.93, 0.86], accents: ['#ff9f1c', '#b07bff', '#ff6b6b', '#ffe36e'] }, // 밝은 낮 스타일의 스테이지 테마 색 — 4단계 주황/보라: 잔디 색조(곱), 안개/하늘 지평선 색, 소품 강조색
     // 밸런스 판정(12·13번): 커브 방향으로 minLean 이상 = 목표 범위(과하게 기울여도 성공), holdSec초 연속 유지로 확정, 목표 ±perfectRange = Perfect
     balance: { minLean: 0.22, perfectRange: 0.15, holdSec: 1.5 },
     controlPoints: [
@@ -294,6 +298,7 @@ const STAGES = [
     // 물 착수(7번): cp = 수면 위를 스치는 골짜기 제어점, level 1~3 = 물보라 연출 단계(단계가 오를수록 화려하게)
     splash: { cp: 2, level: 3 },
     theme: '#ff9f1c', // 피니쉬 게이트 아치 등 스테이지 테마 색(8번)
+    palette: { grass: [0.75, 1.15, 0.7], haze: [0.78, 0.93, 0.82], accents: ['#3ddc84', '#ffd24d', '#ff7a7a', '#ffffff'] }, // 밝은 낮 스타일의 스테이지 테마 색 — 5단계 숲 초록: 잔디 색조(곱), 안개/하늘 지평선 색, 소품 강조색
     // 밸런스 판정(12·13번): 커브 방향으로 minLean 이상 = 목표 범위(과하게 기울여도 성공), holdSec초 연속 유지로 확정, 목표 ±perfectRange = Perfect
     balance: { minLean: 0.25, perfectRange: 0.14, holdSec: 0.9 },
     controlPoints: [
@@ -388,6 +393,7 @@ const TUTORIAL_STAGE = {
   trackLengthM: 460,
   rollback: { cp: 11, mode: 'mash' },
   theme: '#3ddc84',
+  palette: { grass: [1.15, 1.3, 0.85], haze: [0.88, 0.97, 0.85], accents: ['#ffe14d', '#9be34a', '#ffffff', '#ff8fb1'] }, // 밝은 낮 스타일의 스테이지 테마 색 — 튜토리얼(1단계 팔레트): 잔디 색조(곱), 안개/하늘 지평선 색, 소품 강조색
   balance: { minLean: 0.12, perfectRange: 0.22, holdSec: 1.5 },
   controlPoints: [
     { x: 0,   y: 8,   z: 0 },    // 스테이션

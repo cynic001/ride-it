@@ -310,6 +310,7 @@ class Track {
     this._placeTrackside(railTopY, isHanging);
     this._placeTunnels(isHanging);
     await Promise.all([this._placeNatureProps(), this._placeParkProps()]);
+    this._placeCarnival();
   }
 
   /** 이벤트 구간 바닥 표시(9번) — 레일 사이에 눕힌 인스턴스 판. 종류별 색/모양:
@@ -735,8 +736,8 @@ class Track {
     // 키트 원본 잎 색(leafsDark)은 청록색 스타일(풀 재질 grass도 동일) — 잔디 바닥 초록과 어울리지 않아 숲 초록으로 교체(선형 색공간 값)
     templates.forEach(t => (t.material.subMaterials || [t.material]).forEach(m => {
       if (!m) return;
-      if (/^leafs/.test(m.name)) m.albedoColor = new BABYLON.Color3(0.07, 0.26, 0.08);
-      else if (/^grass/.test(m.name)) m.albedoColor = new BABYLON.Color3(0.12, 0.36, 0.07);
+      if (/^leafs/.test(m.name)) m.albedoColor = new BABYLON.Color3(0.13, 0.5, 0.1); // 밝고 선명한 초록(밝은 낮 스타일)
+      else if (/^grass/.test(m.name)) m.albedoColor = new BABYLON.Color3(0.22, 0.58, 0.08);
     }));
     const totalWeight = NATURE_PROPS.reduce((a, p) => a + p.weight, 0);
     const rand = seededRandom(this.stageData.id * 7919);
@@ -802,6 +803,7 @@ class Track {
     const freeScore = sign => PARK_LAYOUT.reduce((n, [, a, l]) =>
       n + (this._minTrackDistXZ(origin.x + fwd.x * a + right.x * l * sign, origin.z + fwd.z * a + right.z * l * sign) > 4 ? 1 : 0), 0);
     const side = freeScore(1) >= freeScore(-1) ? 1 : -1;
+    this._parkFrame = { origin, fwd, right, side }; // 놀이공원 장식(_placeCarnival)이 같은 광장 기준을 씀
 
     PARK_LAYOUT.forEach(([file, along, lateral, facing], k) => {
       const x = origin.x + fwd.x * along + right.x * lateral * side;
@@ -816,6 +818,112 @@ class Track {
       inst.lookAt(inst.position.subtract(front));
       this._meshes.push(inst);
     });
+  }
+
+  /** 놀이공원 분위기 장식 — 알록달록한 깃발 줄, 풍선, 파라솔·천막, 꽃밭. 스테이션 광장(_parkFrame)과 트랙 바깥쪽에 배치.
+   * 전부 정점 색 + 비조명 재질로 한 메시에 병합(드로우콜 1회), 색은 스테이지 palette.accents. 레일에서 9m 이상 떨어진 곳에만, low는 개수 절반 */
+  _placeCarnival() {
+    const f = this._parkFrame;
+    if (!f) return;
+    const scene = this.scene, q = QualityManager.current;
+    const k = q === 'low' ? 0.5 : q === 'medium' ? 0.8 : 1;
+    const acc = (this.stageData.palette || { accents: ['#ffe14d', '#ff8fb1', '#7fd8ff', '#ffffff'] }).accents.map(h => BABYLON.Color3.FromHexString(h));
+    const rand = seededRandom(this.stageData.id * 4421 + 17);
+    const pick = () => acc[Math.floor(rand() * acc.length)];
+    const white = new BABYLON.Color3(1, 0.97, 0.92);
+    const parts = [];
+    const colorize = (mesh, c) => {
+      const n = mesh.getTotalVertices(), cols = [];
+      for (let i = 0; i < n; i++) cols.push(c.r, c.g, c.b, 1);
+      mesh.setVerticesData(BABYLON.VertexBuffer.ColorKind, cols);
+      return mesh;
+    };
+    const put = (mesh, c, x, y, z) => { colorize(mesh, c).position.set(x, y, z); parts.push(mesh); return mesh; };
+    const W = (a, l) => new BABYLON.Vector3(f.origin.x + f.fwd.x * a + f.right.x * l * f.side, 0, f.origin.z + f.fwd.z * a + f.right.z * l * f.side);
+    const clear = (v, d) => this._minTrackDistXZ(v.x, v.z) >= d && !this.inPond(v.x, v.z);
+    const cyl = (h, dTop, dBot, tess) => BABYLON.MeshBuilder.CreateCylinder('c', { height: h, diameterTop: dTop, diameterBottom: dBot, tessellation: tess }, scene);
+
+    const parasol = (v, c) => { put(cyl(3.2, 0.15, 0.15, 6), white, v.x, 1.6, v.z); put(cyl(1.3, 0, 4.6, 12), c, v.x, 3.85, v.z); };
+    const tent = (v, c) => { put(cyl(2.4, 6, 6, 12), white, v.x, 1.2, v.z); put(cyl(3.4, 0, 7.4, 12), c, v.x, 4.1, v.z); put(BABYLON.MeshBuilder.CreateSphere('b', { diameter: 0.7, segments: 4 }, scene), pick(), v.x, 6.0, v.z); };
+    const bed = (v) => {
+      const a = pick(), b = pick(), c = pick();
+      [[2.6, 0.05, new BABYLON.Color3(0.25, 0.6, 0.2)], [2.2, 0.08, a], [1.5, 0.11, b], [0.8, 0.14, c]].forEach(([r, y, col]) =>
+        put(BABYLON.MeshBuilder.CreateDisc('d', { radius: r, tessellation: 14 }, scene), col, v.x, y, v.z).rotation.x = Math.PI / 2);
+    };
+    const balloons = (v, count) => {
+      put(cyl(5, 0.12, 0.12, 5), new BABYLON.Color3(0.85, 0.85, 0.9), v.x, 2.5, v.z);
+      for (let i = 0; i < count; i++) put(BABYLON.MeshBuilder.CreateSphere('bl', { diameter: 1.5, segments: 5 }, scene), pick(), v.x + (rand() - 0.5) * 3, 6.4 + rand() * 3.2, v.z + (rand() - 0.5) * 3);
+    };
+    // 깃발 줄: 두 기둥 사이를 늘어뜨린 선 + 2m마다 삼각 깃발(수작업 삼각형 하나의 정점 데이터로 누적)
+    const tri = { positions: [], colors: [], indices: [] };
+    const addTri = (p0, p1, p2, c) => {
+      const base = tri.positions.length / 3;
+      [p0, p1, p2].forEach(p => { tri.positions.push(p.x, p.y, p.z); tri.colors.push(c.r, c.g, c.b, 1); });
+      tri.indices.push(base, base + 1, base + 2);
+    };
+    const bunting = (a, b, topY) => {
+      put(cyl(topY, 0.18, 0.18, 6), new BABYLON.Color3(0.8, 0.8, 0.85), a.x, topY / 2, a.z);
+      put(cyl(topY, 0.18, 0.18, 6), new BABYLON.Color3(0.8, 0.8, 0.85), b.x, topY / 2, b.z);
+      const len = BABYLON.Vector3.Distance(a, b), n = Math.max(2, Math.round(len / 2)), dir = b.subtract(a).normalize();
+      const side = new BABYLON.Vector3(-dir.z, 0, dir.x);
+      let prev = null;
+      for (let i = 0; i <= n; i++) {
+        const u = i / n, sag = 4 * u * (1 - u) * 1.4; // 가운데가 1.4m 처짐
+        const p = a.add(dir.scale(len * u)); p.y = topY - sag;
+        if (prev) { // 줄(가는 삼각형 두 장)
+          const e = side.scale(0.06);
+          addTri(prev.add(e), prev.subtract(e), p.add(e), new BABYLON.Color3(0.9, 0.9, 0.95)); addTri(prev.subtract(e), p.subtract(e), p.add(e), new BABYLON.Color3(0.9, 0.9, 0.95));
+        }
+        if (i < n) { const m = a.add(dir.scale(len * (u + 0.5 / n))); m.y = topY - 4 * (u + 0.5 / n) * (1 - u - 0.5 / n) * 1.4; addTri(m.subtract(dir.scale(0.6)), m.add(dir.scale(0.6)), m.add(new BABYLON.Vector3(0, -1.2, 0)), pick()); }
+        prev = p;
+      }
+    };
+
+    // ── 스테이션 광장: 깃발 줄 3줄, 풍선 묶음, 파라솔·천막, 꽃밭
+    const plaza = [
+      ['bunting', -18, 12, -18, 36], ['bunting', 18, 12, 18, 36], ['bunting', -18, 36, 18, 36],
+    ];
+    plaza.slice(0, k < 1 ? 2 : 3).forEach(([, a1, l1, a2, l2]) => { const A = W(a1, l1), B = W(a2, l2); if (clear(A, 8) && clear(B, 8)) bunting(A, B, 7.5); });
+    [[-14, 16], [14, 16], [-22, 24], [22, 24], [-16, 32], [16, 32]].slice(0, Math.max(3, Math.round(6 * k))).forEach(([a, l]) => { const v = W(a, l); if (clear(v, 6)) parasol(v, pick()); });
+    [[-28, 22], [28, 22], [0, 46]].slice(0, Math.max(1, Math.round(3 * k))).forEach(([a, l]) => { const v = W(a, l); if (clear(v, 8)) tent(v, pick()); });
+    [[-10, 36], [10, 36], [0, 4]].slice(0, Math.max(1, Math.round(3 * k))).forEach(([a, l]) => { const v = W(a, l); if (clear(v, 6)) balloons(v, Math.round(9 * k) + 2); });
+    [[-12, 10], [12, 10], [-20, 8], [20, 8], [-25, 15], [25, 15], [-8, 4], [8, 4], [-14, 28], [14, 28]].slice(0, Math.max(4, Math.round(10 * k))).forEach(([a, l]) => { const v = W(a, l); if (clear(v, 5)) bed(v); });
+
+    // ── 트랙 바깥쪽: 일정 간격으로 꽃밭/풍선/파라솔을 번갈아(트랙 위로 높이 뜬 구간은 지면에서 멀어 건너뜀)
+    const samples = this._sampleLoop(10);
+    const count = Math.round(16 * k), stride = Math.max(1, Math.floor(samples.length / count));
+    for (let i = 0, n = 0; i < samples.length && n < count; i += stride, n++) {
+      const s = samples[i];
+      if (s.pos.y > 25) continue;
+      const nrm = new BABYLON.Vector3(s.tangent.z, 0, -s.tangent.x).normalize().scale(n % 2 ? 1 : -1);
+      const v = new BABYLON.Vector3(s.pos.x + nrm.x * 13, 0, s.pos.z + nrm.z * 13);
+      if (!clear(v, 11)) continue;
+      const kind = n % 3;
+      if (kind === 0) bed(v); else if (kind === 1) balloons(v, Math.round(6 * k) + 2); else parasol(v, pick());
+    }
+
+    // ── 병합
+    if (tri.indices.length) {
+      const m = new BABYLON.Mesh('carnivalFlags', scene);
+      const vd = new BABYLON.VertexData();
+      vd.positions = tri.positions; vd.indices = tri.indices; vd.colors = tri.colors;
+      vd.uvs = new Array(tri.positions.length / 3 * 2).fill(0); // 병합하려면 다른 조각과 정점 속성이 같아야 함
+      BABYLON.VertexData.ComputeNormals(tri.positions, tri.indices, vd.normals = []);
+      vd.applyToMesh(m);
+      parts.push(m);
+    }
+    if (!parts.length) return;
+    const merged = BABYLON.Mesh.MergeMeshes(parts, true, true, undefined, false, false);
+    if (!scene._carnivalMat) {
+      const m = new BABYLON.StandardMaterial('carnivalMat', scene);
+      m.disableLighting = true; m.emissiveColor = new BABYLON.Color3(1, 1, 1); m.backFaceCulling = false; // 정점 색 그대로(깃발은 양면)
+      scene._carnivalMat = m;
+    }
+    merged.name = 'carnival';
+    merged.material = scene._carnivalMat;
+    merged.isPickable = false;
+    merged.freezeWorldMatrix();
+    this._meshes.push(merged);
   }
 
   /** 템플릿 메시의 로컬 바운딩박스 크기(x=폭, y=높이, z=진행방향 길이) — KIT_SCALE 적용 전 원본 값 */

@@ -9,6 +9,21 @@
 
 const STYLES = {
   standard: { label: '기본' },
+  // 밝은 낮(기본값): 선명한 하늘색 그라데이션 + 옅은 하늘색 안개(멀리가 어두워지지 않게) + 푸른빛 그림자. 지면·안개·하늘 지평선은 스테이지 palette로 살짝 달라짐
+  day: {
+    label: '카툰 낮',
+    outline: true,
+    sky: ['#0f74ff', '#2a8dff', '#4ea9ff', '#86c9ff', '#bfe6ff'],
+    fog: [0.72, 0.88, 1.0], fogDensity: 0.0008,
+    sun: { dir: [-0.5, -0.78, 0.38], color: [1.0, 0.98, 0.93], intensity: 2.5 },
+    envIntensity: 0.95,
+    ground: [1.15, 1.25, 1.05],
+    bands: [0.8, 0.98, 1.1],
+    shadow: [0.8, 0.9, 1.14], // 그림자 단계에 곱하는 색 — 검정이 아닌 푸른빛
+    tint: [1.04, 1.02, 1.0],
+    image: { exposure: 1.3, contrast: 1.04, saturation: 22 },
+    clouds: true,
+  },
   toon: {
     label: '카툰 노을',
     outline: true,
@@ -42,6 +57,7 @@ class ToonPlugin extends BABYLON.MaterialPluginBase {
     this._isEnabled = false;
     this.bands = new BABYLON.Vector3(0.55, 0.9, 1.08);
     this.tint = new BABYLON.Color3(1, 1, 1);
+    this.shadow = new BABYLON.Color3(1, 1, 1);
   }
   get isEnabled() { return this._isEnabled; }
   set isEnabled(v) {
@@ -54,14 +70,15 @@ class ToonPlugin extends BABYLON.MaterialPluginBase {
   getClassName() { return 'ToonPlugin'; }
   getUniforms() {
     return {
-      ubo: [{ name: 'toonBands', size: 3, type: 'vec3' }, { name: 'toonTint', size: 3, type: 'vec3' }],
-      fragment: '#ifdef TOON\nuniform vec3 toonBands;\nuniform vec3 toonTint;\n#endif',
+      ubo: [{ name: 'toonBands', size: 3, type: 'vec3' }, { name: 'toonTint', size: 3, type: 'vec3' }, { name: 'toonShadow', size: 3, type: 'vec3' }],
+      fragment: '#ifdef TOON\nuniform vec3 toonBands;\nuniform vec3 toonTint;\nuniform vec3 toonShadow;\n#endif',
     };
   }
   bindForSubMesh(ubo) {
     if (!this._isEnabled) return;
     ubo.updateFloat3('toonBands', this.bands.x, this.bands.y, this.bands.z);
     ubo.updateColor3('toonTint', this.tint);
+    ubo.updateColor3('toonShadow', this.shadow);
   }
   getCustomCode(shaderType) {
     if (shaderType !== 'fragment') return null;
@@ -72,7 +89,7 @@ class ToonPlugin extends BABYLON.MaterialPluginBase {
   float toonLa = dot(toonAlb, vec3(0.2126, 0.7152, 0.0722));
   float toonShade = dot(finalColor.rgb, vec3(0.2126, 0.7152, 0.0722)) / toonLa;
   float toonQ = toonShade < 0.42 ? toonBands.x : (toonShade < 0.85 ? toonBands.y : toonBands.z);
-  finalColor.rgb = toonAlb * toonQ * toonTint;
+  finalColor.rgb = toonAlb * toonQ * toonTint * (toonShade < 0.42 ? toonShadow : vec3(1.0));
 #endif
 `,
     };
@@ -126,8 +143,14 @@ void main(void) {
   gl_FragColor = vec4(col, 1.0);
 }`;
 
+/** '#rrggbb' 색을 0~1 RGB 배열 쪽으로 t만큼 섞음 */
+function mixHex(hex, rgb, t) {
+  const c = [1, 3, 5].map((i, k) => parseInt(hex.slice(i, i + 2), 16) / 255 * (1 - t) + Math.min(1, rgb[k]) * t);
+  return '#' + c.map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+}
+
 const StyleManager = {
-  current: localStorage.getItem('rc_style') || 'toon',
+  current: localStorage.getItem('rc_style') || 'day', // 저장된 선택(예: 카툰 노을)이 있으면 그대로 존중
   _skyDome: null,
   _outline: null,
 
@@ -149,11 +172,14 @@ const StyleManager = {
       if (!p) return;
       const on = toon && m.name !== 'skyBox';
       p.isEnabled = on;
-      if (on) { p.bands.set(...st.bands); p.tint.set(...st.tint); }
+      if (on) { p.bands.set(...st.bands); p.tint.set(...st.tint); p.shadow.set(...(st.shadow || [1, 1, 1])); }
     });
 
     if (game._skybox) game._skybox.setEnabled(!toon);
-    this._setSkyDome(scene, toon ? st.sky : null);
+    const pal = game.track && game.track.stageData.palette;
+    const day = this.current === 'day' && pal; // 밝은 낮 + 스테이지 테마 색
+    this._setSkyDome(scene, toon ? (day ? st.sky.map((c, i) => (i >= 3 ? mixHex(c, pal.haze, 0.4) : c)) : st.sky) : null);
+    this._setClouds(scene, !!st.clouds, QualityManager.current);
 
     const sun = game.sun;
     if (toon) {
@@ -161,10 +187,11 @@ const StyleManager = {
       sun.diffuse = new BABYLON.Color3(...st.sun.color);
       sun.intensity = st.sun.intensity;
       scene.environmentIntensity = st.envIntensity;
-      scene.fogColor = new BABYLON.Color3(...st.fog);
+      const fog = day ? st.fog.map((c, i) => c * 0.6 + pal.haze[i] * 0.4) : st.fog;
+      scene.fogColor = new BABYLON.Color3(...fog);
       scene.fogDensity = st.fogDensity;
-      scene.clearColor = new BABYLON.Color4(...st.fog, 1);
-      if (game._ground) game._ground.material.albedoColor = new BABYLON.Color3(...st.ground);
+      scene.clearColor = new BABYLON.Color4(...fog, 1);
+      if (game._ground) game._ground.material.albedoColor = new BABYLON.Color3(...(day ? pal.grass : st.ground));
     } else {
       sun.direction = new BABYLON.Vector3(-0.55, -0.68, 0.48).normalize();
       sun.diffuse = new BABYLON.Color3(1, 1, 1);
@@ -189,6 +216,42 @@ const StyleManager = {
     }
 
     this._setOutline(game, toon && st.outline && QualityManager.current !== 'low');
+  },
+
+  /** 카툰 구름: 구 5~6개를 합친 뭉게구름 n개를 하늘에 고정(카메라 기준 infiniteDistance, 천천히 회전) — 아래쪽은 푸르스름하게 정점 색으로 음영.
+   * 전부 한 메시로 병합해 드로우콜 1회, low는 4개 */
+  _setClouds(scene, on, quality) {
+    const n = on ? ({ low: 4, medium: 7, high: 10 }[quality] || 7) : 0;
+    if (this._cloudN === n && (!n || (this._clouds && !this._clouds.isDisposed()))) return;
+    if (this._clouds) { this._clouds.dispose(); this._clouds = null; }
+    this._cloudN = n;
+    if (!n) return;
+    const parts = [];
+    let seed = 12345;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    for (let i = 0; i < n; i++) {
+      const ang = (i + rnd() * 0.6) / n * Math.PI * 2, dist = 650 + rnd() * 120, y = 60 + rnd() * 170;
+      const cx = Math.cos(ang) * dist, cz = Math.sin(ang) * dist, size = 55 + rnd() * 55;
+      for (let k = 0; k < 6; k++) {
+        const s = BABYLON.MeshBuilder.CreateSphere('cloudPart', { diameter: size * (0.55 + rnd() * 0.5), segments: 6 }, scene);
+        s.position.set(cx + (k - 2.5) * size * 0.42, y + (k % 2 ? 1 : 0) * size * 0.18 + (k === 2 || k === 3 ? size * 0.2 : 0), cz + (rnd() - 0.5) * size * 0.4);
+        s.bakeCurrentTransformIntoVertices();
+        const pos = s.getVerticesData(BABYLON.VertexBuffer.PositionKind), cols = [];
+        for (let v = 1; v < pos.length; v += 3) { const lo = Math.max(0, Math.min(1, (pos[v] - (y - size * 0.3)) / (size * 0.8))); cols.push(0.9 + 0.1 * lo, 0.95 + 0.05 * lo, 1, 1); }
+        s.setVerticesData(BABYLON.VertexBuffer.ColorKind, cols);
+        parts.push(s);
+      }
+    }
+    const cloud = BABYLON.Mesh.MergeMeshes(parts, true, true);
+    cloud.name = 'styleClouds';
+    if (!scene._cloudMat) {
+      const m = new BABYLON.StandardMaterial('cloudMat', scene);
+      m.disableLighting = true; m.emissiveColor = new BABYLON.Color3(1, 1, 1); m.backFaceCulling = false;
+      scene._cloudMat = m;
+    }
+    cloud.material = scene._cloudMat;
+    cloud.infiniteDistance = true; cloud.applyFog = false; cloud.isPickable = false; cloud.alwaysSelectAsActiveMesh = true;
+    this._clouds = cloud;
   },
 
   _setSkyDome(scene, stops) {

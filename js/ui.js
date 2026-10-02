@@ -515,6 +515,7 @@ const UI = {
       high: ['높음', '최고 — 실시간 그림자, 모션·방사형 블러, 색수차'],
     };
     const S = {
+      day: '선명한 하늘색 + 몽글몽글 구름, 밝고 캐주얼한 낮',
       standard: '사실적인 조명 + 맑은 하늘(HDRI)',
       toon: '단계형 음영 + 외곽선 + 노을빛 — 고속에서 형태가 가장 또렷',
       pastel: '부드러운 단계형 음영 + 따뜻한 파스텔',
@@ -533,7 +534,7 @@ const UI = {
       <div class="field"><span class="field-label">품질</span>
         ${Object.entries(Q).map(([k, [t, d]]) => opt('quality', k, t, d, k === QualityManager.current)).join('')}</div>
       <div class="field"><span class="field-label">스타일</span>
-        ${Object.keys(STYLES).map(k => opt('style', k, STYLES[k].label, S[k] || '', k === StyleManager.current, preview(k))).join('')}</div>
+        ${['day', 'toon', 'pastel', 'standard'].map(k => opt('style', k, STYLES[k].label, S[k] || '', k === StyleManager.current, preview(k))).join('')}</div>
       <div class="actions"><button id="graphicsCloseBtn" class="btn primary wide">확인</button></div>
     `, { solid: true });
     el.querySelectorAll('.gfx-opt').forEach(b => b.addEventListener('click', () => {
