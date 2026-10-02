@@ -90,35 +90,55 @@ npm run lint   # npx eslint js/
 
 ## 전체 검증 (코드 변경 후 마무리 단계)
 
-순서대로 실행 (스킬 폴더 `.claude/skills/run-ride-it`에서, 긴 출력은 파일로 저장 후 `grep`/`tail`):
+순서대로 실행 (프로젝트 루트에서 lint, 스킬 폴더에서 나머지. 긴 출력은 파일로 저장 후 필요한 줄만 읽기):
 
 ```bash
+npm run lint                                                         # 0. 문법
 cd .claude/skills/run-ride-it
-npm run --prefix ../../.. lint                                   # 0. 문법 (exit 0)
 node verify.mjs --out=/tmp/ride-it-verify > /tmp/verify.log 2>&1; echo "verify exit=$?"
-node score-sim.mjs --runs=60 > /tmp/score-sim.log 2>&1; echo "score-sim exit=$?"
-grep -E "PASS|FAIL" /tmp/verify.log | tail -40; tail -40 /tmp/score-sim.log
+node score-sim.mjs --runs=60 > /tmp/score-sim.log 2>&1; echo "score-sim exit=$?"   # 스테이지별 JSON 한 줄씩
+tail -1 /tmp/verify.log; grep -E "^FAIL" /tmp/verify.log
 ```
 
-통과 기준
-- lint: exit 0
-- verify.mjs: exit 0, 마지막 줄 `[verify] N/N checks passed, pageErrors=0`, `FAIL` 줄 0개 (CDP 터치 시나리오 A~G 전부 PASS)
-- score-sim.mjs: exit 0, `PAGEERROR`/`CONSOLE` 오류 없음, 5단계 모두 완주,
-  perfect 완주 시간 15초 이상, 연속 이벤트(게이트/커브 진입) 최소 간격 0.6초 이상,
-  perfect/average 점수 비율이 이전 `개발기록.md` 기록에서 크게 벗어나지 않음
-- 속도 배율·연출을 건드렸다면 위 시간·간격 기준을 특히 확인 (AGENTS.md "속도감 최우선")
+소요 시간 (2026-10-02 실측): lint 1초 + verify 약 80초 + score-sim 약 1초 = **약 1분 30초**.
+20분을 한참 밑돌아 빠른 버전은 따로 두지 않음 — 20분을 넘기게 되면 `verify.mjs --stages=0,4`
++ `score-sim.mjs --runs=20`을 빠른 버전으로 쓸 것.
 
-보고 형식 (표 하나 + 한 줄 결론)
+### 합격 기준 (하나라도 어기면 실패 — 안 바뀌어야 하는 것만)
+- lint exit 0
+- verify.mjs exit 0, 마지막 줄 `N/N checks passed, pageErrors=0`, `FAIL` 줄 0개
+- score-sim.mjs exit 0, `PAGEERROR`/`CONSOLE` 오류 없음, 5개 스테이지 모두 완주(perfect.timeSec 존재)
+- 완주 시간(perfect/average `timeSec`) 15초 이상
+- 연속 이벤트 간격 `perfect.minEventGapSec` 0.6초 이상
+- 평균 점수가 완벽 점수를 넘지 않음 (`average.overPerfect` = 0, `average.score` < `perfect.score`)
+
+### 기준선 표 (참고용 — 합격 기준 아님)
+2026-10-02 측정, `--runs=60`, 1랩, 버튼 모델. 시뮬레이션은 시드 고정이라 코드가 같으면 결과도 같음.
+
+| 단계 | 완벽 완주(초) | 평균 완주(초) | 완벽 점수 | 평균 점수 | 저속 비율 완벽/평균 | 게이트 P/G/M(평균) | 랭크 분포 S/A/B/C | 최소 이벤트 간격(초) |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 18.0 | 20.2 | 3353 | 1539 | 0.045 / 0.072 | .45/.32/.23 | 8/22/24/6 | 1.12 |
+| 2 | 17.8 | 18.7 | 4253 | 1998 | 0.047 / 0.045 | .46/.31/.23 | 1/18/29/12 | 0.98 |
+| 3 | 15.3 | 18.3 | 5085 | 2404 | 0.000 / 0.035 | .47/.26/.26 | 2/14/40/4 | 0.88 |
+| 4 | 22.7 | 25.0 | 5982 | 2491 | 0.029 / 0.028 | .42/.26/.31 | 0/12/34/14 | 1.03 |
+| 5 | 22.0 | 22.6 | 7650 | 3138 | 0.027 / 0.025 | .36/.31/.33 | 1/10/40/9 | 0.75 |
+
+기준선과 달라졌을 때
+- 의도한 변경이면: 이유를 `개발기록.md`에 적고 이 표를 새 측정값으로 갱신 (경고 아님).
+- 의도하지 않은 큰 변동(예: 평균 완주 시간 ±20% 이상)만 경고로 보고. 합격/불합격에는 영향 없음.
+
+### 보고 형식 (표 하나 + 한 줄 결론)
 
 ```
 | 항목 | 결과 | 비고 |
-| lint | PASS/FAIL | exit code |
-| verify.mjs | PASS n / FAIL m | 실패 이름·pageerror |
-| score-sim | PASS/FAIL | 단계별 완주 시간(최소~최대), 최소 이벤트 간격 |
+| lint | PASS/FAIL | exit code, 소요 시간 |
+| verify.mjs | PASS n/n | 실패 이름·pageErrors, 소요 시간 |
+| score-sim | PASS/FAIL | 합격 기준 위반 항목, 소요 시간 |
+기준선 변동: 없음 / 의도한 변경(개발기록 갱신) / 경고(±20% 이상 항목)
 결론: 통과 / 실패 항목과 원인 한 줄
 ```
 
-실패 시 로그의 해당 줄만 인용하고, 임의로 기준을 완화하지 말고 사용자에게 알린다.
+실패하는 항목이 있으면 고치지 말고 로그의 해당 줄만 인용해 원인을 보고한다. 기준을 임의로 완화하지 않는다.
 
 ---
 
