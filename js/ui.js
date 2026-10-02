@@ -31,6 +31,16 @@ const ControlSettings = {
 window.CONTROL_MODES = CONTROL_MODES;
 window.ControlSettings = ControlSettings;
 
+// 레일 이탈(밸런스 Miss 시 커브 밖으로 튕겨 나가 재출발, 3번 이탈하면 실패) — 기본 켜짐. 튜토리얼은 설정과 무관하게 이탈 없음
+const DerailSettings = {
+  on: localStorage.getItem('rc_derail') !== 'off',
+  set(on) {
+    this.on = on;
+    try { localStorage.setItem('rc_derail', on ? 'on' : 'off'); } catch (e) { /* 무시 */ }
+  },
+};
+window.DerailSettings = DerailSettings;
+
 // 스테이지별 진행 저장 — { [stage.id]: { cleared, best, rank, plays } } (인덱스가 아닌 id 기준이라 순서가 바뀌어도 유지)
 const RANK_ORDER = 'CBAS';
 const ProgressManager = {
@@ -111,6 +121,7 @@ const LOGO = (small = false) => `
 // 부스트 타이밍 팝업(13번): 바깥 원 반지름 = POP_R0 × (1 − err / POP_RANGE) — err(지금 누르면 판정될 오차, 초)가 0인 순간 안쪽 원(POP_R0)과 겹침.
 // Good/Perfect 띠는 안쪽 원 둘레에 ±good/±perfect초에 해당하는 두께로 그림 → 판정값과 그림이 같은 식이라 어긋날 수 없음
 const POP_R0 = 30, POP_RANGE = 0.8; // viewBox 120 기준 반지름, 팝업이 뜨는 시점 = 중심 도달 0.8초 전
+const DERAIL_HITS = 3; // cart.js DERAIL.maxHits와 같은 값(HUD 하트 개수)
 const JUDGE_LABEL = { perfect: 'PERFECT!', good: 'GOOD', miss: 'MISS' };
 const GATE_LABEL = { boost: 'BOOST', finish: 'FINISH' };
 
@@ -275,7 +286,7 @@ const UI = {
           <h2>${s.name}</h2>
           <p class="detail-motif">${s.motif}</p>
           ${s.rollback ? `<p class="detail-warn">⚠ 뒤로 떨어지는 구간이 있어요${s.rollback.mode === 'mash' ? ' — 부스트 연타로 다시 올라가요!' : ' — 부스터가 다시 쏘아 올려줘요'}</p>` : ''}
-          <div class="detail-meta"><span class="stars">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><span>최고 ${Math.round(s.baseSpeedKmh * 1.5)}km/h</span></div>
+          <div class="detail-meta"><span class="stars">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><span>최고 ${Math.round(s.baseSpeedKmh * 1.5)}km/h</span><span class="derail-tag${DerailSettings.on ? ' on' : ''}" id="derailTag">이탈 ${DerailSettings.on ? 'ON' : 'OFF'}</span></div>
           <div class="stats">
             <div class="stat"><small>최고 랭크</small><b>${p ? p.rank : '-'}</b></div>
             <div class="stat"><small>최고 점수</small><b>${p ? p.best.toLocaleString() : '-'}</b></div>
@@ -321,6 +332,9 @@ const UI = {
       <div class="field"><span class="field-label">밸런스 조작</span>
         ${seg('control', Object.entries(CONTROL_MODES).map(([k, v]) => [k, v.label]), ControlSettings.mode)}
         <p class="field-desc" id="controlDesc">${CONTROL_MODES[ControlSettings.mode].desc}</p></div>
+      <div class="field"><span class="field-label">레일 이탈</span>
+        ${seg('derail', [['on', '켜기'], ['off', '끄기']], DerailSettings.on ? 'on' : 'off')}
+        <p class="field-desc">커브에 실패하면 이탈! 3번이면 실패</p></div>
       <div class="actions row">
         <button id="settingsHowtoBtn" class="btn">${ICONS.help}조작법</button>
         <button id="creditsBtn" class="btn">${ICONS.info}크레딧</button>
@@ -334,6 +348,7 @@ const UI = {
       const key = group.dataset.setting;
       if (key === 'view') { ViewSettings.set(v); document.getElementById('viewDesc').textContent = this._viewDesc(v); }
       else if (key === 'audio') AudioManager.setEnabled(v === 'on');
+      else if (key === 'derail') DerailSettings.set(v === 'on');
       else if (key === 'control') {
         ControlSettings.set(v);
         document.getElementById('controlDesc').textContent = CONTROL_MODES[v].desc;
@@ -608,7 +623,7 @@ const UI = {
     if (el) el.remove();
   },
 
-  showStartPrompt(name, motif, { tutorial = false } = {}) {
+  showStartPrompt(name, motif, { tutorial = false, derail = false } = {}) {
     // 스테이지를 재도전/재선택할 때마다 새로 호출되므로, 직전 호출에서 등록해둔 window 리스너를
     // 먼저 정리 — 그대로 두면 "발사 전에 스테이지 선택으로 돌아가기"를 반복할 때마다 리스너가
     // 계속 쌓이는 누수가 생김
@@ -626,6 +641,7 @@ const UI = {
             <span class="combo-chip" id="comboChip"${tutorial ? ' hidden' : ''}><small>COMBO</small><b id="comboLabel">0</b><small class="mult" id="comboMult">×1.0</small></span>
             ${tutorial ? '<button class="tut-skip" id="tutSkipBtn">건너뛰기</button>' : ''}
           </div>
+          ${derail ? `<div class="hearts" id="hearts" aria-label="남은 기회">${'<i class="heart">♥</i>'.repeat(DERAIL_HITS)}</div>` : ''}
         </div>
         ${tutorial ? '<div class="tut-banner" id="tutBanner"></div>' : ''}
         <div class="judge" id="judgeToast"></div>
@@ -665,7 +681,7 @@ const UI = {
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
       bal: $('balGauge'), balDir: $('balDir'), balBand: $('balBand'), balPerfect: $('balPerfect'), balCursor: $('balCursor'), balMin: $('balMin'), balMinTick: $('balMinTick'), balProg: $('balProg'), balResult: $('balResult'),
       pop: $('gatePop'), popLabel: $('gatePopLabel'), popGood: $('gatePopGood'), popPerfect: $('gatePopPerfect'), popRing: $('gatePopRing'), popResult: $('gatePopResult'), popKey: null, popResultUntil: 0,
-      judge: $('judgeToast'),
+      judge: $('judgeToast'), hearts: $('hearts'), lastDerails: 0,
       rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
     };
 
@@ -867,6 +883,14 @@ const UI = {
         h.rbSub.textContent = left.toFixed(1); // 일반 스테이지는 짧은 신호만(13번) — 연타 방법 설명은 튜토리얼에서
       } else h.rbSub.textContent = rb.phase === 'launch' ? '' : '꽉 잡아!';
     }
+    if (h.hearts && cart.derails !== h.lastDerails) { // 남은 기회(하트) — 잃는 순간 하나가 튀며 회색으로
+      h.lastDerails = cart.derails;
+      [...h.hearts.children].forEach((el, i) => {
+        const lost = i >= DERAIL_HITS - cart.derails;
+        if (lost && !el.classList.contains('off')) { el.classList.remove('lose'); void el.offsetWidth; el.classList.add('lose'); }
+        el.classList.toggle('off', lost);
+      });
+    }
     h.cameraBtn.disabled = !cart.launched;
     h.pauseBtn.disabled = !cart.launched;
   },
@@ -883,6 +907,27 @@ const UI = {
       rank: j.rank, balanceAcc, gates, judgeRatio: j.ratio, curveCount: j.curves, curvesCleared: cart.curvesCleared || 0,
       gateMissed: Math.max(0, j.gates - gates.perfect - gates.good - gates.miss),
     };
+  },
+
+  /** 레일 이탈 3번 — 스테이지 실패(기록 저장 없음) */
+  showFail(stageIndex) {
+    const stageData = STAGES[stageIndex];
+    this._setScreen(`
+      <div class="screen modal-overlay" id="failScreen">
+        <div class="card result-card">
+          <div class="ribbon fail">실패…</div>
+          <div class="result-stage">${stageData.name}</div>
+          <div class="hearts big" aria-hidden="true">${'<i class="heart off">♥</i>'.repeat(DERAIL_HITS)}</div>
+          <p class="fail-text">레일에서 ${DERAIL_HITS}번 이탈했어요</p>
+          <div class="actions">
+            <button id="retryBtn" class="btn primary wide">${ICONS.retry}다시 도전</button>
+            <button id="stageSelectBtn" class="btn wide">${ICONS.list}스테이지 선택</button>
+          </div>
+        </div>
+      </div>
+    `);
+    document.getElementById('retryBtn').addEventListener('click', () => Game.loadStage(stageIndex));
+    document.getElementById('stageSelectBtn').addEventListener('click', () => this.showStageSelect(STAGES, i => Game.loadStage(i)));
   },
 
   showResult(cart, stageIndex) {
@@ -910,6 +955,7 @@ const UI = {
               ...(bd.finishBonus > 0 ? [['피니쉬 보너스', bd.finishBonus]] : []),
               ...(bd.mashBonus > 0 ? [['연타 보너스', bd.mashBonus]] : []),
             ].map(([k, v]) => `<div class="bd-row"><span>${k}</span><b>+${Math.round(v).toLocaleString()}</b></div>`).join('')}
+            ${cart.derailEnabled ? `<div class="bd-row bd-derail"><span>레일 이탈 ×${cart.derails}</span><b>−${Math.round(bd.derailPenalty).toLocaleString()}</b></div>` : ''}
           </div>
           <div class="stats">
             <div class="stat"><small>최고 콤보</small><b>${cart.maxCombo.toLocaleString()}</b></div>

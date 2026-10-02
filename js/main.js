@@ -66,7 +66,7 @@ const Game = {
     // 스테이지 배속: 기본 +10%/스테이지를 참고선으로 두되, 모티브별 baseSpeedKmh가 우선
     const stageMultiplier = stageData.baseSpeedKmh / 45; // 1단계(45km/h) 대비 배율로 정규화
 
-    this.cart = new Cart(this.track, stageMultiplier, laps);
+    this.cart = new Cart(this.track, stageMultiplier, laps, { derail: !tutorial && DerailSettings.on });
     this._lapBannerKey = null; this._lastLapSeen = undefined; this._prevT = undefined;
     if (this.input) this.input.dispose(); // 이전 스테이지 입력 리스너가 남아 탭이 중복 판정되던 문제 방지
     if (this.camera) this.camera.dispose(); // 이전 스테이지 카메라가 activeCamera로 남아 빈 하늘만 보이던 문제 방지
@@ -84,7 +84,7 @@ const Game = {
         this._setupSplash();
         StyleManager.apply(this); // 새로 로드된 glb 재질에 단계형 음영 적용
         // showStartPrompt가 스타트 바 DOM을 먼저 만들어야 InputController가 그 엘리먼트에 바인딩 가능
-        UI.showStartPrompt(stageData.name, stageData.motif, { tutorial });
+        UI.showStartPrompt(stageData.name, stageData.motif, { tutorial, derail: this.cart.derailEnabled });
         this.input = new InputController(this.canvas, this.cart, this.camera, UI.startBarEl, ControlSettings.mode);
         if (tutorial) { this.track.setRollbackMarkersVisible(true); Tutorial.begin(this); }
 
@@ -182,6 +182,20 @@ const Game = {
     const pos = this.track.getPositionAt(this.cart.t);
     const tangent = this.track.getTangentAt(this.cart.t);
     const roll = this.track.getBankRollAt(this.cart.t);
+    const ds = this.cart.derailState;
+    if (ds) { // 레일 이탈 연출(렌더 전용 오프셋): 커브 바깥쪽으로 튕겨 포물선으로 떨어지며 구름
+      const u = Math.min(1, ds.time / 1.5);
+      const right = BABYLON.Vector3.Cross(BABYLON.Vector3.Up(), tangent);
+      if (right.lengthSquared() > 0.01) right.normalize(); else right.set(1, 0, 0);
+      const off = right.scale(ds.dir * 10 * u).add(tangent.scale(Math.min(30, ds.speed * 0.3) * u));
+      off.y = Math.max(5 * u - 16 * u * u, 0.6 - pos.y); // 지면 아래로는 안 내려감
+      pos.addInPlace(off);
+      this.cartMesh.position.copyFrom(pos);
+      this.cartMesh.lookAt(pos.add(tangent), 0, u * 1.4, roll + ds.dir * u * 4.5);
+      if (this.camera) this.camera.focus = pos;
+      return;
+    }
+    if (this.camera) this.camera.focus = null;
     this.cartMesh.position.copyFrom(pos);
     this.cartMesh.lookAt(pos.add(tangent), 0, 0, roll);
   },
@@ -366,8 +380,9 @@ const Game = {
 
     if (this.input) this.input.update(dt);
     this.cart.update(dt);
+    if (this.cart.derailState && this.cart.derailState.time < 0.6) this.camera.kick(0.8); // 이탈 직후 화면 흔들림
+    this._updateCartMesh(); // 카메라가 이탈 중 날아가는 카트를 바라보도록 메시가 먼저
     this.camera.update(this.track, this.cart, dt);
-    this._updateCartMesh();
     UI.updateHUD(this.cart, this.track);
 
     const diveNow = Math.max(0, -this.track.getTangentAt(this.cart.t).y - 0.2);
@@ -381,6 +396,15 @@ const Game = {
       AudioManager.playSample('whoa', { volume: 0.85, rate: 0.95 + Math.random() * 0.15 });
     }
     this._prevTy = ty;
+    if (this.cart.failed) { // 레일 이탈 3번 → 실패 화면(기록 없음)
+      SpeedLines.draw(0, 0);
+      if (this._vignette) this._vignette.style.opacity = '0';
+      AudioManager.updateWind(0);
+      AudioManager.setBgmMode('menu');
+      UI.showFail(this.currentStageIndex);
+      this.engine.stopRenderLoop();
+      return;
+    }
     if (this.cart.isFinished) {
       SpeedLines.draw(0, 0);
       if (this._vignette) this._vignette.style.opacity = '0';
@@ -587,6 +611,15 @@ window.addEventListener('rollback', e => {
 });
 window.addEventListener('mash-tap', () => AudioManager.playChainClick());
 // 발사 순간 연출: 카메라 밀림+FOV 킥, 스피드 라인 버스트 (발사음은 input.js가 AudioManager.playLaunch)
+window.addEventListener('derail', () => {
+  UI.flashSignal('이탈!', 'miss');
+  AudioManager.playDerail();
+});
+window.addEventListener('derail-respawn', () => { // 되감긴 위치에서 아치·물 착수·카메라 펄스가 잘못 발동하지 않게 기준 위치 재설정
+  Game._prevT = undefined;
+  if (Game.camera) Game.camera.resnap(Game.cart);
+  UI.flashSignal('다시 출발!', 'good small');
+});
 window.addEventListener('cart-launched', e => {
   const k = e.detail ? e.detail.strength : 1;
   AudioManager.playSample('voice_go', { volume: 0.55 });

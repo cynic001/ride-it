@@ -446,6 +446,18 @@
     margin-top: -46px; padding: 8px 26px; border-radius: 14px; background: var(--yellow); color: var(--navy);
     font-size: 24px; box-shadow: 0 4px 0 var(--yellow-deep);
   }
+  .ribbon.fail { background: var(--red); color: #fff; box-shadow: 0 4px 0 #c9382d; }
+  /* 레일 이탈 남은 기회(하트) — HUD 왼쪽 위, 잃으면 회색 + 한 번 튐 */
+  .hearts { align-self: flex-start; display: flex; gap: 4px; padding: 2px 8px; border-radius: 999px; background: var(--navy-soft); pointer-events: none; }
+  .heart { font-style: normal; font-size: 22px; line-height: 26px; color: #ff4d6d; }
+  .heart.off { color: rgba(255,255,255,.35); }
+  .heart.lose { animation: heartLose .5s ease-out; }
+  @keyframes heartLose { 0% { transform: scale(1.8); } 100% { transform: scale(1); } }
+  .hearts.big { background: none; padding: 0; gap: 10px; align-self: center; } .hearts.big .heart { font-size: 40px; line-height: 44px; }
+  .fail-text { font-size: 20px !important; color: var(--navy) !important; }
+  .derail-tag { padding: 2px 10px; border-radius: 999px; background: #eef1f8; color: #2f3a63; font-size: 14px; }
+  .derail-tag.on { background: #ffe3e0; color: #c9382d; }
+  .bd-derail b { color: #c9382d; }
   .loading-card { background: transparent; box-shadow: none; color: #fff; }
   .loading-card p { color: #fff; }
   .spinner {

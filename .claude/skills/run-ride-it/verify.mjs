@@ -75,6 +75,7 @@ async function main() {
       sessionStorage.setItem('verify_init', '1');
       for (const k of Object.keys(localStorage)) if (k !== 'rc_quality') localStorage.removeItem(k);
     }
+    localStorage.setItem('rc_derail', 'off'); // 기존 흐름 검증은 이탈 없이(이탈은 verify-polish.mjs)
   }, QUALITY);
   const shot = async name => page.screenshot({ path: path.join(OUT, `${name}.png`) });
 
@@ -419,7 +420,7 @@ async function main() {
  * 두 손가락 시나리오를 돌려 서로 끊거나 바꾸지 않는지 확인. 키보드 ← + ↑ 동시 입력도 */
 async function multiTouchTest(browser, base, pageErrors) {
   const tctx = await browser.newContext({ viewport: { width: 375, height: 667 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
-  await tctx.addInitScript(q => { localStorage.setItem('rc_quality', q); localStorage.setItem('rc_howto_seen', '1'); localStorage.setItem('rc_tutorial_done', '1'); localStorage.setItem('rc_tutorial_asked', '1'); }, QUALITY);
+  await tctx.addInitScript(q => { localStorage.setItem('rc_derail', 'off'); localStorage.setItem('rc_quality', q); localStorage.setItem('rc_howto_seen', '1'); localStorage.setItem('rc_tutorial_done', '1'); localStorage.setItem('rc_tutorial_asked', '1'); }, QUALITY);
   const tp = await tctx.newPage();
   tp.on('pageerror', e => pageErrors.push('[touch] ' + e.message));
   const cdp = await tctx.newCDPSession(tp);

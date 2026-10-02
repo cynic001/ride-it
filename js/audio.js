@@ -164,6 +164,16 @@ const AudioManager = {
     if (finish) this.playSample('voice_congrats', { volume: 0.6, delay: 0.5 });
   },
 
+  /** 레일 이탈 — 금속 긁히는 소리 + 낮은 충돌음, 0.9초 뒤 착지 "쿵" */
+  playDerail() {
+    if (!this._ready()) return;
+    const t0 = this.ctx.currentTime;
+    this._whoosh(t0, 0.6, 2600, 300, 0.3);
+    this._blip({ freq: 220, freqEnd: 60, duration: 0.3, type: 'sawtooth', peak: 0.25 });
+    setTimeout(() => this._blip({ freq: 90, freqEnd: 35, duration: 0.35, type: 'sine', peak: 0.4 }), 900);
+    this.playSample('whoa', { volume: 0.7, rate: 1.15 });
+  },
+
   /** 물 착수 "첨벙 + 쏴아" — 단계가 오를수록 크고 길게 */
   playSplash(level = 1) {
     if (!this._ready()) return;

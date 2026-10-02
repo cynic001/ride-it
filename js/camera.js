@@ -75,6 +75,12 @@ class CoasterCamera {
     this._push = Math.max(this._push, 1.8 * strength);
   }
 
+  /** 카트가 순간이동(이탈 재출발)했을 때 — 3인칭 스프링이 가로질러 날아오지 않게 즉시 맞추고 낙하/펄스 감지 기준 위치도 갱신 */
+  resnap(cart) {
+    this._snap = true;
+    this._prevT = cart.t;
+  }
+
   dispose() {
     this.camera.detachControl();
     this.camera.dispose();
@@ -104,7 +110,7 @@ class CoasterCamera {
 
   /** 자동 1인칭 펄스 요청(3인칭 설정에서만 의미) — 쿨다운 중이거나 뒤로 떨어지는 중이면 무시 */
   autoFirst(sec, reason, cart) {
-    if (!cart || !cart.launched || cart.rollback || this._clock < this._autoCooldown) return;
+    if (!cart || !cart.launched || cart.rollback || cart.derailState || this._clock < this._autoCooldown) return;
     if (this._clock < this._autoUntil) { this._autoUntil = Math.max(this._autoUntil, this._clock + sec); }
     else this._autoUntil = this._clock + sec;
     this._autoCooldown = this._autoUntil + VIEW_BLEND_SEC + AUTO_FIRST.cooldownSec; // 복귀(블렌드) 후 3초
@@ -163,7 +169,8 @@ class CoasterCamera {
     const w = this._blendLin * this._blendLin * (3 - 2 * this._blendLin); // smoothstep
 
     // 3인칭 스프링(발사 전엔 완전 고정)
-    this._pos3 = cart.launched ? BABYLON.Vector3.Lerp(this._pos3, pos3, Math.min(1, dt * 5)) : pos3;
+    this._pos3 = cart.launched && !this._snap ? BABYLON.Vector3.Lerp(this._pos3, pos3, Math.min(1, dt * 5)) : pos3;
+    this._snap = false;
 
     // 급하강 진입(접선이 아래로 크게 꺾이는 순간) — 짧고 강한 킥
     if (cart.launched && tangent.y < -0.45 && this._prevTangentY >= -0.45 && speedRatio > 0.3) this.kick(0.9);
@@ -183,7 +190,8 @@ class CoasterCamera {
       Math.sin(T * 31.9 + 0.7) * k * 0.5
     );
     const pos = BABYLON.Vector3.Lerp(this._pos3, pos1, w);
-    const look = BABYLON.Vector3.Lerp(look3, look1, w);
+    let look = BABYLON.Vector3.Lerp(look3, look1, w);
+    if (this.focus) look = BABYLON.Vector3.Lerp(look, this.focus, 0.85); // 레일 이탈 중: 날아가는 카트를 따라 봄
     this.camera.position = pos.add(shake);
     this.camera.setTarget(look.add(shake.scale(0.3)));
 

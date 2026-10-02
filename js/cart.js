@@ -37,6 +37,8 @@ const SCORE = {
   balancePerfect: 50,       // 그 유지 시간 중 balancePerfectRatio 이상을 Perfect 범위(목표 ±perfectRange)에 있었으면 추가 → Perfect 150
   balancePerfectRatio: 0.6,
 };
+// 레일 이탈(설정 ON, 튜토리얼 제외): 커브 Miss → 1.5초 추락 연출 → 커브 시작 leadM 앞에서 기본 속도로 재출발, 감점·콤보 0. maxHits번째 이탈은 스테이지 실패
+const DERAIL = { sec: 1.5, maxHits: 3, penalty: 200, leadM: 15 };
 // 게이트 판정(시간 기준): 모바일 터치 지연 보정 — 탭 이벤트가 실제 손가락 접촉보다 약 이만큼 늦게 도착한다고 보고
 // 판정 시각을 앞당겨 계산. 기기별 체감이 다르면 이 값 하나만 조정
 const INPUT_LATENCY_OFFSET = 0.05; // 초
@@ -51,8 +53,9 @@ class Cart {
    * @param {Track} track
    * @param {number} stageMultiplier - 스테이지 배속 (1.1^(stage-1) 등)
    * @param {number} totalLaps - 완주까지 폐곡선을 돌아야 하는 횟수 (기본 1 = 기존과 동일 동작)
+   * @param {{derail: boolean}} opts - derail: 밸런스 Miss 시 레일 이탈(false면 기존 감속 방식)
    */
-  constructor(track, stageMultiplier = 1, totalLaps = 1) {
+  constructor(track, stageMultiplier = 1, totalLaps = 1, { derail = false } = {}) {
     this.track = track;
     this.stageMultiplier = stageMultiplier;
     this.totalLaps = totalLaps;
@@ -82,7 +85,12 @@ class Cart {
     this.lowSpeedTime = 0;    // 기본 속도 70% 미만으로 달린 시간(밸런싱 지표)
     this.atSpeedCap = false;  // HUD 강조용
     // 점수 원천별 내역 — 콤보 배율로 늘어난 몫은 comboBonus로 따로 집계(합계 = score)
-    this.scoreBreakdown = { gate: 0, balance: 0, balancePerfect: 0, comboBonus: 0, finishBonus: 0, mashBonus: 0 };
+    this.scoreBreakdown = { gate: 0, balance: 0, balancePerfect: 0, comboBonus: 0, finishBonus: 0, mashBonus: 0, derailPenalty: 0 }; // derailPenalty는 점수에서 깎인 양(양수)
+    this.derailEnabled = derail;
+    this.derails = 0;
+    this.derailState = null;  // { time, dir(바깥쪽 ±1), lap, tStart, speed } — 연출(main.js)이 읽음
+    this.failed = false;      // 이탈 maxHits번 → 스테이지 실패
+    this.derailMax = DERAIL.maxHits;
     this.balancePerfects = 0;
     // 스테이지별 밸런스 난이도 — 없으면 캐주얼 기본값
     this.balanceRule = { minLean: 0.2, perfectRange: 0.15, holdSec: 1.5, ...track.stageData.balance };
@@ -90,7 +98,7 @@ class Cart {
     this.balanceResults = { perfect: 0, good: 0, miss: 0 };
     this.rollback = null;     // 뒤로 떨어지기 진행 상태 { phase: 'stall'|'back'|'launch'|'mash', time, gauge, ... }
     this.rollbackLog = [];    // 랩별 결과 { mode, climbSec, bonus, assisted } — 결과/시뮬레이션용
-    this._rbLap = 0;
+    this._rbDone = new Set(); // 뒤로 떨어지기를 이미 겪은 랩(이탈로 되감겨도 다시 발동하지 않게)
     this._curve = null;        // 진행 중인 커브 세그먼트 { key, hold(초), holdPerfect(초), done }
     this._resolvedGates = new Set(); // 게이트당(랩별) 판정 1회 — 연타로 점수/부스트를 반복 획득하는 것 방지
     this.boostRemaining = 0;  // 남은 가속 거리(m)
@@ -120,7 +128,7 @@ class Cart {
   }
 
   _startRollback(rz) {
-    this._rbLap = this.currentLap;
+    this._rbDone.add(this.currentLap);
     this.boostRemaining = 0; this.boostAccel = 0;
     this.rollback = { phase: 'stall', time: 0, mode: rz.mode, zone: rz, gauge: 0, taps: 0, mashTime: 0 };
     window.dispatchEvent(new CustomEvent('rollback', { detail: { phase: 'stall', mode: rz.mode } }));
@@ -247,7 +255,53 @@ class Cart {
     const c = this._curve;
     this._curve = null;
     this.balanceState = null;
-    if (c && !c.done) this._balanceJudge('miss');
+    if (c && !c.done) {
+      this._balanceJudge('miss');
+      // 완주 순간·뒤로 떨어지기 구간 안의 커브는 이탈 없음
+      if (this.derailEnabled && !this.isFinished && !this.track.inRollbackZone(c.tStart + 1e-4)) this._startDerail(c);
+    }
+  }
+
+  /** 레일 이탈 시작 — 점수 감점(0 아래로는 안 내려감), 콤보 초기화, 가속 효과 제거 */
+  _startDerail(c) {
+    const seg = this.track.getSegmentAt(c.tStart + 1e-4);
+    this.derails += 1;
+    this.combo = 0;
+    const cut = Math.min(DERAIL.penalty, this.score);
+    this.score -= cut;
+    this.scoreBreakdown.derailPenalty += cut;
+    this.boostRemaining = 0; this.boostAccel = 0; this.assistActive = false;
+    this.derailState = { time: 0, dir: seg.curveDirection === 'left' ? 1 : -1, lap: c.lap, tStart: c.tStart, speed: this.speed };
+    window.dispatchEvent(new CustomEvent('derail', { detail: { count: this.derails, left: DERAIL.maxHits - this.derails } }));
+  }
+
+  /** 추락 연출 시간(고정 스텝)이 끝나면: 마지막 기회였으면 실패, 아니면 커브 직전에서 기본 속도로 재출발 */
+  _updateDerail(dt) {
+    const d = this.derailState;
+    d.time += dt;
+    this.rideTime += dt;
+    if (d.time < DERAIL.sec) return;
+    this.derailState = null;
+    if (this.derails >= DERAIL.maxHits) {
+      this.failed = true;
+      window.dispatchEvent(new CustomEvent('stage-failed'));
+      return;
+    }
+    let t = d.tStart - DERAIL.leadM / this.track.lengthM, lap = d.lap;
+    if (t < 0) { if (lap > 1) { t += 1; lap -= 1; } else t = 0; }
+    this.t = t; this.currentLap = lap;
+    this.speed = this.baseSpeedMs;
+    this._lastHeight = this.track.getHeightAt(t);
+    this._stepDistance = 0;
+    this._curve = null; this.balanceState = null; this._lastBalanceTier = null;
+    // 재출발 지점이 앞 커브의 끝자락이면 그 커브는 중간부터 들어가는 셈이라 유지 시간을 못 채움 — 판정하지 않음(연쇄 이탈 방지)
+    const rs = this.track.getSegmentAt(t);
+    this._skipCurveKey = rs.requiredLean > 0 && rs.tStart !== d.tStart ? `${lap}:${rs.tStart}` : null;
+    this._crestHold = 0; this._liftArmed = null;
+    // 되감긴 구간에서 이미 지나친 게이트는 다시 점수 내지 못하게(커브 시작 앞 게이트 전부 처리 완료로)
+    const curveLapT = (d.lap - 1) + d.tStart, nowLapT = (lap - 1) + t;
+    for (const g of this._gateCandidates()) if (g.dT < curveLapT - nowLapT) this._resolvedGates.add(g.key);
+    window.dispatchEvent(new CustomEvent('derail-respawn'));
   }
 
   /** 커브 밸런스 판정 확정 — perfect 150 / good 100 / miss 0 */
@@ -276,7 +330,8 @@ class Cart {
 
   /** 고정 타임스텝 물리 업데이트 */
   update(dt) {
-    if (!this.launched) return;
+    if (!this.launched || this.failed) return;
+    if (this.derailState) { this._updateDerail(dt); return; } // 추락 연출 중엔 물리·판정 정지
 
     // 진행률은 실제 커브 길이 기준 — stageData.trackLengthM(실제 코스터 길이)은 모델링된 커브보다 10~50% 길어서
     // 그대로 쓰면 화면상 카트가 표시 속도보다 느리게 움직였음
@@ -314,7 +369,7 @@ class Cart {
     const prevT = this.t;
     this.t += this._stepDistance / trackLength;
     const rz = this.track.rollbackZone;
-    if (rz && this._rbLap !== this.currentLap) {
+    if (rz && !this._rbDone.has(this.currentLap)) {
       const trig = rz.tValley + (rz.tPeak - rz.tValley) * ROLLBACK.triggerFrac;
       if (prevT < trig && this.t >= trig) this._startRollback(rz);
     }
@@ -342,14 +397,14 @@ class Cart {
     // 좌우 밸런스 판정(13번): 커브 방향으로 최소 기울기 이상(과하게 기울여도 OK — 버튼·키보드 1.0도 성공) = 목표 범위.
     // 목표 범위를 holdSec초 "연속" 유지하면 판정 확정 — 그동안 Perfect 범위(목표 ±perfectRange)에 있던 비율로 Perfect/Good.
     // 범위를 벗어나면 진행도 0으로, 구간이 끝날 때까지 못 채우면 Miss(_finalizeCurve). 확정 후엔 남은 구간에서 감점 없음
-    if (seg.requiredLean > 0) {
+    if (seg.requiredLean > 0 && segKey !== this._skipCurveKey) {
       const R = this.balanceRule;
       const dir = seg.curveDirection === 'left' ? -1 : 1;
       const lean = this.leanInput * dir; // 커브 방향 기준 기울기(+면 맞는 방향)
       const minLean = Math.min(R.minLean, seg.requiredLean);
       const inBand = lean >= minLean;
       const perfectNow = Math.abs(lean - seg.requiredLean) <= R.perfectRange;
-      if (!this._curve) this._curve = { key: segKey, hold: 0, holdPerfect: 0, done: null };
+      if (!this._curve) this._curve = { key: segKey, hold: 0, holdPerfect: 0, done: null, lap: this.currentLap, tStart: seg.tStart };
       const c = this._curve;
       if (inBand) {
         this.combo += 1;

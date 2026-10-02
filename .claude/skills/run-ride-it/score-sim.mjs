@@ -25,6 +25,8 @@ const LAPS = Number(args.laps ?? 1);
 const NOCAP = !!args.nocap; // 비교용: 속도 상한 해제
 const SCALE = args.scale ? Number(args.scale) : null; // 게임 속도 배율 실험
 const HOLD0 = !!args.hold0; // 실험: 정상 멈칫 끄기
+const SLOPPY = Number(args.sloppy ?? 0.25);        // 평균 플레이어가 커브마다 "엉성"하게 누를 확률(기본 25% — 기존 기준선)
+const D_SLOPPY = Number(args.dsloppy ?? 0.12);      // 레일 이탈 시뮬(derailSim)의 평균 플레이어: 이탈 규칙을 아는 플레이어는 커브의 12%만 놓친다고 가정(초보 25%는 failRateNovice)
 const DEVICE = args.device || 'button'; // 밸런스 입력 모델: button(◀▶, 기본) | keyboard | tilt — pad(한손 엄지 패드)는 13번에서 제거, 비교용으로만 남김
 
 const server = http.createServer((req, res) => {
@@ -40,16 +42,16 @@ await page.goto(`http://localhost:${Number(args.port ?? 8132)}/index.html`, { wa
 if (HOLD0) await page.addInitScript(() => { window.__simOverrides = () => { CHAIN_LIFT.crestHold = 0; }; });
 await page.waitForFunction(() => window.STAGES && window.Track && window.Cart && window.Game && Game.scene, null, { timeout: 90000 });
 
-const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
+const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE, SLOPPY, D_SLOPPY }) => {
   if (SCALE) Cart.speedScale = SCALE;
   if (window.__simOverrides) window.__simOverrides(); // 실험용 상수 덮어쓰기(--hold0 등)
   window.dispatchEvent = () => true; // 시뮬 중 오디오/UI 이벤트 무시
   const rng = seed => () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const gauss = r => Math.sqrt(-2 * Math.log(r() || 1e-9)) * Math.cos(2 * Math.PI * r());
 
-  function play(sd, tr, model, seed) {
+  function play(sd, tr, model, seed, derail = false, sloppy = derail ? D_SLOPPY : SLOPPY) {
     const r = rng(seed);
-    const cart = new Cart(tr, sd.baseSpeedKmh / 45, LAPS);
+    const cart = new Cart(tr, sd.baseSpeedKmh / 45, LAPS, { derail });
     if (NOCAP) cart.maxSpeedMs = Infinity;
     cart.launch(model === 'perfect' ? 1 : 0.7, 1);
     let time = 0, stag = 0, segKey = null, plan = null;
@@ -57,9 +59,9 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
     const hits = []; let prevT = 0; let climb = 0;
     const gatePlans = {};
     const mashRate = model === 'perfect' ? 9 : Math.max(3.5, 6 + gauss(r) * 1.2); // 초당 연타 횟수
-    let mashAcc = 0, crests = 0, wasHold = false;
+    let mashAcc = 0, crests = 0, wasHold = false; const dsegs = [];
     const curveSecs = []; let curveIn = null; // 커브 세그먼트별 체류 시간(초) — 밸런스 1.5초 유지 판정 가능 여부
-    while (!cart.isFinished && time < 900) {
+    while (!cart.isFinished && !cart.failed && time < 900) {
       const seg = tr.getSegmentAt(cart.t);
       const key = `${cart.currentLap}:${seg.tStart}`;
       const local = (cart.t - seg.tStart) / (seg.tEnd - seg.tStart);
@@ -69,7 +71,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
         segKey = key;
         plan = model === 'perfect'
           ? { good: true }
-          : { good: r() < 0.75 };
+          : { good: r() >= sloppy };
         plan.modulate = model === 'perfect' || r() < 0.2; // 버튼/키: 톡톡 눌러 목표 근처를 맞추는 커브 비율
         plan.pressOn = true; plan.pressUntil = 0;
       }
@@ -108,7 +110,9 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
         cart.leanInput = model === 'perfect' ? desired : cart.leanInput + (desired - cart.leanInput) * (1 - Math.exp(-follow / 60));
       }
       if (cart.rollback && cart.rollback.phase === 'mash') { mashAcc += mashRate / 60; while (mashAcc >= 1) { mashAcc -= 1; cart.mashTap(); } }
+      const dBefore = cart.derails;
       cart.update(1 / 60);
+      if (cart.derails > dBefore) dsegs.push(tr.segmentRanges.findIndex(x => x.tStart === cart.derailState.tStart));
       if (cart._crestHold > 0 && !wasHold) crests += 1; wasHold = cart._crestHold > 0; // 체인 리프트 정상 멈칫 횟수
       time += 1 / 60;
       if (cart.currentLap === 1) { for (const e of events) if (prevT < e && cart.t >= e) hits.push(time); prevT = cart.t; }
@@ -123,7 +127,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
     for (let k = 1; k < hits.length; k++) minGap = Math.min(minGap, hits[k] - hits[k - 1]);
     const mash = cart.rollbackLog.filter(x => x.mode === 'mash');
     const curveN = sd.segments.filter(g => g.requiredLean > 0).length * LAPS;
-    return { curveSecs, crests, curveRate: (cart.curvesCleared || 0) / curveN, perfectRate: cart.balancePerfects / curveN, mashSec: mash.length ? mash[0].climbSec : null, mashAssisted: mash.some(x => x.assisted), mashBonus: cart.scoreBreakdown.mashBonus, climb, minGap, gc, gTotal, jr: cart.judgeSummary().ratio, rank: cart.judgeSummary().rank, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
+    return { curveSecs, crests, curveRate: (cart.curvesCleared || 0) / curveN, perfectRate: cart.balancePerfects / curveN, mashSec: mash.length ? mash[0].climbSec : null, mashAssisted: mash.some(x => x.assisted), mashBonus: cart.scoreBreakdown.mashBonus, climb, minGap, gc, gTotal, jr: cart.judgeSummary().ratio, rank: cart.judgeSummary().rank, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, dsegs, derails: cart.derails, failed: cart.failed, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
   }
 
   return STAGES.map((sd, i) => {
@@ -133,11 +137,16 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
       S.forEach((p, k) => { const up = p.tangent.y > 0.15; if (up && st === null) st = k; if ((!up || k === S.length - 1) && st !== null) { const len = (k - st) * 2; if (len >= 30) climbs.push({ t0: +S[st].t.toFixed(3), t1: +p.t.toFixed(3), len, rise: +(p.pos.y - S[st].pos.y).toFixed(1) }); st = null; } }); }
     const perfect = play(sd, tr, 'perfect', 1);
     const avgRuns = Array.from({ length: RUNS }, (_, k) => play(sd, tr, 'average', 1000 + k));
+    // 레일 이탈 ON(게임 기본값): 같은 시드의 평균 플레이어가 몇 번 이탈하고 몇 %가 3번 이탈로 실패하는지
+    const dRuns = Array.from({ length: RUNS }, (_, k) => play(sd, tr, 'average', 1000 + k, true));
+    const nRuns = Array.from({ length: RUNS }, (_, k) => play(sd, tr, 'average', 1000 + k, true, 0.25));
+    const dHist = [0, 1, 2, 3].map(n => dRuns.filter(x => x.derails === n).length);
+    const derailSim = { derailsAvg: +(dRuns.reduce((a, x) => a + x.derails, 0) / RUNS).toFixed(2), failRate: +(dRuns.filter(x => x.failed).length / RUNS).toFixed(3), failRateNovice: +(nRuns.filter(x => x.failed).length / RUNS).toFixed(3), derailsAvgNovice: +(nRuns.reduce((a, x) => a + x.derails, 0) / RUNS).toFixed(2), derailHist: dHist, derailSegs: (() => { const h = {}; dRuns.forEach(x => x.dsegs.forEach(g => { h[g] = (h[g] || 0) + 1; })); return h; })(), perfectDerails: play(sd, tr, 'perfect', 1, true).derails };
     tr.dispose();
     const mean = f => avgRuns.reduce((a, x) => a + f(x), 0) / RUNS;
     const round = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Math.round(v)]));
     return {
-      stage: i + 1, climbs,
+      stage: i + 1, climbs, derailSim,
       perfect: { curveSecs: perfect.curveSecs.map(x => x.sec), crests: perfect.crests, curveRate: +perfect.curveRate.toFixed(2), perfectRate: +perfect.perfectRate.toFixed(2), mashSec: perfect.mashSec === null ? null : +perfect.mashSec.toFixed(2), climbSec: +perfect.climb.toFixed(1), minEventGapSec: +perfect.minGap.toFixed(2), gatePGM: [perfect.gc.perfect, perfect.gc.good, perfect.gc.miss], judgeRatio: +perfect.jr.toFixed(2), lowRatio: +perfect.low.toFixed(3), assistRatio: +perfect.assist.toFixed(3), score: Math.round(perfect.score), bd: round(perfect.bd), timeSec: +perfect.time.toFixed(1), stagSec: +perfect.stag.toFixed(1), vmaxKmh: Math.round(perfect.vmax), capKmh: Math.round(perfect.cap), maxCombo: perfect.maxCombo },
       average: {
         score: Math.round(mean(x => x.score)),
@@ -159,7 +168,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE }) => {
       },
     };
   });
-}, { RUNS, LAPS, NOCAP, SCALE, DEVICE });
+}, { RUNS, LAPS, NOCAP, SCALE, DEVICE, SLOPPY, D_SLOPPY });
 
 out.forEach(o => console.log(JSON.stringify(o)));
 await browser.close();
