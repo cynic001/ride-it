@@ -43,7 +43,7 @@
   /* 속도감 스피드 라인 — 3D 캔버스와 UI 사이, 입력은 통과 */
   #speedLines { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   /* 고속 비네트: 가장자리를 어둡게 해 시야가 좁아지는 느낌 — opacity는 main.js가 속도 비례로 */
-  .lap-banner { position: absolute; left: 0; right: 0; top: 34%; text-align: center; pointer-events: none; z-index: 6;
+  .lap-banner { position: absolute; left: 0; right: 0; top: 58%; /* 피니쉬 팝업 판정과 같은 순간에 뜨므로 팝업 아래 */ text-align: center; pointer-events: none; z-index: 6;
     font-size: 44px; color: #fff; letter-spacing: 2px; -webkit-text-stroke: 7px var(--navy); paint-order: stroke fill;
     animation: lapPop 1.8s var(--ease-pop) forwards; }
   .lap-banner.big { font-size: 54px; color: var(--yellow); }
@@ -230,8 +230,8 @@
   }
   .speedo { text-align: center; line-height: 1; text-shadow: 0 2px 0 var(--navy), 0 0 12px rgba(20,26,51,.5); }
   .speedo .num { font-size: 34px; color: #fff; -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; }
-  .speedo .unit { font-size: 13px; color: var(--yellow); margin-left: 2px; }
-  .speedo .sub { display: block; margin-top: 4px; font-size: 12px; color: #fff; }
+  .speedo .unit { font-size: 14px; color: var(--yellow); margin-left: 2px; -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; }
+  .speedo .sub { display: block; margin-top: 4px; font-size: 14px; color: #fff; -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; } /* 밝은 하늘 위에서도 읽히게 외곽선 */
   .speedo { position: relative; }
   .speedo .max-tag {
     position: absolute; top: 3px; left: 100%; margin-left: 4px; padding: 1px 6px; border-radius: 6px;
@@ -291,7 +291,7 @@
     -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; pointer-events: none; }
   .lift-hint.on { opacity: 1; animation: pulse 1.2s ease-in-out infinite; }
   /* 판정 토스트(게이트 탭 결과) */
-  .judge { position: absolute; top: 30%; left: 0; right: 0; text-align: center; pointer-events: none; font-size: 40px;
+  .judge { position: absolute; top: 47%; /* 부스트 팝업(위쪽 146~320px) 아래, 밸런스 게이지(아래쪽) 위 */ left: 0; right: 0; text-align: center; pointer-events: none; font-size: 40px;
     -webkit-text-stroke: 6px var(--navy); paint-order: stroke fill; opacity: 0; }
   .judge.show { animation: judgePop .7s var(--ease-pop) forwards; }
   @keyframes judgePop { 0% { opacity: 0; transform: scale(.4); } 25% { opacity: 1; transform: scale(1.1); } 70% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: translateY(-20px); } }
@@ -465,6 +465,7 @@
   .heart.off { color: rgba(255,255,255,.35); }
   .heart.lose { animation: heartLose .5s ease-out; }
   @keyframes heartLose { 0% { transform: scale(1.8); } 100% { transform: scale(1); } }
+  .hearts.big .heart.off { color: #c9cfe0; }
   .hearts.big { background: none; padding: 0; gap: 10px; align-self: center; } .hearts.big .heart { font-size: 40px; line-height: 44px; }
   .fail-text { font-size: 20px !important; color: var(--navy) !important; }
   .derail-tag { padding: 6px 12px; min-height: 32px; border: 0; border-radius: 999px; background: #eef1f8; color: #2f3a63; font: inherit; font-size: 14px; cursor: pointer; }
@@ -545,7 +546,8 @@
     .start-bar { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); gap: 4px; }
     .start-bar-track { height: 150px; }
     .start-bar-label { font-size: 15px; }
-    .lap-banner { top: 28%; }
+    .lap-banner { top: 62%; }
+    .judge { top: 78%; }
     .rb-overlay { top: 22%; }
   }
   @media (max-height: 620px) { /* 아주 낮은 화면: 타이틀/목록 간격 축소 */

@@ -211,6 +211,36 @@ section('popup', async () => {
   }
 });
 
+// ── 1-1 안내 요소 겹침: 팝업(+판정)·랩 배너·판정 토스트·밸런스 게이지·조작 버튼·HUD가 서로 겹치지 않음 (세로·가로, 피니쉬 순간처럼 동시에 뜰 때)
+section('overlap', async () => {
+  for (const [name, w, h] of [['세로', 375, 667], ['가로', 667, 375]]) {
+    const { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_derail: 'on' } });
+    await loadStage(page, 0);
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('cart-launched', { detail: { strength: 1, flickMultiplier: 1 } })));
+    const r = await page.evaluate(() => {
+      document.getElementById('gatePop').classList.add('on'); document.getElementById('balGauge').classList.add('on');
+      UI.showLapBanner('FINAL LAP', true); UI.flashSignal('GOOD', 'good'); UI._showPopResult('perfect');
+      const R = (sel, pad = 0) => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width }; };
+      const popLabel = R('#gatePop'), lbl = R('#gatePopLabel');
+      const pop = { l: popLabel.l, r: popLabel.r, t: popLabel.t, b: Math.max(popLabel.b, lbl ? lbl.b : 0) };
+      // 글자 영역은 줄 박스가 화면 폭 전체라 실제 글자 폭(range)으로 계산
+      const textBox = sel => { const e = document.querySelector(sel); const rg = document.createRange(); rg.selectNodeContents(e); const b = rg.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
+      const boxes = { banner: textBox('.lap-banner'), judge: textBox('#judgeToast'), popResult: textBox('#gatePopResult') };
+      const others = { 팝업: pop, 게이지: R('#balGauge'), 버튼: R('.lean-btns'), 부스트: R('#boostBtn'), 상단: R('.hud-row'), 컨트롤: R('.hud-controls') };
+      const hit = (a, b) => a && b && a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+      const bad = [];
+      for (const k of ['banner', 'judge']) {
+        for (const [on, o] of Object.entries(others)) if (hit(boxes[k], o)) bad.push(`${k}×${on}`);
+      }
+      if (hit(boxes.banner, boxes.judge)) bad.push('banner×judge');
+      return { bad, boxes, W: innerWidth, H: innerHeight };
+    });
+    check(`overlap ${name}: 랩 배너·판정 토스트가 팝업·게이지·버튼·HUD와 겹치지 않음`, r.bad.length === 0 && r.boxes.banner.r - r.boxes.banner.l > 50 && r.boxes.judge.r - r.boxes.judge.l > 30, JSON.stringify(r)); // 빈 박스로 통과하지 않게 폭도 확인
+    check(`overlap ${name} page error 0`, errors.length === 0, errors.join('|'));
+    await close();
+  }
+});
+
 for (const [name, fn] of sections) {
   if (ONLY && !ONLY.includes(name)) continue;
   try { await fn(); } catch (e) { check(`${name} 실행`, false, String(e.message).split('\n')[0]); }
