@@ -134,9 +134,10 @@ const LOGO = (small = false) => `
     <div class="logo-en">RIDE IT</div>
   </div>`;
 
-// 부스트 타이밍 팝업(13번): 바깥 원 반지름 = POP_R0 × (1 − err / POP_RANGE) — err(지금 누르면 판정될 오차, 초)가 0인 순간 안쪽 원(POP_R0)과 겹침.
-// Good/Perfect 띠는 안쪽 원 둘레에 ±good/±perfect초에 해당하는 두께로 그림 → 판정값과 그림이 같은 식이라 어긋날 수 없음
-const POP_R0 = 30, POP_RANGE = 0.8; // viewBox 120 기준 반지름, 팝업이 뜨는 시점 = 중심 도달 0.8초 전
+// 부스트 타이밍 링(UI 개선 2차 4번): BOOST 버튼 바깥의 링. 링 반지름 = BR_T + (BR_OUT − BR_T) × (−err / POP_RANGE) — err(지금 누르면 판정될 오차, 초)가
+// 0인 순간 링이 목표 반지름(BR_T, 버튼 가장자리 바로 바깥)에 닿음. Good/Perfect 띠 두께도 같은 식(±good/±perfect초)이라 판정(cart.gateTiming)과 어긋날 수 없음.
+// 좌표는 viewBox 144 기준(버튼 반지름 BR_BTN = 50, 링 바깥 끝 BR_OUT = 72).
+const BR_BTN = 50, BR_T = 57, BR_OUT = 72, POP_RANGE = 0.8; // 링이 나타나는 시점 = 중심 도달 0.8초 전
 const BAL_RING_C = 2 * Math.PI * 20; // 균형 바 노브 둘레 링(r=20) 길이 — 진행도 = stroke-dashoffset
 const DERAIL_HITS = 3; // cart.js DERAIL.maxHits와 같은 값(HUD 하트 개수)
 const JUDGE_LABEL = { perfect: 'PERFECT!', good: 'GOOD', miss: 'MISS' };
@@ -626,15 +627,7 @@ const UI = {
         <div class="rb-overlay" id="rbOverlay"><div class="rb-title" id="rbTitle"></div>
           <div class="rb-gauge" id="rbGauge"><div class="rb-gauge-fill" id="rbGaugeFill"></div></div><div class="rb-sub" id="rbSub"></div></div>
         <div class="timing-pop" id="gatePop">
-          <svg viewBox="0 0 120 120" aria-hidden="true">
-            <circle class="tp-bg" cx="60" cy="60" r="56"/>
-            <circle class="tp-good" id="gatePopGood" cx="60" cy="60" r="${POP_R0}"/>
-            <circle class="tp-perfect" id="gatePopPerfect" cx="60" cy="60" r="${POP_R0}"/>
-            <circle class="tp-target" cx="60" cy="60" r="${POP_R0}"/>
-            <circle class="tp-ring" id="gatePopRing" cx="60" cy="60" r="${POP_R0 * 2}"/>
-            <circle class="tp-flash" id="gatePopFlash" cx="60" cy="60" r="${POP_R0 + 4}"/>
-          </svg>
-          <span class="tp-label" id="gatePopLabel">BOOST</span>
+          <span class="hud-chip tp-label" id="gatePopLabel"></span>
           <div class="tp-result" id="gatePopResult"></div>
         </div>
         <div class="start-bar" id="startBar">
@@ -660,7 +653,7 @@ const UI = {
       speed: $('speedLabel'), speedo: $('speedo'), comboMult: $('comboMult'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'), lap: $('lapLabel'),
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'), viewFlash: $('viewFlash'), viewMode: 'third',
       bal: $('balGauge'), balDir: $('balDir'), balBand: $('balBand'), balPerfect: $('balPerfect'), balKnob: $('balKnob'), balTarget: $('balTarget'), balRing: $('balRing'), balResult: $('balResult'), balLast: null,
-      pop: $('gatePop'), popLabel: $('gatePopLabel'), popGood: $('gatePopGood'), popPerfect: $('gatePopPerfect'), popRing: $('gatePopRing'), popResult: $('gatePopResult'), popFlash: $('gatePopFlash'), popKey: null, popResultUntil: 0, popPrevErr: null, popTick: 0,
+      pop: $('gatePop'), popLabel: $('gatePopLabel'), popResult: $('gatePopResult'), ringWrap: $('boostWrap'), ring: $('brRing'), ringOut: $('brOut'), ringGood: $('brGood'), ringPerfect: $('brPerfect'), ringFlash: $('brFlash'), popKey: null, popResultUntil: 0, popPrevErr: null, popTick: 0,
       judge: $('judgeToast'), hearts: $('hearts'), lastDerails: 0,
       rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
     };
@@ -745,7 +738,21 @@ const UI = {
           </div></div>
         </div>
       </div>
-      <div class="ctl-right" id="ctlRight"><button class="ctl-btn boost" id="boostBtn">BOOST</button></div>
+      <div class="ctl-right" id="ctlRight">
+        <div class="boost-wrap" id="boostWrap">
+          <svg class="boost-ring" viewBox="0 0 144 144" aria-hidden="true">
+            <defs><linearGradient id="brRainbow" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD84D"/><stop offset=".33" stop-color="#4DE0FF"/><stop offset=".66" stop-color="#7DFFB0"/><stop offset="1" stop-color="#B38CFF"/></linearGradient></defs>
+            <circle class="br-good" id="brGood" cx="72" cy="72" r="${BR_T}"/>
+            <circle class="br-perfect" id="brPerfect" cx="72" cy="72" r="${BR_T}"/>
+            <circle class="br-target" cx="72" cy="72" r="${BR_T}"/>
+            <circle class="br-out" id="brOut" cx="72" cy="72" r="${BR_OUT}"/>
+            <circle class="br-ring" id="brRing" cx="72" cy="72" r="${BR_OUT}"/>
+            <circle class="br-flash" id="brFlash" cx="72" cy="72" r="${BR_T}"/>
+            <g class="br-stars"><path class="star" transform="translate(114 30)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/><path class="star" transform="translate(30 30)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/><path class="star" transform="translate(30 114)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/><path class="star" transform="translate(114 114)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/></g>
+          </svg>
+          <button class="ctl-btn boost" id="boostBtn" type="button">BOOST</button>
+        </div>
+      </div>
     </div>`;
   },
 
@@ -840,38 +847,40 @@ const UI = {
         h.balLast = null;
       }
 
-      // 부스트 타이밍 팝업: 다가오는 게이트(중심까지 POP_RANGE초 이내)에서 등장, 바깥 원이 줄어 안쪽 원과 겹치는 순간 = 정타.
-      // err는 판정 함수(cart.gateTiming, 터치 지연 보정 포함)와 같은 값
+      // 부스트 타이밍 링: 다가오는 게이트(중심까지 POP_RANGE초 이내)에서 BOOST 버튼 바깥에 나타나 줄어들고, 링이 목표 반지름에 닿는 순간 = 정타.
+      // err는 판정 함수(cart.gateTiming, 터치 지연 보정 포함)와 같은 값. 늦으면 링이 버튼 아래로 줄어들며 사라짐
       const g = cart.launched && !cart.rollback ? cart.gateTiming() : null;
-      const now = performance.now();
+      const now = performance.now(), wrap = h.ringWrap;
       if (g && -g.err <= POP_RANGE + INPUT_LATENCY_OFFSET && g.err <= GATE_ATTEMPT_RANGE) {
-        const k = 2 * POP_R0 / POP_RANGE; // 초 → 띠 두께
-        h.popLabel.textContent = GATE_LABEL[g.type] || '';
-        h.popGood.setAttribute('stroke-width', (k * g.good).toFixed(2));
-        h.popPerfect.setAttribute('stroke-width', (k * g.perfect).toFixed(2));
-        const r = Math.max(3, POP_R0 * (1 - g.err / POP_RANGE));
-        h.popRing.setAttribute('r', r.toFixed(2));
-        h.pop.dataset.err = g.err.toFixed(4);
-        h.pop.classList.toggle('ready', Math.abs(g.err) <= g.good);
-        h.pop.classList.toggle('perfect-now', Math.abs(g.err) <= g.perfect);
-        h.pop.classList.toggle('lowfx', QualityManager.current === 'low');
+        const k = (BR_OUT - BR_T) / POP_RANGE; // 초 → 반지름(viewBox)
+        const r = Math.max(BR_BTN, BR_T + k * -g.err).toFixed(2);
+        h.ring.setAttribute('r', r); h.ringOut.setAttribute('r', r);
+        h.ringGood.setAttribute('stroke-width', (2 * k * g.good).toFixed(2));
+        h.ringPerfect.setAttribute('stroke-width', (2 * k * g.perfect).toFixed(2));
+        wrap.dataset.err = g.err.toFixed(4);
+        wrap.classList.add('on');
+        wrap.classList.toggle('ready', Math.abs(g.err) <= g.good);
+        wrap.classList.toggle('perfect-now', Math.abs(g.err) <= g.perfect);
+        wrap.classList.toggle('finish', g.type === 'finish');
+        wrap.classList.toggle('lowfx', QualityManager.current === 'low');
+        h.popLabel.textContent = g.type === 'finish' ? t('hud.finish') : '';
         // 박자 틱: 정타 0.5초 전·0.25초 전 "틱-틱", 정타 직전 "지금!"(출력 지연만큼 살짝 일찍) — 게이트마다 한 번씩
         if (h.popKey !== g.key) { h.popTick = 0; h.popPrevErr = null; }
         if (h.popTick < 1 && g.err >= -0.5) { h.popTick = 1; AudioManager.playTick(false); }
         if (h.popTick < 2 && g.err >= -0.25) { h.popTick = 2; AudioManager.playTick(false); }
         if (h.popTick < 3 && g.err >= -0.03) { h.popTick = 3; AudioManager.playTick(true); }
-        if (h.popPrevErr !== null && h.popPrevErr < 0 && g.err >= 0) { // 정타 순간 반짝
-          h.popFlash.classList.remove('go'); void h.popFlash.getBoundingClientRect(); h.popFlash.classList.add('go');
+        if (h.popPrevErr !== null && h.popPrevErr < 0 && g.err >= 0) { // 정타 순간 반짝(링 안쪽에서 퍼지는 흰 원, 0.18초)
+          h.ringFlash.classList.remove('go'); void h.ringFlash.getBoundingClientRect(); h.ringFlash.classList.add('go');
         }
         h.popPrevErr = g.err;
-        h.pop.classList.toggle('finish', g.type === 'finish');
         if (h.popKey && h.popKey !== g.key && !cart._resolvedGates.has(h.popKey)) this._showPopResult('miss'); // 앞 게이트를 놓치고 바로 다음 게이트
-        if (now >= h.popResultUntil) { h.pop.classList.add('on'); h.pop.classList.remove('result'); }
+        if (now >= h.popResultUntil) { h.pop.classList.toggle('on', g.type === 'finish'); h.pop.classList.remove('result'); }
         h.popKey = g.key;
       } else {
-        // 팝업에 떠 있던 게이트를 누르지 않고 지나침 → MISS
+        // 링이 떠 있던 게이트를 누르지 않고 지나침 → MISS
         if (h.popKey && !cart._resolvedGates.has(h.popKey) && cart.launched && !cart.rollback) this._showPopResult('miss');
         h.popKey = null;
+        wrap.classList.remove('on', 'ready', 'perfect-now', 'finish');
         if (now >= h.popResultUntil) h.pop.classList.remove('on', 'result');
       }
     }

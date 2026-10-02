@@ -101,6 +101,7 @@ const STRINGS = {
   'view.first': '1인칭',
   'view.third': '3인칭',
   'hud.view': '시점 바꾸기',
+  'hud.finish': '결승선',
   'hud.sound': '소리 켜기·끄기',
   'hud.pause': '일시정지',
 

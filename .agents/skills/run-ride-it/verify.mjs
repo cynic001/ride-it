@@ -343,8 +343,8 @@ async function main() {
         }
         UI.updateHUD(c, Game.track);
         const A = (id, k) => parseFloat(document.getElementById(id).getAttribute(k));
-        return { err: g.err, type: g.type, good: g.good, perfect: g.perfect, ring: A('gatePopRing', 'r'), expRing: 30 * (1 - g.err / 0.8),
-          goodW: A('gatePopGood', 'stroke-width'), perfW: A('gatePopPerfect', 'stroke-width'), on: document.getElementById('gatePop').classList.contains('on'), n: c._gateResults.length };
+        return { err: g.err, type: g.type, good: g.good, perfect: g.perfect, ring: A('brRing', 'r'), expRing: Math.max(50, 57 + (15 / 0.8) * -g.err), // BOOST 버튼 바깥 링: 목표 반지름 57, 바깥 끝 72(0.8초 전), 버튼 반지름 50
+          goodW: A('brGood', 'stroke-width'), perfW: A('brPerfect', 'stroke-width'), on: document.getElementById('boostWrap').classList.contains('on'), n: c._gateResults.length };
       });
       if (gg) {
         if (s === STAGES[0]) await shot(`${tag}_2c_timing_pop`);
@@ -353,9 +353,9 @@ async function main() {
         await sleep(120);
         const shown = await page.evaluate(() => document.getElementById('gatePopResult').textContent);
         if (s === STAGES[0]) await shot(`${tag}_2d_pop_result`);
-        check(`${tag} timing popup matches timing judge`, gg.on && Math.abs(gg.ring - gg.expRing) < 0.05 && Math.abs(gg.goodW - 75 * gg.good) < 0.02 && Math.abs(gg.perfW - 75 * gg.perfect) < 0.02,
+        check(`${tag} boost ring matches timing judge`, gg.on && Math.abs(gg.ring - gg.expRing) < 0.05 && Math.abs(gg.goodW - 37.5 * gg.good) < 0.02 && Math.abs(gg.perfW - 37.5 * gg.perfect) < 0.02,
           `err=${gg.err.toFixed(3)}s ring=${gg.ring}/${gg.expRing.toFixed(2)} good=${gg.goodW} perfect=${gg.perfW}`);
-        check(`${tag} BOOST at ring overlap → perfect, shown in popup`, res === 'perfect' && shown === 'PERFECT!', `${gg.type} → ${res} / "${shown}"`);
+        check(`${tag} BOOST when the ring reaches the target → perfect, shown in the center`, res === 'perfect' && shown === 'PERFECT!', `${gg.type} → ${res} / "${shown}"`);
       }
       await page.evaluate(() => { if (!Game.cart.isFinished) { Game.lastTime = performance.now(); Game.engine.runRenderLoop(() => Game._loop()); } });
 

@@ -47,7 +47,7 @@ const res = await page.evaluate(() => {
     }
     // 상태 서명(그림자 제외)
     const sigEl = target.matches('button, .stage-btn, .chip, .hud-chip, .badge') ? target : (target.querySelector('button.switch, .seg, .meter, .card, .stat') || target);
-    const parts = [sigEl, ...sigEl.querySelectorAll('*')].slice(0, 12).map(e => { const cs = getComputedStyle(e); const op = cs.opacity === '0' ? 'H' : ''; return [cs.color, cs.backgroundColor, cs.fontWeight, cs.borderStyle + cs.borderTopColor, cs.outlineStyle, cs.textDecorationLine, e.children.length ? '' : e.textContent.trim().slice(0, 12), op, cs.fill, cs.stroke, cs.width, cs.transform === 'none' ? '' : 'T'].join('|'); }).join('//');
+    const parts = [sigEl, ...sigEl.querySelectorAll('*')].slice(0, 40).map(e => { const cs = getComputedStyle(e); const op = cs.opacity === '0' ? 'H' : ''; return [getComputedStyle(e, '::before').content, cs.backgroundImage === 'none' ? '' : cs.backgroundImage, cs.strokeDashoffset, cs.display === 'none' ? 'D' : '', cs.color, cs.backgroundColor, cs.fontWeight, cs.borderStyle + cs.borderTopColor, cs.outlineStyle, cs.textDecorationLine, e.children.length ? '' : e.textContent.trim().slice(0, 12), op, cs.fill, cs.stroke, cs.width, cs.transform === 'none' ? '' : 'T'].join('|'); }).join('//');
     (out.states[group] ||= []).push({ state, sig: parts });
   }
   return out;

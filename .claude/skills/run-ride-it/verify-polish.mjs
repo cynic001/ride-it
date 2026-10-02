@@ -170,43 +170,79 @@ section('progress', async () => {
   await close();
 });
 
-// ── 1-2 부스트 타이밍 팝업: 화면 폭 40%(세로)/높이 40%(가로), Perfect 범위에서 perfect-now(글로우), 정타 순간 flash, 틱-틱-지금 소리 1회씩, 판정 글자 크게
-section('popup', async () => {
-  for (const [name, w, h] of [['세로', 375, 667], ['가로', 667, 375]]) {
-    const { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_derail: 'off' } });
+// ── 4 부스트 타이밍 링(BOOST 버튼 바깥): 판정과 같은 식, 틱-틱-지금 1회씩, 정타 순간 반짝, Good은 은은하게(점멸 없음), Miss는 점멸 없음,
+//    Perfect는 알록달록 점멸 — 초당 3회 이하·빨강 제외·모양 변화(두꺼워짐·맥동·별)·reduced-motion이면 고정 무지개 테두리·low는 맥동 없음
+section('boost', async () => {
+  const parseColor = c => { const m = String(c).match(/rgba?\(([^)]+)\)/); if (m) return m[1].split(',').slice(0, 3).map(Number); const h = String(c).match(/^#([0-9a-f]{6})$/i); return h ? [0, 2, 4].map(i => parseInt(h[1].slice(i, i + 2), 16)) : null; };
+  for (const [name, w, h] of [['세로', 375, 667], ['가로', 667, 375], ['소형 세로', 320, 568]]) {
+    const { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_derail: 'off', rc_quality: 'medium' } });
     await loadStage(page, 0);
+    await page.evaluate(() => { Game.engine.stopRenderLoop(); Game.input._launch(1, 1); });
+    await page.waitForTimeout(450); // 조작부가 올라오는 전환(0.25초)이 끝난 뒤
+    const geo = await page.evaluate(() => { const b = document.getElementById('boostBtn').getBoundingClientRect(), wr = document.getElementById('boostWrap').getBoundingClientRect(), bar = document.getElementById('balGauge').getBoundingClientRect();
+      return { btn: b.width, wrap: wr.width, dx: (wr.left + wr.right) / 2 - (b.left + b.right) / 2, dy: (wr.top + wr.bottom) / 2 - (b.top + b.bottom) / 2, barRight: bar.right, wrapLeft: wr.left, wrapRight: wr.right, wrapBottom: wr.bottom, W: innerWidth, H: innerHeight, wrapTop: wr.top }; });
+    check(`부스트 ${name}: BOOST 버튼 지름 ${Math.round(geo.btn)}px(큰 원형), 링 영역은 버튼의 1.44배·같은 중심·화면 안·균형 바와 안 겹침`,
+      geo.btn >= 76 && Math.abs(geo.wrap / geo.btn - 1.44) < 0.02 && Math.abs(geo.dx) < 1 && Math.abs(geo.dy) < 1 && geo.wrapRight <= geo.W + 0.5 && geo.wrapBottom <= geo.H + 0.5 && geo.barRight <= geo.wrapLeft + 0.5, JSON.stringify(geo));
+    // 다가오는 게이트까지 진행하며 상태 샘플링
     const r = await page.evaluate(() => {
-      Game.engine.stopRenderLoop();
-      const ticks = []; let nowErr = null; const c = Game.cart;
+      const c = Game.cart, wrap = document.getElementById('boostWrap'), ticks = []; let key = null, n = 0, perfectSeen = false, perfectOutside = false, goodOutside = false, flashSeen = false, ringOk = true, maxErr = 0;
       AudioManager.playTick = f => ticks.push([f, +(c.gateTiming() ? c.gateTiming().err : 9).toFixed(3)]);
-      window.dispatchEvent(new CustomEvent('cart-launched', { detail: { strength: 1, flickMultiplier: 1 } }));
-      c.launch(1, 1);
-      const pop = document.getElementById('gatePop'), flash = document.getElementById('gatePopFlash');
-      let key = null, perfectSeen = false, perfectOutside = false, flashSeen = false, size = null, n = 0;
-      while (n++ < 60 * 100) {
+      while (n++ < 60 * 120) {
         c.leanInput = 0; Game._fixedUpdate(1 / 60);
-        const g = c.gateTiming();
-        if (!g) continue;
-        if (key === null && g.err > -0.78 && g.err < 0) key = g.key; // 다가오는 첫 게이트
+        const g = c.gateTiming(); if (!g) continue;
+        if (key === null && g.err > -0.78 && g.err < 0) key = g.key;
         if (key === null || g.key !== key) { if (key !== null) break; continue; }
-        const inP = Math.abs(g.err) <= g.perfect;
-        if (pop.classList.contains('perfect-now') && inP) perfectSeen = true;
-        if (pop.classList.contains('perfect-now') && !inP) perfectOutside = true;
-        if (flash.classList.contains('go')) flashSeen = true;
-        if (!size && pop.classList.contains('on')) { size = { w: pop.offsetWidth, h: pop.offsetHeight, vw: innerWidth, vh: innerHeight }; }
+        const inP = Math.abs(g.err) <= g.perfect, inG = Math.abs(g.err) <= g.good;
+        if (wrap.classList.contains('perfect-now') && inP) perfectSeen = true;
+        if (wrap.classList.contains('perfect-now') && !inP) perfectOutside = true;
+        if (wrap.classList.contains('ready') && !inG) goodOutside = true;
+        if (document.getElementById('brFlash').classList.contains('go')) flashSeen = true;
+        const rr = parseFloat(document.getElementById('brRing').getAttribute('r')), exp = Math.max(50, 57 + (15 / 0.8) * -g.err); maxErr = Math.max(maxErr, Math.abs(rr - exp)); if (Math.abs(rr - exp) > 0.05) ringOk = false;
       }
-      const res = document.getElementById('gatePopResult'); UI._showPopResult('perfect');
-      const fs = parseFloat(getComputedStyle(res).fontSize);
-      return { ticks, perfectSeen, perfectOutside, flashSeen, size, fs, quality: QualityManager.current };
+      return { ticks, perfectSeen, perfectOutside, goodOutside, flashSeen, ringOk, maxErr };
     });
-    const want = name === '세로' ? 0.4 * 375 : 0.4 * 375; // 세로 40vw = 150, 가로 40vh = 150
-    check(`popup ${name}: 크기 = 화면 짧은 변의 약 40%`, r.size && Math.abs(r.size.w - want) < 6 && Math.abs(r.size.h - want) < 6, JSON.stringify(r.size));
-    check(`popup ${name}: Perfect 범위 안에서만 perfect-now(글로우)`, r.perfectSeen && !r.perfectOutside, `seen=${r.perfectSeen} outside=${r.perfectOutside}`);
-    check(`popup ${name}: 정타 순간 flash`, r.flashSeen);
+    check(`부스트 ${name}: 링 반지름·Good/Perfect 띠가 cart.gateTiming과 같은 식(오차 ${r.maxErr.toFixed(3)})`, r.ringOk, JSON.stringify(r));
+    check(`부스트 ${name}: Perfect 범위에서만 perfect-now, Good 범위에서만 ready`, r.perfectSeen && !r.perfectOutside && !r.goodOutside, JSON.stringify(r));
+    check(`부스트 ${name}: 정타 순간 flash`, r.flashSeen);
     const t = r.ticks;
-    check(`popup ${name}: 틱-틱-지금 1회씩(−0.5s·−0.25s·−0.03s 부근)`, t.length === 3 && !t[0][0] && !t[1][0] && t[2][0] && t[0][1] >= -0.52 && t[0][1] < -0.4 && t[1][1] >= -0.27 && t[1][1] < -0.15 && t[2][1] >= -0.05 && t[2][1] < 0.03, JSON.stringify(t));
-    check(`popup ${name}: 판정 글자 48px 이상`, r.fs >= 48, String(r.fs));
-    check(`popup ${name} page error 0`, errors.length === 0, errors.join('|'));
+    check(`부스트 ${name}: 틱-틱-지금 1회씩`, t.length === 3 && !t[0][0] && !t[1][0] && t[2][0] && t[0][1] >= -0.52 && t[0][1] < -0.4 && t[1][1] >= -0.27 && t[1][1] < -0.15 && t[2][1] >= -0.05 && t[2][1] < 0.03, JSON.stringify(t));
+    if (name !== '소형 세로') {
+      // 상태별 점멸: 강제로 err를 맞춘 상태를 만들어 애니메이션을 검사
+      // 같은 게이트로 err를 맞춘 상태를 만든다(게이트가 몇 개 없어 매번 새로 찾지 않음): 접근 중인 게이트를 잡고 cart.t를 옮겨 판정 오차를 지정
+      await page.evaluate(() => {
+        const c = Game.cart; let n = 0;
+        while (n++ < 60 * 120) { c.leanInput = 0; Game._fixedUpdate(1 / 60); const g = c.gateTiming(); if (g && g.err > -0.78 && g.err < -0.6) break; }
+        window.__setErr = err => { const g = c.gateTiming(); const tPerSec = Math.max(0.1, c.speed * Cart.speedScale * c.tScale) / Game.track.lengthM; c.t += g.dT - (-(err + 0.05) * tPerSec); UI.updateHUD(c, Game.track); return c.gateTiming(); };
+      });
+      const gt = await page.evaluate(() => { const g = Game.cart.gateTiming(); return { perfect: g.perfect, good: g.good }; });
+      const state = async errSec => {
+        await page.evaluate(e => window.__setErr(e), errSec);
+        await page.waitForTimeout(80);
+        return page.evaluate(() => {
+          const wrap = document.getElementById('boostWrap'); const anims = wrap.getAnimations({ subtree: true }).filter(a => a.playState === 'running' && !(a.animationName || '').match(/brFlash/));
+          const info = anims.map(a => { const t = a.effect.getTiming(), kf = a.effect.getKeyframes(); const stepped = kf.some(k => /steps/.test(String(k.easing)));
+            const colors = kf.filter(k => k.offset < 1).map(k => k.stroke).filter(Boolean); const changes = stepped ? colors.filter((c, i) => i === 0 || c !== colors[i - 1]).length : 0; // steps 애니메이션: 색이 바뀌는 횟수(마지막 100% 키프레임 중복 제외)
+            return { name: a.animationName, dur: t.duration, stepped, colors, perSec: stepped ? changes / (t.duration / 1000) : 1000 / t.duration }; });
+          const ring = getComputedStyle(document.getElementById('brRing')), out = getComputedStyle(document.getElementById('brOut'));
+          return { cls: [...wrap.classList].join(' '), info, ringW: parseFloat(ring.strokeWidth), outW: parseFloat(out.strokeWidth), ringStroke: ring.stroke, stars: getComputedStyle(wrap.querySelector('.br-stars')).opacity };
+        });
+      };
+      const miss = await state(-0.7), good = await state(-(gt.perfect + gt.good) / 2), perfect = await state(-0.02);
+      check(`부스트 ${name}: Miss 구간(링 멀리)에는 점멸·애니메이션 없음, 별 없음`, !/ready|perfect-now/.test(miss.cls) && miss.info.length === 0 && parseFloat(miss.stars) === 0, JSON.stringify(miss));
+      check(`부스트 ${name}: Good 구간은 은은하게 구분(노란 링, 점멸 없음)`, /ready/.test(good.cls) && !/perfect-now/.test(good.cls) && good.info.length === 0, JSON.stringify(good));
+      const maxHz = Math.max(...perfect.info.map(i => i.perSec));
+      const red = perfect.info.flatMap(i => i.colors).map(parseColor).filter(Boolean).filter(([r, g, b]) => r > 200 && g < 90 && b < 90);
+      check(`부스트 ${name}: Perfect 점멸은 초당 3회 이하(최대 ${maxHz.toFixed(2)}회/초, 애니메이션 ${perfect.info.length}개), 강한 빨강 없음`, /perfect-now/.test(perfect.cls) && perfect.info.length >= 3 && maxHz <= 3.01 && red.length === 0, JSON.stringify(perfect));
+      check(`부스트 ${name}: Perfect는 색 외에 모양도 바뀜(링 두꺼워짐 ${good.ringW}→${perfect.ringW}, 맥동 애니메이션, 별 반짝임)`, perfect.ringW > good.ringW + 3 && perfect.info.some(i => /Pulse/i.test(i.name)) && parseFloat(perfect.stars) === 1 && perfect.info.some(i => /Twinkle/i.test(i.name)), JSON.stringify([good.ringW, perfect.ringW, perfect.info.map(i => i.name)]));
+      // reduced-motion: 점멸 없이 고정된 무지개빛 테두리
+      await page.emulateMedia({ reducedMotion: 'reduce' }); await page.waitForTimeout(100);
+      const rm = await state(-0.02);
+      check(`부스트 ${name}: reduced-motion이면 점멸 없이 고정 무지개빛 테두리`, /perfect-now/.test(rm.cls) && rm.info.length === 0 && /brRainbow/.test(rm.ringStroke) && rm.ringW > good.ringW + 3, JSON.stringify(rm));
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+    }
+    const res = await page.evaluate(() => { UI._showPopResult('perfect'); return parseFloat(getComputedStyle(document.getElementById('gatePopResult')).fontSize); });
+    check(`부스트 ${name}: 판정 글자 48px 이상`, res >= 48, String(res));
+    check(`boost ${name} page error 0`, errors.length === 0, errors.join('|'));
     await close();
   }
 });
@@ -381,7 +417,7 @@ section('fonts', async () => {
 // ── 5 시점 버튼 + HUD 겹침: 오른쪽 가장자리 약 36% 높이·터치 48~52px·반투명→누르면 불투명·아이콘이 지금 시점을 알려줌·키보드 C,
 //    그리고 모든 HUD 요소(칩·버튼·균형 바·부스트·타이밍 표시)가 서로 겹치지 않고 화면 안에 있음 (세로·가로·작은 폰·데스크톱)
 section('hud', async () => {
-  for (const [name, w, h] of [['세로', 375, 667], ['가로', 667, 375], ['데스크톱', 1280, 720]]) { // 작은 폰(320×568)은 4번(부스트 링) 이후 HUD 배치 정리 때 추가
+  for (const [name, w, h] of [['세로', 375, 667], ['가로', 667, 375], ['소형 세로', 320, 568], ['데스크톱', 1280, 720]]) {
     const { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_derail: 'on', rc_quality: 'medium' } });
     await loadStage(page, 0);
     const pre = await page.evaluate(() => ({ dis: document.getElementById('cameraToggleBtn').disabled }));

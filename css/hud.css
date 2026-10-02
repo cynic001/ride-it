@@ -31,10 +31,10 @@
     pointer-events: none; opacity: 0; transform: translateY(20px); transition: opacity .25s ease, transform .25s ease;
   }
 .drive-controls.on { opacity: 1; transform: none; }
-.drive-controls.on .ctl-btn { pointer-events: auto; }
+
 /* 양손(13번): 왼쪽 아래 ◀ ▶, 오른쪽 아래 BOOST — 양 끝 엄지 위치, 가운데는 비워 손가락이 겹치지 않게(한손 패드 CSS는 legacy/onehand-pad.js) */
 .drive-controls.twohand {
-    display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 8px;
     padding-left: calc(12px + env(safe-area-inset-left, 0px)); padding-right: calc(12px + env(safe-area-inset-right, 0px));
   }
 .ctl-left, .ctl-right { position: relative; display: flex; flex-direction: column; gap: 10px; }
@@ -43,14 +43,10 @@
 
 
 /* 기울기 모드: ◀ ▶ 대신 폰 기울기 */
-.ctl-btn {
-    min-width: 64px; min-height: 64px; border-radius: 20px; font-size: 26px; color: var(--navy); background: rgba(255,255,255,.85);
-    box-shadow: 0 5px 0 #b8c2dc, 0 8px 16px rgba(0,0,0,.25);
-    touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
-  }
 
-.ctl-btn.boost { min-width: 108px; min-height: 108px; border-radius: 50%; font-size: 22px; background: var(--yellow); box-shadow: 0 6px 0 var(--yellow-deep), 0 10px 20px rgba(0,0,0,.3); }
-#uiRoot .ctl-btn.pressed { transform: translateY(4px) scale(.96); box-shadow: 0 1px 0 #b8c2dc; filter: brightness(1.08); }
+
+
+
 .drive-controls { -webkit-touch-callout: none; }
 .rb-overlay { position: absolute; left: 0; right: 0; top: 26%; text-align: center; pointer-events: none; opacity: 0; transition: opacity .15s ease; }
 .rb-overlay.on { opacity: 1; }
@@ -101,36 +97,32 @@
 
 
 .judge.small { font-size: 30px; }
-/* 부스트 타이밍 팝업(13번): 화면 위쪽 가운데 — 바깥 흰 원이 줄어들어 안쪽 원과 겹치는 순간이 정타 */
-.timing-pop { --pop: min(40vw, 190px); position: absolute; left: 50%; top: calc(146px + env(safe-area-inset-top, 0px)); width: var(--pop); height: var(--pop); margin-left: calc(var(--pop) / -2);
-    pointer-events: none; opacity: 0; transform: scale(.7); transition: opacity .15s ease, transform .2s var(--ease-pop); }
-.timing-pop.on { opacity: 1; transform: none; }
-.timing-pop svg { width: 100%; height: 100%; overflow: visible; }
-.tp-bg { fill: rgba(20,26,51,.7); stroke: rgba(255,255,255,.5); stroke-width: 2; }
-.tp-good { fill: none; stroke: rgba(255,184,13,.75); }
-.tp-perfect { fill: none; stroke: var(--green); }
-.tp-target { fill: none; stroke: #fff; stroke-width: 1.5; stroke-dasharray: 3 3; }
-.tp-ring { fill: none; stroke: #fff; stroke-width: 4; filter: drop-shadow(0 0 2px rgba(20,26,51,.9)); }
-.timing-pop.ready .tp-ring { stroke: var(--yellow); }
+
+
+
+
+
+
+
+
+
 /* Perfect 범위 안: 링이 초록으로 바뀌며 빛남(low 프리셋은 glow 대신 굵은 링만), 정타 순간(err 0)엔 짧은 반짝임 */
-.timing-pop.perfect-now .tp-ring { stroke: #7dffb0; stroke-width: 6; filter: drop-shadow(0 0 6px #7dffb0) drop-shadow(0 0 12px rgba(125,255,176,.8)); }
-.timing-pop.perfect-now.lowfx .tp-ring { stroke-width: 8; filter: none; }
-.timing-pop.perfect-now .tp-bg { stroke: #7dffb0; stroke-width: 6; }
-.tp-flash { fill: #fff; opacity: 0; pointer-events: none; }
-.tp-flash.go { animation: tpFlash .18s ease-out; }
-@keyframes tpFlash { 0% { opacity: .95; transform: scale(.6); } 100% { opacity: 0; transform: scale(1.5); } }
-.tp-flash { transform-origin: 60px 60px; }
-.timing-pop.ready .tp-bg { stroke: var(--green); stroke-width: 4; }
-.timing-pop.finish .tp-bg { fill: rgba(80,20,60,.6); }
-.tp-label { position: absolute; left: -20px; right: -20px; top: 100%; margin-top: 2px; text-align: center; font-size: 20px; line-height: 24px; color: #fff;
-    -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; }
-.tp-result { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-size: 54px; line-height: 1; opacity: 0;
-    -webkit-text-stroke: 9px var(--navy); paint-order: stroke fill; }
-.tp-result.show { animation: judgePopC .7s var(--ease-pop) forwards; }
-.tp-result.perfect { color: var(--yellow); }
-.tp-result.good { color: var(--green); }
-.tp-result.miss { color: var(--red); }
-.timing-pop.result svg, .timing-pop.result .tp-label { opacity: 0; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @keyframes judgePopC { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.4); } 40% { transform: translate(-50%, -50%) scale(1.05); }
     70% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(1); } }
 /* 스타트 바: 엄지가 닿는 하단 중앙 세로 레일 — 아래로 당겨 충전, 위로 튕겨 발사 */
@@ -200,7 +192,6 @@
      조작은 양쪽 엄지 위치(아래 양 끝), 노치·홈 인디케이터는 safe-area로 피함 */
   @media (orientation: landscape) and (max-height: 500px) {
     .hud-top { top: 6px; left: calc(12px + env(safe-area-inset-left, 0px)); right: calc(170px + env(safe-area-inset-right, 0px)); gap: 4px; }
-    .timing-pop { --pop: min(40vh, 150px); top: calc(58px + env(safe-area-inset-top, 0px)); }
     .drive-controls { padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
     .drive-controls.twohand { padding-left: calc(20px + env(safe-area-inset-left, 0px)); padding-right: calc(20px + env(safe-area-inset-right, 0px)); }
     .start-bar { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); gap: 4px; }
@@ -215,7 +206,7 @@
 body.popup-open .tut-ring, body.popup-open .tut-finger { display: none !important; }
 
 /* ══ 균형 바 — 왼쪽 아래. HUD 칩 변형 패널(불투명 크림) 안에 홈(inset) 트랙 + 노브(raised, 노란 링) ══ */
-.bal-bar { position: relative; width: min(60vw, 280px); padding: var(--s-1) var(--s-1) var(--s-2); border-radius: var(--r-md); background: var(--hud-bg); border: var(--hud-border); box-shadow: var(--hud-shadow);
+.bal-bar { position: relative; width: min(55vw, 280px); padding: var(--s-1) var(--s-1) var(--s-2); border-radius: var(--r-md); background: var(--hud-bg); border: var(--hud-border); box-shadow: var(--hud-shadow);
   touch-action: none; user-select: none; -webkit-user-select: none; opacity: 0; pointer-events: none; transition: opacity var(--t-ui) var(--ease); contain: layout style; }
 .drive-controls.on .bal-bar { opacity: 1; pointer-events: auto; }
 .bal-top { display: flex; align-items: center; justify-content: space-between; height: 24px; margin-bottom: var(--s-1); font-size: 14px; font-weight: 700; color: var(--ink); }
@@ -263,7 +254,6 @@ body.popup-open .tut-ring, body.popup-open .tut-finger { display: none !importan
   .lap-banner, .lap-banner.big { left: 270px; right: 130px; font-size: 32px; top: 77%; -webkit-text-stroke-width: 6px; }
   .judge { left: 270px; right: 130px; top: 90%; font-size: 26px; line-height: 1.1; -webkit-text-stroke-width: 5px; }
   .bal-bar { width: min(44vw, 240px); }
-  .timing-pop { top: calc(104px + env(safe-area-inset-top, 0px)); }
   .rb-overlay { top: 38%; }
 }
 
@@ -277,3 +267,55 @@ body.popup-open .tut-ring, body.popup-open .tut-finger { display: none !importan
 .view-flash.show { animation: viewFlash 1.4s var(--ease) both; }
 @keyframes viewFlash { 0% { opacity: 0; transform: translateY(-6px); } 12% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
 @media (orientation: landscape) and (max-height: 500px) { .view-btn { top: 34%; } .view-flash { top: calc(34% + 60px); } }
+
+/* ══ BOOST 버튼 + 버튼 바깥 타이밍 링 ══
+   링이 줄어들어 목표 반지름(버튼 가장자리 바로 바깥, 점선)에 닿는 순간 누르면 PERFECT. 노란 띠 = GOOD 범위, 초록 띠 = PERFECT 범위.
+   Perfect 범위에 들어오면 링이 두꺼워지고 크기가 맥동하며 색이 순환(초당 3회 이하, 작은 영역, 빨강 제외) + 별 반짝임 — 색 외에 모양도 바뀜.
+   reduced-motion이면 점멸 없이 고정된 무지개빛 테두리 ── */
+.drive-controls { --boost: min(100px, 24vw); }
+.ctl-right { position: relative; }
+.boost-wrap { position: relative; width: calc(var(--boost) * 1.44); height: calc(var(--boost) * 1.44); }
+.boost-ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; opacity: 0; transform-origin: 50% 50%; }
+.boost-wrap.on .boost-ring { opacity: 1; }
+.br-good { fill: none; stroke: #FFD84D; opacity: .85; } .br-perfect { fill: none; stroke: #168A4C; }
+.br-target { fill: none; stroke: #fff; stroke-width: 1.5; stroke-dasharray: 3 3; }
+.br-out { fill: none; stroke: var(--ink); stroke-width: 8; } .br-ring { fill: none; stroke: #fff; stroke-width: 4.5; }
+.boost-wrap.ready .br-ring { stroke: var(--accent); }
+.boost-wrap.finish .br-target { stroke: var(--ink); stroke-width: 3; stroke-dasharray: 6 6; }
+.br-flash { fill: none; stroke: #fff; stroke-width: 6; opacity: 0; transform-origin: 72px 72px; }
+.br-flash.go { animation: brFlash .18s ease-out; } @keyframes brFlash { 0% { opacity: .95; transform: scale(.9); } 100% { opacity: 0; transform: scale(1.25); } }
+.br-stars { opacity: 0; } .br-stars .star { fill: #FFF6B0; stroke: var(--ink); stroke-width: 1; }
+.boost-wrap.perfect-now .br-ring { stroke-width: 9; animation: brCycle 1.4s steps(1, end) infinite; }
+.boost-wrap.perfect-now .br-out { stroke-width: 13; animation: brCycleOut 1.4s steps(1, end) infinite; }
+.boost-wrap.perfect-now .boost-ring { animation: brPulse .7s ease-in-out infinite; }
+.boost-wrap.perfect-now .br-stars { opacity: 1; } .boost-wrap.perfect-now .br-stars .star { animation: brTwinkle 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.boost-wrap.perfect-now .br-stars .star:nth-child(2) { animation-delay: .35s; } .boost-wrap.perfect-now .br-stars .star:nth-child(3) { animation-delay: .7s; } .boost-wrap.perfect-now .br-stars .star:nth-child(4) { animation-delay: 1.05s; }
+@keyframes brCycle { 0% { stroke: #FFD84D; } 25% { stroke: #4DE0FF; } 50% { stroke: #7DFFB0; } 75% { stroke: #B38CFF; } }
+@keyframes brCycleOut { 0% { stroke: #1D4DB5; } 25% { stroke: #146236; } 50% { stroke: #5B3FD0; } 75% { stroke: #141a33; } }
+@keyframes brPulse { 50% { transform: scale(1.06); } }
+@keyframes brTwinkle { 0%, 100% { transform: scale(.55); opacity: .5; } 50% { transform: scale(1.25); opacity: 1; } }
+.boost-wrap.perfect-now.lowfx .boost-ring { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .boost-wrap.perfect-now .br-ring { animation: none !important; stroke: url(#brRainbow); stroke-width: 9; }
+  .boost-wrap.perfect-now .br-out { animation: none !important; stroke: var(--ink); }
+  .boost-wrap.perfect-now .boost-ring, .boost-wrap.perfect-now .br-stars .star { animation: none !important; }
+}
+.ctl-btn { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; border: 0; font-family: inherit; cursor: pointer; }
+.ctl-btn.boost { position: absolute; left: 50%; top: 50%; width: var(--boost); height: var(--boost); margin: calc(var(--boost) / -2) 0 0 calc(var(--boost) / -2); border-radius: var(--r-pill);
+  background: var(--accent); color: var(--on-accent); border: var(--hud-border); box-shadow: 0 5px 0 #A66E00; font-family: var(--font-display); font-size: calc(var(--boost) * .21); letter-spacing: 1px;
+  pointer-events: none; opacity: 0; transition: opacity var(--t-ui) var(--ease), transform var(--t-press) var(--ease); }
+.drive-controls.on .ctl-btn.boost { pointer-events: auto; opacity: 1; }
+.ctl-btn.boost::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 6px 10px rgba(110, 70, 0, .55); opacity: 0; transition: opacity var(--t-press) var(--ease); pointer-events: none; }
+.ctl-btn.boost.pressed, .ctl-btn.boost:active { transform: translateY(3px) scale(var(--press-scale)); box-shadow: 0 2px 0 #A66E00; } .ctl-btn.boost.pressed::after, .ctl-btn.boost:active::after { opacity: 1; }
+.ctl-btn.boost:focus-visible { box-shadow: 0 0 0 2px var(--accent), 0 0 0 4px var(--ink) !important; outline: none; }
+/* 중앙: 판정 글자(PERFECT!/GOOD/MISS)와 결승선 알림만 — 링은 BOOST 버튼 바깥 */
+.timing-pop { position: absolute; left: 50%; top: calc(172px + env(safe-area-inset-top, 0px)); width: min(54vw, 240px); height: 72px; margin-left: calc(min(54vw, 240px) / -2); display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0; transition: opacity var(--t-press) var(--ease); }
+.timing-pop.on { opacity: 1; }
+.tp-label { position: absolute; top: 0; left: 50%; transform: translateX(-50%); }
+.timing-pop.result .tp-label { opacity: 0; }
+.tp-result { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-family: var(--font-display); font-size: 54px; line-height: 1; opacity: 0; -webkit-text-stroke: 9px var(--navy); paint-order: stroke fill; }
+.tp-result.show { animation: judgePopC .7s var(--ease-pop) forwards; }
+.tp-result.perfect { color: var(--yellow); } .tp-result.good { color: var(--green); } .tp-result.miss { color: var(--red); }
+@keyframes judgePopC { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.4); } 40% { transform: translate(-50%, -50%) scale(1.05); }
+  70% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(1); } }
+@media (orientation: landscape) and (max-height: 500px) { .timing-pop { top: calc(104px + env(safe-area-inset-top, 0px)); } }
