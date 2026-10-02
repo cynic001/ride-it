@@ -49,8 +49,17 @@ const QualityManager = {
   _fpsHistory: [],
   _lastDowngradeTime: 0,
 
-  /** 최초 진입 시 기기 스펙 기반 프리셋 추천 */
+  /** <html data-q>를 현재 프리셋과 맞춤 — low에서는 CSS 그림자가 1겹 + 1px 경계선으로 단순화(css/ui-tokens.css) */
+  _sync() { document.documentElement.dataset.q = this.current; },
+
   detectInitialPreset(engine) {
+    const r = this._detectInitialPreset(engine);
+    this._sync();
+    return r;
+  },
+
+  /** 최초 진입 시 기기 스펙 기반 프리셋 추천 */
+  _detectInitialPreset(engine) {
     const saved = localStorage.getItem('rc_quality');
     if (saved && QUALITY_PRESETS[saved]) {
       this.current = saved;
@@ -113,6 +122,7 @@ const QualityManager = {
     if (!QUALITY_PRESETS[name]) return;
     this.current = name;
     localStorage.setItem('rc_quality', name);
+    this._sync();
   },
 
   get settings() {
@@ -134,6 +144,7 @@ const QualityManager = {
       this.current = this.current === 'high' ? 'medium' : 'low';
       this._lastDowngradeTime = now;
       this._fpsHistory = [];
+      this._sync();
       window.dispatchEvent(new CustomEvent('quality-downgraded', { detail: this.current }));
     }
   },
@@ -141,3 +152,4 @@ const QualityManager = {
 
 window.QUALITY_PRESETS = QUALITY_PRESETS;
 window.QualityManager = QualityManager;
+QualityManager._sync();

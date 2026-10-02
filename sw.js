@@ -9,10 +9,11 @@
  * 빌드 단계가 없어 배포마다 버전을 올리지 않아도 되도록 "내용 비교"로 새 버전을 감지함. CACHE 이름은 캐시 구조가
  * 바뀔 때만 올리면 됨(올리면 activate에서 이전 캐시 전부 삭제).
  */
-const CACHE = 'ride-it-v3';
+const CACHE = 'ride-it-v4';
 const CORE = [
   './',
   'index.html',
+  'css/ui-tokens.css', 'css/ui.css', 'css/title.css', 'css/hud.css',
   'manifest.webmanifest',
   'js/quality.js', 'js/style.js', 'js/audio.js', 'js/stages.js', 'js/track.js', 'js/cart.js',
   'js/camera.js', 'js/input.js', 'js/ui.js', 'js/tutorial.js', 'js/main.js',
@@ -65,7 +66,9 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
-  const networkFirst = sameOrigin && (req.mode === 'navigate' || /\.(html|js|webmanifest)$/.test(url.pathname) || url.pathname.endsWith('/'));
+  // 개발 전용 UI 키트(?ui-kit, js/ui-kit.js)는 캐시에 넣지 않고 항상 네트워크로
+  if (url.searchParams.has('ui-kit') || /\/ui-kit\.(js|css)$/.test(url.pathname)) return;
+  const networkFirst = sameOrigin && (req.mode === 'navigate' || /\.(html|js|css|webmanifest)$/.test(url.pathname) || url.pathname.endsWith('/'));
 
   if (networkFirst) {
     e.respondWith(

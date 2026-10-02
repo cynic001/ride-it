@@ -20,7 +20,7 @@ const OUT = path.resolve(args.out ?? '/tmp/ride-it-tutorial');
 const RUNS = String(args.runs ?? 'keyboard,touch,touch-land').split(',');
 const PORT = Number(args.port ?? 8133);
 fs.mkdirSync(OUT, { recursive: true });
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.glb': 'model/gltf-binary', '.png': 'image/png', '.env': 'application/octet-stream', '.webmanifest': 'application/manifest+json', '.m4a': 'audio/mp4', '.json': 'application/json' };
+const MIME = { '.html': 'text/html', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.js': 'text/javascript', '.glb': 'model/gltf-binary', '.png': 'image/png', '.env': 'application/octet-stream', '.webmanifest': 'application/manifest+json', '.m4a': 'audio/mp4', '.json': 'application/json' };
 const server = http.createServer((req, res) => {
   const f = path.join(ROOT, decodeURIComponent(req.url.split('?')[0]) === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]));
   fs.readFile(f, (e, d) => { if (e) { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' }); res.end(d); });
@@ -56,7 +56,7 @@ async function run(browser, mode) {
     const bad = f.sels.filter((sel, i) => { const t = document.querySelector(sel); const r = rings[i]; if (!t || !r) return true;
       const a = t.getBoundingClientRect(), b = r.getBoundingClientRect(); const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
       return !(cx >= a.left && cx <= a.right && cy >= a.top && cy <= a.bottom) || b.right > innerWidth + 8 || b.bottom > innerHeight + 8; });
-    return { ok: !bad.length, sels: f.sels, bad };
+    return { ok: !bad.length, sels: f.sels, bad, rects: bad.map((sel, i) => { const t = document.querySelector(sel).getBoundingClientRect(), r = rings[f.sels.indexOf(sel)].getBoundingClientRect(); return [t.left, t.top, t.right, t.bottom, r.left, r.top, r.right, r.bottom].map(Math.round); }), ih: innerHeight };
   });
   const okCard = async () => { if (touch) await tap('#tutOkBtn'); else await page.keyboard.press('Enter'); };
   // 밸런스: 커브 방향(이 트랙은 오른쪽) 버튼/키 누르고 있기

@@ -1,0 +1,104 @@
+/**
+ * ui-tokens.css — 디자인 토큰(뉴모픽 · 밝고 따뜻한 캐주얼). 모든 화면의 색·그림자·반경·간격·모션은 여기 값만 쓴다.
+ * 빛은 왼쪽 위 고정: 밝은 그림자 = 왼쪽 위(음수 오프셋), 어두운 그림자 = 오른쪽 아래(양수 오프셋, 따뜻한 베이지).
+ * 그림자는 요소당 2겹까지, box-shadow/filter는 애니메이션하지 않음(눌림은 ::after 겹침 요소의 opacity/transform).
+ */
+:root {
+  /* 바탕면 — 따뜻한 크림 */
+  --nm-bg: #F1EBDD;
+  --nm-bg-deep: #E6DDC8;          /* 홈(inset) 바닥 · 비활성 면 */
+  --nm-light: rgba(255, 255, 255, .95);
+  --nm-dark: rgba(176, 152, 108, .52);   /* 순수 검정/회색 금지 — 베이지 계열 */
+  --nm-line: rgba(255, 255, 255, .7);    /* 1px 경계선(low 프리셋·HUD 테두리) */
+
+  /* 글자 — 크림 위 대비 4.5:1 이상 (scripts의 대비 검사로 확인) */
+  --ink: #141a33;                 /* 본문 진한 남색 */
+  --ink-2: #454a66;               /* 보조 글자 */
+  --ink-disabled: #6f6a5c;        /* 비활성 글자(대비 3:1 이상, 점선 테두리·"(사용 불가)" 표시 병행) */
+
+  /* 포인트 — 노랑은 글자색으로 쓰지 않음(노란 바탕 위엔 남색 글자) */
+  --accent: #FFB80D;
+  --accent-deep: #D99700;
+  --accent-soft: #FFE08A;
+  --on-accent: #141a33;
+  --accent-shadow-dark: rgba(217, 151, 13, .5);
+  --accent-shadow-light: rgba(255, 238, 170, .95);
+
+  /* 상태 색(배경 대비 3:1 이상, 색만으로 의미를 전달하지 않음 — 아이콘·글자 병행) */
+  --ok: #146236;
+  --warn: #8F4600;
+  --danger: #AE2E25;
+  --info: #1D4DB5;
+  --perfect-band: #1F4FBF;
+  --good-band: #146236;
+
+  /* 하늘(타이틀·3D 장면 배경용) */
+  --sky-top: #2f7de1;
+  --sky-bottom: #9fd8ff;
+
+  /* 모서리 — 12 / 20 / 28 / 999 만 */
+  --r-sm: 12px;
+  --r-md: 20px;
+  --r-lg: 28px;
+  --r-pill: 999px;
+
+  /* 간격 — 8px 단위 */
+  --s-1: 8px;
+  --s-2: 16px;
+  --s-3: 24px;
+  --s-4: 32px;
+  --s-5: 40px;
+  --s-6: 48px;
+
+  /* 입체 단계 */
+  --sh-raised-lg: 8px 8px 16px var(--nm-dark), -8px -8px 16px var(--nm-light);
+  --sh-raised-md: 5px 5px 10px var(--nm-dark), -5px -5px 10px var(--nm-light);
+  --sh-raised-sm: 3px 3px 6px var(--nm-dark), -3px -3px 6px var(--nm-light);
+  --sh-inset: inset 4px 4px 8px var(--nm-dark), inset -4px -4px 8px var(--nm-light);
+  --sh-inset-sm: inset 2px 2px 4px var(--nm-dark), inset -2px -2px 4px var(--nm-light);
+  --sh-accent: 5px 5px 10px var(--accent-shadow-dark), -5px -5px 10px var(--accent-shadow-light);
+  --sh-accent-inset: inset 4px 4px 8px var(--accent-shadow-dark), inset -4px -4px 8px var(--accent-shadow-light);
+
+  /* 3D 장면 위 HUD 변형 — 불투명 크림 + 1.5px 반투명 흰 테두리 + 아래쪽 진한 그림자 한 겹 */
+  --hud-bg: var(--nm-bg);
+  --hud-border: 1.5px solid rgba(255, 255, 255, .72);
+  --hud-shadow: 0 3px 0 rgba(86, 66, 28, .55);
+  --hud-shadow-pressed: 0 1px 0 rgba(86, 66, 28, .55);
+
+  /* 모션 — 눌림 90ms, 전환 200~260ms */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --ease-pop: cubic-bezier(.34, 1.56, .64, 1);   /* 연출 글자(판정·랩 배너) 전용 */
+  --t-press: 90ms;
+  --t-ui: 220ms;
+  --t-screen: 260ms;
+  --press-scale: .97;
+
+  /* 서체 */
+  --font-body: "Noto Sans KR", -apple-system, "Apple SD Gothic Neo", sans-serif;
+  --font-display: "Jua", "Noto Sans KR", -apple-system, "Apple SD Gothic Neo", sans-serif;
+
+  /* 전환용 오래된 이름(점차 제거) — 새 코드는 쓰지 말 것 */
+  --yellow: var(--accent);
+  --yellow-deep: var(--accent-deep);
+  --navy: var(--ink);
+  --red: #ff5a4e;
+  --green: #3ddc84;
+  --navy-soft: rgba(20, 26, 51, .82);
+}
+
+/* low 프리셋(SE2): 그림자 1겹 + 1px 경계선, 전환 최소 — quality.js가 <html data-q>를 갱신 */
+html[data-q="low"] {
+  --sh-raised-lg: 4px 4px 0 var(--nm-dark);
+  --sh-raised-md: 3px 3px 0 var(--nm-dark);
+  --sh-raised-sm: 2px 2px 0 var(--nm-dark);
+  --sh-inset: inset 3px 3px 0 var(--nm-dark);
+  --sh-inset-sm: inset 2px 2px 0 var(--nm-dark);
+  --sh-accent: 3px 3px 0 var(--accent-shadow-dark);
+  --sh-accent-inset: inset 3px 3px 0 var(--accent-shadow-dark);
+  --t-ui: 120ms;
+  --t-screen: 120ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --t-press: 1ms; --t-ui: 1ms; --t-screen: 1ms; }
+}

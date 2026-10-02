@@ -32,7 +32,7 @@ const PULL = Number(args.pull ?? 0.6);
 const SHOT = args.shot ?? '/tmp/ride-it.png';
 const PORT = Number(args.port ?? 8123);
 
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.glb': 'model/gltf-binary', '.json': 'application/json' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.glb': 'model/gltf-binary', '.json': 'application/json' };
 
 function startServer() {
   const server = http.createServer((req, res) => {

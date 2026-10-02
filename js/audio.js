@@ -164,6 +164,15 @@ const AudioManager = {
     if (finish) this.playSample('voice_congrats', { volume: 0.6, delay: 0.5 });
   },
 
+  /** UI 버튼 "톡" — 아주 작고 짧은 합성음. 연타해도 시끄럽지 않게 70ms 쓰로틀, 사운드 토글은 masterGain이 따름 */
+  playUiClick(kind = 'tap') {
+    const now = performance.now();
+    if (now - (this._lastUiClick || 0) < 70 || !this._ready()) return;
+    this._lastUiClick = now;
+    if (kind === 'page') this._blip({ freq: 660, freqEnd: 520, duration: 0.035, type: 'triangle', peak: 0.05 });
+    else this._blip({ freq: 480, freqEnd: 340, duration: 0.04, type: 'triangle', peak: 0.06 });
+  },
+
   /** 부스트 정타 박자 — 틱(짧고 낮음) 두 번 뒤 "지금!"(길고 높음). 사운드 토글은 masterGain이 따름 */
   playTick(final) {
     if (!this._ready()) return;

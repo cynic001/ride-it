@@ -1,0 +1,233 @@
+/**
+ * hud.css — 주행 중 HUD와 조작부(균형 바·부스트·스타트 바·타이밍 링·튜토리얼 안내줄). 칩/버튼은 ui.css의 .hud-chip/.hud-btn 변형.
+ */
+/* ── 연출(랩 배너·물방울·물안개) ── */
+  .lap-banner { position: absolute; left: 0; right: 0; top: 58%; /* 피니쉬 팝업 판정과 같은 순간에 뜨므로 팝업 아래 */ text-align: center; pointer-events: none; z-index: 6;
+    font-size: 44px; color: #fff; letter-spacing: 2px; -webkit-text-stroke: 7px var(--navy); paint-order: stroke fill;
+    animation: lapPop 1.8s var(--ease-pop) forwards; }
+  .lap-banner.big { font-size: 54px; color: var(--yellow); }
+  @keyframes lapPop { 0% { opacity: 0; transform: scale(.3) rotate(-6deg); } 18% { opacity: 1; transform: scale(1.12) rotate(2deg); } 30% { transform: scale(1) rotate(0); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-30px); } }
+  .droplet { position: fixed; z-index: 4; pointer-events: none; border-radius: 50%; opacity: 0;
+    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.85), rgba(190,230,255,.35) 45%, rgba(160,210,255,0) 70%);
+    animation: dropFade 1.9s ease-out forwards; }
+  @keyframes dropFade { 0% { opacity: 0; transform: scale(.4); } 10% { opacity: .95; transform: scale(1); } 100% { opacity: 0; transform: translateY(40px) scale(1.1); } }
+  .mist-flash { position: fixed; inset: 0; z-index: 3; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 40%, rgba(255,255,255,.85), rgba(235,245,255,.6) 60%, rgba(255,255,255,.4)),
+                linear-gradient(120deg, rgba(255,90,90,.18), rgba(255,241,90,.18), rgba(90,255,122,.18), rgba(90,180,255,.18), rgba(180,90,255,.18));
+    animation: mistFade 2s ease-out forwards; }
+  @keyframes mistFade { 0% { opacity: 0; } 12% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ── HUD ── .hud는 클릭을 통과시키고(캔버스가 밸런스/게이트 입력을 받음) 실제 버튼만 다시 살림 */
+#uiRoot .hud { position: relative; height: 100%; pointer-events: none; }
+.hud-top { position: absolute; top: 10px; left: 12px; right: 12px; display: flex; flex-direction: column; gap: 8px; }
+.progress { height: 8px; border-radius: 999px; background: rgba(20,26,51,.45); overflow: hidden; }
+.progress-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--yellow), #ffd966); }
+.hud-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; color: #fff; }
+/* 밝은 하늘 위에서도 읽히게 외곽선 */
+/* 최고속도 상한 도달: 숫자가 노랗게 달아오르며 살짝 맥동 */
+/* ── 주행 조작: 발사 후 표시 ── */
+.drive-controls {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 0 10px calc(10px + env(safe-area-inset-bottom, 0px));
+    pointer-events: none; opacity: 0; transform: translateY(20px); transition: opacity .25s ease, transform .25s ease;
+  }
+.drive-controls.on { opacity: 1; transform: none; }
+.drive-controls.on .ctl-btn { pointer-events: auto; }
+/* 양손(13번): 왼쪽 아래 ◀ ▶, 오른쪽 아래 BOOST — 양 끝 엄지 위치, 가운데는 비워 손가락이 겹치지 않게(한손 패드 CSS는 legacy/onehand-pad.js) */
+.drive-controls.twohand {
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+    padding-left: calc(12px + env(safe-area-inset-left, 0px)); padding-right: calc(12px + env(safe-area-inset-right, 0px));
+  }
+.ctl-left, .ctl-right { position: relative; display: flex; flex-direction: column; gap: 10px; }
+.ctl-left { align-items: flex-start; }
+.ctl-right { align-items: flex-end; }
+.lean-btns { display: flex; gap: 12px; }
+.drive-controls.tilt .lean-btns { display: none; }
+/* 기울기 모드: ◀ ▶ 대신 폰 기울기 */
+.ctl-btn {
+    min-width: 64px; min-height: 64px; border-radius: 20px; font-size: 26px; color: var(--navy); background: rgba(255,255,255,.85);
+    box-shadow: 0 5px 0 #b8c2dc, 0 8px 16px rgba(0,0,0,.25);
+    touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+.ctl-btn.lean { width: 72px; height: 72px; }
+.ctl-btn.boost { min-width: 108px; min-height: 108px; border-radius: 50%; font-size: 22px; background: var(--yellow); box-shadow: 0 6px 0 var(--yellow-deep), 0 10px 20px rgba(0,0,0,.3); }
+#uiRoot .ctl-btn.pressed { transform: translateY(4px) scale(.96); box-shadow: 0 1px 0 #b8c2dc; filter: brightness(1.08); }
+.drive-controls { -webkit-touch-callout: none; }
+.rb-overlay { position: absolute; left: 0; right: 0; top: 26%; text-align: center; pointer-events: none; opacity: 0; transition: opacity .15s ease; }
+.rb-overlay.on { opacity: 1; }
+.rb-title { font-size: 40px; color: var(--red); -webkit-text-stroke: 6px var(--navy); paint-order: stroke fill; animation: wobble .5s ease-in-out infinite; }
+.rb-overlay.mash .rb-title { color: var(--yellow); animation: pulse .25s ease-in-out infinite; }
+.rb-gauge { width: 70%; max-width: 280px; height: 18px; margin: 8px auto 0; border-radius: 999px; background: rgba(20,26,51,.65); border: 3px solid #fff; overflow: hidden; }
+.rb-gauge-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--yellow), var(--red)); transition: width .08s linear; }
+.rb-sub { margin-top: 6px; font-size: 16px; color: #fff; -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; }
+.detail-warn { font-size: 16px !important; line-height: 1.45 !important; color: #d9432f !important; }
+.lift-hint { position: absolute; left: 0; right: 0; top: 40%; text-align: center; font-size: 17px; color: #bfe9ff; opacity: 0; transition: opacity .3s ease;
+    -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; pointer-events: none; }
+.lift-hint.on { opacity: 1; animation: pulse 1.2s ease-in-out infinite; }
+/* 판정 토스트(게이트 탭 결과) */
+.judge { position: absolute; top: 47%; /* 부스트 팝업(위쪽 146~320px) 아래, 밸런스 게이지(아래쪽) 위 */ left: 0; right: 0; text-align: center; pointer-events: none; font-size: 40px;
+    -webkit-text-stroke: 6px var(--navy); paint-order: stroke fill; opacity: 0; }
+.judge.show { animation: judgePop .7s var(--ease-pop) forwards; }
+@keyframes judgePop { 0% { opacity: 0; transform: scale(.4); } 25% { opacity: 1; transform: scale(1.1); } 70% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: translateY(-20px); } }
+.judge.perfect { color: var(--yellow); }
+.judge.good { color: var(--green); }
+.judge.miss { color: var(--red); }
+/* 밸런스 게이지(13·14번): ◀ ▶ 바로 위 — 회색 바(−1~+1) = 범위 밖, 초록 성공 띠 = 최소선(진한 선 + 아래 눈금)부터 커브 쪽 끝까지 한 덩어리,
+     파란 Perfect 띠(흰 테두리) = 성공 띠 안의 보너스 구간 — 가운데 정렬이 아니어도 색·테두리로 구분. 아래를 가리키는 삼각형 커서 + 세로선,
+     아래 막대 = 연속 유지 진행도. 커서가 띠 안이면 띠가 밝아짐 */
+.bal-gauge { position: relative; width: 156px; height: 62px; opacity: 0; transition: opacity .2s ease; pointer-events: none; }
+.bal-gauge.on { opacity: 1; }
+.bal-dir { position: absolute; left: 0; top: -6px; font-size: 26px; line-height: 26px; color: #5dff9a; -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; animation: dirNudgeL .6s ease-in-out infinite; }
+.bal-dir.right { left: auto; right: 0; animation-name: dirNudgeR; }
+@keyframes dirNudgeL { 50% { transform: translateX(-4px); } }
+@keyframes dirNudgeR { 50% { transform: translateX(4px); } }
+.bal-bar { position: absolute; left: 0; right: 0; top: 26px; height: 18px; border-radius: 6px; background: #5d6584; border: 2px solid var(--navy); overflow: hidden; }
+.bal-band { position: absolute; top: 0; bottom: 0; background: #34b06a; transition: background .1s ease; }
+.bal-gauge.in .bal-band { background: #6dffa5; }
+/* 번짐(glow) 없이 밝기만 — 최소선 경계가 흐려지지 않게 */
+.bal-perfect { position: absolute; top: 1px; bottom: 1px; border-radius: 4px; background: #2563eb; box-shadow: inset 0 0 0 2px #fff; }
+.bal-gauge.perfect .bal-perfect { background: #4da3ff; box-shadow: inset 0 0 0 2px #fff; }
+/* Perfect 범위 안: 커서도 파랗게 — 좁은 파란 띠를 커서가 가려도 상태가 보이게 */
+.bal-gauge.perfect .bal-cursor { border-top-color: #4da3ff; }
+.bal-gauge.perfect .bal-cursor::after { background: #4da3ff; }
+.bal-min { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: #0b3d22; }
+/* 성공 띠가 시작되는 최소선 */
+.bal-min-tick { position: absolute; top: 48px; width: 0; height: 0; margin-left: -4px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 5px solid #5dff9a; }
+.bal-zero { position: absolute; left: 50%; bottom: 0; width: 2px; height: 5px; margin-left: -1px; background: rgba(20,26,51,.7); }
+.bal-cursor { position: absolute; top: 14px; left: 50%; width: 0; height: 0; margin-left: -8px; pointer-events: none;
+    border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 11px solid var(--yellow); filter: drop-shadow(0 0 1px var(--navy)) drop-shadow(0 0 1px var(--navy)); }
+.bal-cursor::after { content: ''; position: absolute; left: -1px; top: 0; width: 2px; height: 20px; background: var(--yellow); box-shadow: 0 0 0 1px var(--navy); }
+.bal-prog { position: absolute; left: 0; right: 0; top: 54px; height: 7px; border-radius: 999px; background: rgba(20,26,51,.6); overflow: hidden; }
+.bal-prog-fill { height: 100%; width: 0; background: linear-gradient(90deg, #5dff9a, var(--yellow)); }
+.bal-gauge.done .bal-prog-fill { background: var(--yellow); }
+.bal-result { position: absolute; left: 0; right: 0; top: -26px; text-align: center; font-size: 22px; white-space: nowrap; opacity: 0; -webkit-text-stroke: 5px var(--navy); paint-order: stroke fill; }
+.bal-result.show { animation: judgePop .8s var(--ease-pop) forwards; }
+.bal-result.perfect { color: var(--yellow); }
+.bal-result.good { color: var(--green); }
+.bal-result.miss { color: var(--red); }
+.judge.small { font-size: 30px; }
+/* 부스트 타이밍 팝업(13번): 화면 위쪽 가운데 — 바깥 흰 원이 줄어들어 안쪽 원과 겹치는 순간이 정타 */
+.timing-pop { --pop: min(40vw, 190px); position: absolute; left: 50%; top: calc(146px + env(safe-area-inset-top, 0px)); width: var(--pop); height: var(--pop); margin-left: calc(var(--pop) / -2);
+    pointer-events: none; opacity: 0; transform: scale(.7); transition: opacity .15s ease, transform .2s var(--ease-pop); }
+.timing-pop.on { opacity: 1; transform: none; }
+.timing-pop svg { width: 100%; height: 100%; overflow: visible; }
+.tp-bg { fill: rgba(20,26,51,.7); stroke: rgba(255,255,255,.5); stroke-width: 2; }
+.tp-good { fill: none; stroke: rgba(255,184,13,.75); }
+.tp-perfect { fill: none; stroke: var(--green); }
+.tp-target { fill: none; stroke: #fff; stroke-width: 1.5; stroke-dasharray: 3 3; }
+.tp-ring { fill: none; stroke: #fff; stroke-width: 4; filter: drop-shadow(0 0 2px rgba(20,26,51,.9)); }
+.timing-pop.ready .tp-ring { stroke: var(--yellow); }
+/* Perfect 범위 안: 링이 초록으로 바뀌며 빛남(low 프리셋은 glow 대신 굵은 링만), 정타 순간(err 0)엔 짧은 반짝임 */
+.timing-pop.perfect-now .tp-ring { stroke: #7dffb0; stroke-width: 6; filter: drop-shadow(0 0 6px #7dffb0) drop-shadow(0 0 12px rgba(125,255,176,.8)); }
+.timing-pop.perfect-now.lowfx .tp-ring { stroke-width: 8; filter: none; }
+.timing-pop.perfect-now .tp-bg { stroke: #7dffb0; stroke-width: 6; }
+.tp-flash { fill: #fff; opacity: 0; pointer-events: none; }
+.tp-flash.go { animation: tpFlash .18s ease-out; }
+@keyframes tpFlash { 0% { opacity: .95; transform: scale(.6); } 100% { opacity: 0; transform: scale(1.5); } }
+.tp-flash { transform-origin: 60px 60px; }
+.timing-pop.ready .tp-bg { stroke: var(--green); stroke-width: 4; }
+.timing-pop.finish .tp-bg { fill: rgba(80,20,60,.6); }
+.tp-label { position: absolute; left: -20px; right: -20px; top: 100%; margin-top: 2px; text-align: center; font-size: 20px; line-height: 24px; color: #fff;
+    -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; }
+.tp-result { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-size: 54px; line-height: 1; opacity: 0;
+    -webkit-text-stroke: 9px var(--navy); paint-order: stroke fill; }
+.tp-result.show { animation: judgePopC .7s var(--ease-pop) forwards; }
+.tp-result.perfect { color: var(--yellow); }
+.tp-result.good { color: var(--green); }
+.tp-result.miss { color: var(--red); }
+.timing-pop.result svg, .timing-pop.result .tp-label { opacity: 0; }
+@keyframes judgePopC { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.4); } 40% { transform: translate(-50%, -50%) scale(1.05); }
+    70% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(1); } }
+/* 스타트 바: 엄지가 닿는 하단 중앙 세로 레일 — 아래로 당겨 충전, 위로 튕겨 발사 */
+.start-bar {
+    position: absolute; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    pointer-events: auto; touch-action: none; /* 이 안에서만 드래그를 받고 브라우저 제스처(스크롤/바운스)는 차단 */
+    padding: 8px 24px; transition: opacity .3s ease, transform .3s ease;
+  }
+.start-bar.launched { opacity: 0; transform: translateX(-50%) translateY(-24px); pointer-events: none; }
+.start-bar-label { color: #fff; font-size: 17px; text-align: center; line-height: 1.25; -webkit-text-stroke: 4px var(--navy); paint-order: stroke fill; }
+.start-bar-label.nudge { animation: nudgeX .4s ease; }
+@keyframes nudgeX { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.start-bar-track {
+    position: relative; width: 64px; height: 200px; border-radius: 32px;
+    background: rgba(20,26,51,.55); border: 3px solid #fff; box-shadow: 0 6px 16px rgba(0,0,0,.25);
+  }
+.start-bar-fill { position: absolute; top: 4px; left: 4px; right: 4px; height: 0; border-radius: 26px; background: linear-gradient(180deg, var(--yellow), #ff7a3d); }
+.start-bar-handle {
+    position: absolute; top: 4px; left: 4px; width: 50px; height: 50px; border-radius: 50%;
+    background: var(--yellow); color: var(--navy); display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 0 var(--yellow-deep), 0 4px 10px rgba(0,0,0,.35); z-index: 1;
+  }
+.start-bar-handle svg { width: 26px; height: 26px; }
+.start-power { width: 140px; height: 10px; border-radius: 999px; background: rgba(20,26,51,.6); border: 2px solid #fff; overflow: hidden; }
+.start-power-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--yellow), #ff5a4e); }
+.start-power-fill.max { animation: pulse .4s ease-in-out infinite; }
+.key-hint { display: none; font-size: 12px; color: #fff; -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; }
+@media (hover: hover) and (pointer: fine) { .key-hint { display: block; } }
+/* 데스크톱에서만 키 안내 */
+/* 일시정지/사운드/카메라: 엄지 패드·스타트 바와 겹치지 않게 화면 위쪽(콤보 배지 아래) */
+/* ── 튜토리얼(13번) ── */
+/* 안내줄은 스타트 바·게이지·조작 버튼과 겹치지 않는 화면 가운데쯤(스타트 단계는 위쪽 — 스타트 바가 아래 절반을 차지) */
+.tut-banner { position: absolute; left: 50%; top: 50%; transform: translateX(-50%); width: min(92vw, 420px);
+    padding: 10px 16px; border-radius: 16px; background: rgba(20,26,51,.9); color: #fff; font-size: 20px; line-height: 1.35; text-align: center;
+    pointer-events: none; opacity: 0; transition: opacity .2s ease; box-shadow: 0 4px 0 rgba(0,0,0,.25); }
+.tut-banner.on { opacity: 1; }
+.tut-banner.top { top: calc(150px + env(safe-area-inset-top, 0px)); }
+.tut-banner small { display: block; font-size: 14px; letter-spacing: 1px; color: var(--yellow); }
+.tut-banner b { color: var(--yellow); font-weight: normal; }
+.tut-banner.hint { background: rgba(160,40,40,.9); }
+.tut-banner.shake { animation: nudgeX .4s ease; }
+.tut-ring { position: fixed; z-index: 15; pointer-events: none; border-radius: 22px; border: 4px solid var(--yellow);
+    box-shadow: 0 0 0 4px rgba(20,26,51,.55), 0 0 18px rgba(255,184,13,.9); animation: tutBlink .9s ease-in-out infinite; }
+@keyframes tutBlink { 50% { opacity: .25; } }
+.tut-finger { position: fixed; z-index: 16; width: 36px; height: 36px; pointer-events: none; animation: tutTap 1s ease-in-out infinite; filter: drop-shadow(0 2px 2px rgba(0,0,0,.4)); }
+.tut-finger svg { width: 100%; height: 100%; }
+@keyframes tutTap { 0%, 100% { transform: translate(6px, 10px); } 50% { transform: translate(0, 0) scale(.92); } }
+@media (orientation: landscape) and (max-height: 500px) {
+    .tut-banner { top: 64%; width: min(46vw, 420px); font-size: 18px; } /* 왼쪽 게이지(~176px)와 오른쪽 BOOST 사이 */
+    .tut-banner.top { top: 84px; left: auto; right: calc(12px + env(safe-area-inset-right, 0px)); transform: none; width: 200px; } /* 스타트 단계: 가운데 스타트 바 오른쪽 */
+  }
+
+/* ══ 주행 HUD 칩(뉴모픽 HUD 변형, 총 12개 이하): 바퀴·커브 / 속도 / 콤보 / 하트 / 일시정지 / 소리 / 시점 + 균형 바 · 부스트 · 목표 표시 ══ */
+.progress { height: 8px; border-radius: var(--r-pill); background: var(--nm-bg); border: var(--hud-border); box-shadow: var(--hud-shadow); overflow: hidden; }
+.progress-fill { height: 100%; width: 0; border-radius: var(--r-pill); background: var(--accent); }
+.hud-row { align-items: center; }
+.lap-chip { flex-direction: column; align-items: flex-start; gap: 0; min-height: 40px; padding: 2px var(--s-1); line-height: 1.25; font-size: 14px; }
+.lap-chip small { font-size: 12px; font-weight: 500; color: var(--ink-2); }
+.speed-chip { position: relative; align-items: baseline; gap: 4px; min-height: 44px; padding: 0 var(--s-2); border-radius: var(--r-md); }
+.speed-chip .num { display: inline-block; font-family: var(--font-display); font-size: 28px; line-height: 44px; min-width: 2ch; text-align: right; color: var(--ink); }
+.speed-chip small { font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.speed-chip .max-tag { position: absolute; top: -8px; right: -4px; padding: 0 6px; border-radius: var(--r-pill); background: var(--danger); color: #fff; font-style: normal; font-size: 12px; font-weight: 700; opacity: 0; }
+.speed-chip.capped .max-tag { opacity: 1; } .speed-chip.capped { background: var(--accent); }
+.combo-chip { flex-direction: column; gap: 0; min-height: 44px; padding: 2px var(--s-2); text-align: center; line-height: 1.15; border-radius: var(--r-md); }
+.combo-chip small { font-size: 12px; font-weight: 700; } .combo-chip b { font-family: var(--font-display); font-size: 20px; font-weight: 400; }
+.combo-chip.bump { animation: bump 220ms var(--ease-pop); } @keyframes bump { 50% { transform: scale(1.12); } }
+.hud-hearts { align-self: flex-start; gap: 2px; padding: 0 var(--s-1); pointer-events: none; }
+.hud-hearts .heart-ico { width: 24px; height: 24px; color: var(--danger); fill: var(--danger); stroke: var(--ink); stroke-width: 1.5; }
+.hud-hearts .heart-ico.off { fill: none; color: var(--ink-disabled); stroke: var(--ink-disabled); stroke-dasharray: 3 2; }
+.hud-hearts .heart-ico.lose { animation: heartLose 400ms var(--ease-pop); } @keyframes heartLose { 0% { transform: scale(1.5); } 100% { transform: scale(1); } }
+.hud-controls { position: absolute; top: calc(88px + env(safe-area-inset-top, 0px)); right: var(--s-2); display: flex; align-items: center; gap: var(--s-1); pointer-events: auto; }
+.tut-skip { min-height: 44px; padding: 0 var(--s-2); border-radius: var(--r-md); font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; pointer-events: auto; }
+.tut-banner { background: var(--hud-bg); border: var(--hud-border); box-shadow: var(--hud-shadow); color: var(--ink); border-radius: var(--r-md); font-weight: 700; padding: var(--s-1) var(--s-2); }
+.tut-banner small { color: var(--ink-2); font-weight: 500; } .tut-banner b { color: var(--ink); background: linear-gradient(transparent 62%, var(--accent-soft) 62%); }
+.tut-banner.hint { background: #fff0e8; color: var(--danger); }
+
+/* ── 가로 화면 ── */
+@media (orientation: landscape) and (max-height: 500px) { .hud-controls { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(var(--s-2) + env(safe-area-inset-right, 0px)); } }
+  /* 가로 화면(13번: 회전 안내 오버레이 제거, 가로·세로 모두 플레이) — 폰 가로(높이 500 이하)에서 HUD를 납작하게,
+     조작은 양쪽 엄지 위치(아래 양 끝), 노치·홈 인디케이터는 safe-area로 피함 */
+  @media (orientation: landscape) and (max-height: 500px) {
+    .hud-top { top: 6px; left: calc(12px + env(safe-area-inset-left, 0px)); right: calc(170px + env(safe-area-inset-right, 0px)); gap: 4px; }
+    .timing-pop { --pop: min(40vh, 150px); top: calc(58px + env(safe-area-inset-top, 0px)); }
+    .drive-controls { padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+    .drive-controls.twohand { padding-left: calc(20px + env(safe-area-inset-left, 0px)); padding-right: calc(20px + env(safe-area-inset-right, 0px)); }
+    .start-bar { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); gap: 4px; }
+    .start-bar-track { height: 150px; }
+    .start-bar-label { font-size: 15px; }
+    .lap-banner { top: 62%; }
+    .judge { top: 78%; }
+    .rb-overlay { top: 22%; }
+  }
+
+@media (max-height: 620px) { /* 아주 낮은 화면 */ .stage-btn { min-height: 56px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }

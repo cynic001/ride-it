@@ -643,6 +643,12 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  if (new URLSearchParams(location.search).has('ui-kit')) { // 개발 전용 UI 키트(?ui-kit) — 게임을 시작하지 않고 컴포넌트만 나열, 서비스 워커 캐시 제외
+    QualityManager.detectInitialPreset();
+    UI.init();
+    const k = document.createElement('script'); k.src = 'js/ui-kit.js'; document.body.appendChild(k);
+    return;
+  }
   Game.init();
   UI.showTitle(() => UI.showStageSelect(STAGES, stageIndex => Game.loadStage(stageIndex)));
 });

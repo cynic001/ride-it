@@ -88,7 +88,7 @@ window.ProgressManager = ProgressManager;
 
 // 아이콘 — 이모지 대신 인라인 SVG(currentColor로 버튼 색 상속)
 const svg = (body, fill = false) =>
-  `<svg viewBox="0 0 24 24" ${fill ? 'fill="currentColor"' : 'fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"'} aria-hidden="true">${body}</svg>`;
+  `<svg viewBox="0 0 24 24" ${fill ? 'fill="currentColor"' : 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'} aria-hidden="true">${body}</svg>`;
 const ICONS = {
   pause: svg('<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>', true),
   soundOn: svg('<path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a8.5 8.5 0 0 1 0 12"/>'),
@@ -201,6 +201,11 @@ const UI = {
 
   init() {
     this.root = document.getElementById('uiRoot');
+    // UI 버튼 "톡" 효과음 — 주행 조작부(균형 바·BOOST)는 제외(자체 입력), 연타 쓰로틀은 AudioManager
+    document.addEventListener('pointerdown', e => {
+      const t = e.target.closest && e.target.closest('#uiRoot .btn, #uiRoot .icon-btn, #uiRoot .seg-btn, #uiRoot .switch, #uiRoot .stage-btn, #uiRoot .hud-btn, #uiRoot .gfx-opt, #uiRoot .derail-tag');
+      if (t && !t.disabled) AudioManager.playUiClick();
+    }, true);
   },
 
   /** 화면 교체 — 직전 화면을 id 없는 복제본(ghost)으로 남겨 페이드 아웃시키고 새 화면은 즉시 렌더
@@ -243,10 +248,9 @@ const UI = {
     this._onStart = onStart;
     this._setScreen(`
       <div class="screen stage-select">
-        ${MENU_BG}
         <div class="top-nav">
           <button class="icon-btn" id="howtoBtn" aria-label="조작법">${ICONS.help}</button>
-          ${LOGO(true)}
+          <div class="logo-mini">떨어진다!!!<small>RIDE IT</small></div>
           <button class="icon-btn" id="settingsBtn" aria-label="설정">${ICONS.gear}</button>
         </div>
         <div class="progress-summary">클리어 ${ProgressManager.clearedCount} / ${stages.length}</div>
@@ -290,7 +294,6 @@ const UI = {
     const s = STAGES[i];
     this._setScreen(`
       <div class="screen stage-detail">
-        ${MENU_BG}
         <div class="top-nav">
           <button class="icon-btn" id="detailBackBtn" aria-label="뒤로">${ICONS.back}</button>
           <span class="top-title">STAGE ${i + 1}</span>
@@ -663,12 +666,12 @@ const UI = {
         <div class="hud-top">
           <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
           <div class="hud-row">
-            <span class="stage-chip stage-label">${name}</span>
-            <span class="speedo" id="speedo"><span class="max-tag">MAX</span><span class="num" id="speedLabel">0</span><span class="unit">km/h</span><span class="sub turn-label" id="turnLabel"></span></span>
-            <span class="combo-chip" id="comboChip"${tutorial ? ' hidden' : ''}><small>COMBO</small><b id="comboLabel">0</b><small class="mult" id="comboMult">×1.0</small></span>
-            ${tutorial ? '<button class="tut-skip" id="tutSkipBtn">건너뛰기</button>' : ''}
+            <span class="hud-chip lap-chip" id="lapChip"><b id="lapLabel">바퀴 1/1</b><small id="turnLabel">커브 1/1</small></span>
+            <span class="hud-chip speed-chip" id="speedo"><i class="max-tag">MAX</i><span class="num" id="speedLabel">0</span><small>km/h</small></span>
+            <span class="hud-chip accent combo-chip" id="comboChip"${tutorial ? ' hidden' : ''}><small>콤보</small><b id="comboLabel">0</b><small class="mult" id="comboMult">×1.0</small></span>
+            ${tutorial ? '<button class="hud-chip tut-skip" id="tutSkipBtn">건너뛰기</button>' : ''}
           </div>
-          ${derail ? `<div class="hearts" id="hearts" aria-label="남은 기회">${'<i class="heart">♥</i>'.repeat(DERAIL_HITS)}</div>` : ''}
+          ${derail ? `<div class="hud-chip hud-hearts" id="hearts" aria-label="남은 기회">${'<svg class="heart-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.5-9.6A5.2 5.2 0 0 1 12 7.7a5.2 5.2 0 0 1 9.5 3.7C19.5 16.4 12 21 12 21z" stroke-linejoin="round"/></svg>'.repeat(DERAIL_HITS)}</div>` : ''}
         </div>
         ${tutorial ? '<div class="tut-banner" id="tutBanner"></div>' : ''}
         <div class="judge" id="judgeToast"></div>
@@ -697,15 +700,15 @@ const UI = {
         </div>
         ${this._driveControlsHTML()}
         <div class="hud-controls">
-          <button class="hud-icon-btn" id="soundToggleBtn" aria-label="사운드 켜기/끄기">${AudioManager.enabled ? ICONS.soundOn : ICONS.soundOff}</button>
-          <button class="hud-icon-btn" id="pauseBtn" disabled aria-label="일시정지">${ICONS.pause}</button>
-          <button class="hud-icon-btn camera-toggle" id="cameraToggleBtn" disabled aria-label="시점 전환">${ICONS.camera}</button>
+          <button class="hud-btn" id="soundToggleBtn" aria-label="사운드 켜기/끄기">${AudioManager.enabled ? ICONS.soundOn : ICONS.soundOff}</button>
+          <button class="hud-btn" id="pauseBtn" disabled aria-label="일시정지">${ICONS.pause}</button>
+          <button class="hud-btn camera-toggle" id="cameraToggleBtn" disabled aria-label="시점 전환">${ICONS.camera}</button>
         </div>
       </div>
     `);
     const $ = id => document.getElementById(id);
     this._hud = {
-      speed: $('speedLabel'), speedo: $('speedo'), comboMult: $('comboMult'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'),
+      speed: $('speedLabel'), speedo: $('speedo'), comboMult: $('comboMult'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'), lap: $('lapLabel'),
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
       bal: $('balGauge'), balDir: $('balDir'), balBand: $('balBand'), balPerfect: $('balPerfect'), balCursor: $('balCursor'), balMin: $('balMin'), balMinTick: $('balMinTick'), balProg: $('balProg'), balResult: $('balResult'),
       pop: $('gatePop'), popLabel: $('gatePopLabel'), popGood: $('gatePopGood'), popPerfect: $('gatePopPerfect'), popRing: $('gatePopRing'), popResult: $('gatePopResult'), popFlash: $('gatePopFlash'), popKey: null, popResultUntil: 0, popPrevErr: null, popTick: 0,
@@ -844,8 +847,8 @@ const UI = {
       const ranges = track.segmentRanges;
       const idx = ranges.findIndex(s => cart.t >= s.tStart && cart.t < s.tEnd);
       const turnNum = idx === -1 ? ranges.length : idx + 1;
-      const lapPrefix = cart.totalLaps > 1 ? `Lap ${cart.currentLap}/${cart.totalLaps} · ` : '';
-      h.turn.textContent = `${lapPrefix}Turn ${turnNum}/${ranges.length}`;
+      h.lap.textContent = `바퀴 ${cart.currentLap}/${cart.totalLaps}`;
+      h.turn.textContent = `커브 ${turnNum}/${ranges.length}`;
       const overall = ((cart.currentLap - 1) + Math.min(1, cart.t)) / cart.totalLaps;
       h.progress.style.width = `${(overall * 100).toFixed(1)}%`;
 

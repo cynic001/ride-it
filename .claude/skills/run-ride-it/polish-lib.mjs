@@ -6,9 +6,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.glb': 'model/gltf-binary', '.json': 'application/json', '.m4a': 'audio/mp4', '.webmanifest': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.glb': 'model/gltf-binary', '.json': 'application/json', '.m4a': 'audio/mp4', '.webmanifest': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
 
-export async function start({ browser = 'chromium', port = 8200, w = 375, h = 667, init = {} } = {}) {
+export async function start({ browser = 'chromium', port = 8200, w = 375, h = 667, init = {}, url = '/index.html' } = {}) {
   const server = http.createServer((req, res) => {
     const p = decodeURIComponent(req.url.split('?')[0]);
     fs.readFile(path.join(ROOT, p === '/' ? '/index.html' : p), (e, d) => {
@@ -27,8 +27,8 @@ export async function start({ browser = 'chromium', port = 8200, w = 375, h = 66
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
-  await page.goto(`http://localhost:${port}/index.html`);
-  await page.waitForFunction(() => window.Game && window.UI && window.STAGES, null, { timeout: 20000 });
+  await page.goto(`http://localhost:${port}${url}`);
+  await page.waitForFunction(() => window.UI && window.STAGES, null, { timeout: 20000 });
   return { page, errors, close: async () => { await b.close(); server.close(); } };
 }
 
