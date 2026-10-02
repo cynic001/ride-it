@@ -120,9 +120,9 @@ section('tutlayout', async () => {
       const out = [];
       for (const key of ['balanceCard', 'boostCard', 'comboCard', 'rollbackCard', 'finishCard']) {
         Tutorial._stepLabel = key; Tutorial.card('제목', Tutorial._text(key), key === 'balanceCard' ? UI.gaugeDiagram() : null, () => {});
-        const c = document.querySelector('#tutCard .card'), b = c.getBoundingClientRect();
-        out.push({ key, top: Math.round(b.top), bottom: Math.round(b.bottom), H: innerHeight, scroll: c.scrollHeight > c.clientHeight, fs: parseFloat(getComputedStyle(c.querySelector('p')).fontSize) });
-        document.getElementById('tutCard').remove(); Tutorial.hold = false;
+        const c = document.querySelector('#tutCard .popup'), b = c.getBoundingClientRect(), body = c.querySelector('.popup-body');
+        out.push({ key, top: Math.round(b.top), bottom: Math.round(b.bottom), H: innerHeight, scroll: body.scrollHeight > body.clientHeight + 1, fs: parseFloat(getComputedStyle(c.querySelector('.popup-block p')).fontSize) });
+        Popup.closeAll(); Tutorial.hold = false;
       }
       return out;
     });
@@ -289,6 +289,91 @@ section('input', async () => {
   const rel = await page.evaluate(() => ({ lean: Game.cart.leanInput, held: Game.input._btnPointers.size }));
   check('입력: 회전하면 눌려 있던 버튼 해제', rel.held === 0 && Math.abs(rel.lean) < 0.7, JSON.stringify(rel));
   check('input page error 0', errors.length === 0, errors.join('|'));
+  await close();
+});
+
+// ── 1-A 모달 팝업 전수: 세로·가로·데스크톱에서 높이 ≤ 화면 1/2, 정중앙, 폭 규칙, 본문 16px 이상, 넘침 없음, 터치 44px — 페이지별 스크린샷은 /tmp/ride-it-popups
+section('popups', async () => {
+  const fs = await import('node:fs'); const OUTP = '/tmp/ride-it-popups'; fs.mkdirSync(OUTP, { recursive: true });
+  const POPUPS = {
+    settings: () => UI.showSettings(), graphics: () => UI.showGraphics(), howto: () => UI.showHowTo(), credits: () => UI.showCredits(),
+    pause: () => UI.showPauseOverlay(), tutorialAsk: () => UI.showTutorialAsk(), tutorialDone: () => UI.showTutorialDone(), loadError: () => UI.showLoadError(() => {}), fail: () => UI.showFail(0),
+    tutCard: () => Popup.open({ id: 'tutCard', title: '균형 바 읽는 법', meta: '2/6', cancelable: false, blocks: [Popup.fig(UI.gaugeDiagram()), Popup.p(Tutorial._text('balanceCard'))], actions: [{ id: 'tutOkBtn', label: t('tutorial.ok'), primary: true }] }),
+  };
+  const table = {};
+  for (const [orient, w, h] of [['세로', 375, 667], ['가로', 667, 375], ['데스크톱', 1280, 720]]) {
+    const { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_derail: 'on' } });
+    await page.evaluate(() => Game.loadTutorial()); await page.waitForSelector('#startBar'); await page.waitForTimeout(300);
+    for (const name of Object.keys(POPUPS)) {
+      await page.evaluate(([n]) => { Popup.closeAll(); window.__open = null; }, [name]);
+      await page.evaluate(([n, src]) => { new Function('UI', 'Popup', 'Tutorial', 'Game', 't', `(${src})()`)(UI, Popup, Tutorial, Game, t); }, [name, POPUPS[name].toString()]);
+      await page.waitForSelector('.popup', { timeout: 5000 });
+      await page.waitForTimeout(260);
+      let pageNo = 0, total = 1;
+      for (;;) {
+        const m = await page.evaluate(([W, H, orient]) => {
+          const panel = document.querySelector('.popup:last-of-type') || document.querySelector('.popup');
+          const pops = [...document.querySelectorAll('.popup')]; const pn = pops[pops.length - 1];
+          const r = pn.getBoundingClientRect(), body = pn.querySelector('.popup-body');
+          const expectW = orient === '가로' || W > H ? Math.min(0.7 * W, 560) : Math.min(0.88 * W, 420);
+          const blocks = [...pn.querySelectorAll('.popup-block:not([hidden])')];
+          const bb = body.getBoundingClientRect();
+          const small = [];
+          for (const b of blocks) for (const el of [b, ...b.querySelectorAll('*')]) {
+            if (el.children.length && !el.matches('p, b, span, small, a')) continue;
+            const txt = [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()); if (!txt) continue;
+            if (el.closest('svg') || el.closest('.popup-meta')) continue;
+            const fs = parseFloat(getComputedStyle(el).fontSize); if (fs < 16) small.push(`${el.tagName}.${el.className}:${fs}`);
+          }
+          const overflow = blocks.some(b => b.getBoundingClientRect().bottom > bb.bottom + 1) || body.scrollHeight > body.clientHeight + 1;
+          const tiny = [...pn.querySelectorAll('button, [role=switch]')].filter(b => b.offsetParent !== null).map(b => b.getBoundingClientRect()).filter(q => q.height < 43.5 || q.width < 43.5).length;
+          const dots = pn.querySelectorAll('.popup-dots i').length;
+          const wb = getComputedStyle(blocks[0] || body).wordBreak;
+          return { h: r.height, maxH: H / 2, cx: (r.left + r.right) / 2 - W / 2, cy: (r.top + r.bottom) / 2 - H / 2, w: r.width, expectW, inView: r.left >= 0 && r.top >= 0 && r.right <= W && r.bottom <= H, small, overflow, tiny, pages: dots || 1, wb, title: pn.querySelector('.popup-title').textContent };
+        }, [w, h, orient]);
+        total = m.pages;
+        const tag = `${orient} ${name} ${pageNo + 1}/${total}`;
+        await page.screenshot({ path: `${OUTP}/${BROWSER}_${orient}_${name}_${pageNo + 1}.png` });
+        check(`popup ${tag}: 높이 ≤ 화면 1/2 (${Math.round(m.h)}/${Math.round(m.maxH)}px), 정중앙(오차 ${m.cx.toFixed(1)}, ${m.cy.toFixed(1)}), 폭 ${Math.round(m.w)}≈${Math.round(m.expectW)}, 화면 안`,
+          m.h <= m.maxH + 0.5 && Math.abs(m.cx) <= 1.5 && Math.abs(m.cy) <= 1.5 && Math.abs(m.w - m.expectW) <= 2 && m.inView, JSON.stringify(m));
+        check(`popup ${tag}: 본문 16px 이상·넘침 없음·터치 44px·keep-all`, !m.small.length && !m.overflow && m.tiny === 0 && m.wb === 'keep-all', JSON.stringify({ small: m.small, overflow: m.overflow, tiny: m.tiny, wb: m.wb }));
+        if (pageNo >= total - 1) break;
+        await page.click('.popup .popup-next'); pageNo++; await page.waitForTimeout(80);
+      }
+      (table[name] ||= {})[orient] = total;
+    }
+    check(`popups ${orient} page error 0`, errors.length === 0, errors.join('|'));
+    await close();
+  }
+  console.log('PAGES ' + JSON.stringify(table));
+  fs.writeFileSync(`${OUTP}/pages_${BROWSER}.json`, JSON.stringify(table, null, 1));
+});
+
+// ── 1-A 글꼴: 자체 호스팅 서브셋(Noto Sans KR·Jua)이 실제로 적용되고, 외부 글꼴 요청이 없고, 쓰는 글자가 서브셋에 다 있음
+section('fonts', async () => {
+  const { execSync } = await import('node:child_process'); const fsx = await import('node:fs'); const pth = await import('node:path');
+  const { ROOT } = await import('./polish-lib.mjs');
+  const { page, errors, close } = await start({ browser: BROWSER });
+  const reqs = []; page.on('request', r => reqs.push(r.url()));
+  await page.reload(); await page.waitForFunction(() => window.UI && window.STAGES);
+  await page.evaluate(() => UI.showSettings()); await page.waitForTimeout(600);
+  const f = await page.evaluate(async () => {
+    await document.fonts.ready;
+    await document.fonts.load('16px "Jua"'); const loaded = [...document.fonts].filter(x => x.status === 'loaded').map(x => `${x.family}`);
+    const el = document.querySelector('.popup-title'); const cs = getComputedStyle(el);
+    return { loaded, family: cs.fontFamily, weight: cs.fontWeight, w700: document.fonts.check('700 16px "Noto Sans KR"'), w400: document.fonts.check('400 16px "Noto Sans KR"'), jua: document.fonts.check('16px "Jua"') };
+  });
+  check('글꼴: Noto Sans KR·Jua 서브셋이 로드됨(font-face loaded)', f.loaded.includes('Noto Sans KR') && f.loaded.includes('Jua'), JSON.stringify(f));
+  check('글꼴: 팝업 제목 font-family가 Noto Sans KR 우선, 폴백 체인 포함', /^"?Noto Sans KR"?,.*(-apple-system).*("?Apple SD Gothic Neo"?).*sans-serif/.test(f.family), f.family);
+  const ext = reqs.filter(u => /fonts\.(googleapis|gstatic)\.com/.test(u));
+  check('글꼴: Google Fonts 외부 요청 없음', ext.length === 0, ext.join(','));
+  const woff = reqs.filter(u => /\.woff2$/.test(u));
+  check('글꼴: woff2는 같은 출처에서 받음(2개)', woff.length >= 2 && woff.every(u => u.includes('localhost')), woff.join(','));
+  const sizes = ['NotoSansKR-subset.woff2', 'Jua-subset.woff2'].map(n => fsx.statSync(pth.join(ROOT, 'assets/fonts', n)).size);
+  check(`글꼴: 서브셋 용량 합계 ${Math.round(sizes.reduce((a, b) => a + b, 0) / 1024)}KB (300KB 이하)`, sizes.reduce((a, b) => a + b, 0) < 300 * 1024, String(sizes));
+  check('글꼴: OFL 라이선스 파일 포함', ['OFL-NotoSansKR.txt', 'OFL-Jua.txt'].every(n => fsx.existsSync(pth.join(ROOT, 'assets/fonts', n))));
+  let cov = ''; try { cov = execSync('python3 tools/make-fonts.py --check', { cwd: ROOT }).toString(); check('글꼴: 소스에서 쓰는 글자가 서브셋에 모두 있음', true); } catch (e) { check('글꼴: 소스에서 쓰는 글자가 서브셋에 모두 있음', false, String(e.stdout || e.message).slice(0, 200)); }
+  check('fonts page error 0', errors.length === 0, errors.join('|'));
   await close();
 });
 

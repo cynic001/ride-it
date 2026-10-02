@@ -78,6 +78,8 @@ async function main() {
     localStorage.setItem('rc_derail', 'off'); // 기존 흐름 검증은 이탈 없이(이탈은 verify-polish.mjs)
   }, QUALITY);
   const shot = async name => page.screenshot({ path: path.join(OUT, `${name}.png`) });
+  // 팝업은 내용이 길면 페이지로 나뉨 — 찾는 요소가 보일 때까지 '다음'을 누름
+  const pageTo = async sel => { for (let i = 0; i < 14; i++) { if (await page.locator(sel).first().isVisible().catch(() => false)) return; const nx = page.locator('.popup-next').last(); if (!(await nx.count())) return; await nx.click(); await sleep(70); } };
 
   try {
     await page.goto(`${base}/index.html`, { waitUntil: 'load' });
@@ -113,6 +115,7 @@ async function main() {
     await page.waitForSelector('#howtoOverlay');
     await sleep(300);
     await shot('01_howto');
+    await pageTo('#howtoCloseBtn');
     await page.locator('#howtoCloseBtn').click();
     await page.waitForSelector('.stage-btn');
     await sleep(400);
@@ -147,11 +150,13 @@ async function main() {
     const st = await page.evaluate(() => AudioManager.ctx.state);
     check('audio re-unlocks on next tap after suspend', st === 'running', st);
     await page.locator('#settingsBtn').click();
-    await page.locator('[data-setting="audio"] [data-value="off"]').click();
+    await pageTo('[data-setting="audio"]');
+    await page.locator('[data-setting="audio"]').click(); // 켜짐 → 꺼짐
     await sleep(400);
     const bgmOff = await rms();
     check('sound toggle mutes bgm', bgmOff < 0.001, `rms=${bgmOff.toFixed(5)}`);
-    await page.locator('[data-setting="audio"] [data-value="on"]').click();
+    await page.locator('[data-setting="audio"]').click(); // 꺼짐 → 켜짐
+    await pageTo('#settingsCloseBtn');
     await page.locator('#settingsCloseBtn').click();
     await sleep(300);
 
@@ -160,20 +165,26 @@ async function main() {
     await page.waitForSelector('#settingsOverlay');
     await sleep(400);
     await shot('03_settings');
+    await pageTo('#graphicsBtn');
     await page.locator('#graphicsBtn').click();
     await page.waitForSelector('#graphicsOverlay');
-    await page.locator('.gfx-opt[data-group="style"][data-value="pastel"]').click();
+    await pageTo('[data-setting="style"] [data-value="pastel"]');
+    await page.locator('[data-setting="style"] [data-value="pastel"]').click();
     const gsaved = await page.evaluate(() => [localStorage.getItem('rc_style'), StyleManager.current]);
-    await page.locator('.gfx-opt[data-group="style"][data-value="toon"]').click();
+    await page.locator('[data-setting="style"] [data-value="toon"]').click();
     await sleep(300);
     await shot('03a_graphics');
     check('graphics popup saves style', gsaved[0] === 'pastel' && gsaved[1] === 'pastel', JSON.stringify(gsaved));
+    await pageTo('#graphicsCloseBtn');
     await page.locator('#graphicsCloseBtn').click();
+    await pageTo('#creditsBtn');
     await page.locator('#creditsBtn').click();
     await page.waitForSelector('#creditsOverlay');
     await sleep(400);
     await shot('03b_credits');
+    await pageTo('#creditsCloseBtn');
     await page.locator('#creditsCloseBtn').click();
+    await pageTo('#settingsCloseBtn');
     await page.locator('#settingsCloseBtn').click();
     await sleep(300);
 

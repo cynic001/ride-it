@@ -1,0 +1,3 @@
+/* fonts.css — 자체 호스팅 서브셋 글꼴(tools/make-fonts.py가 생성). 폴백: -apple-system, "Apple SD Gothic Neo", sans-serif */
+@font-face { font-family: "Noto Sans KR"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("../assets/fonts/NotoSansKR-subset.woff2") format("woff2"); }
+@font-face { font-family: "Jua"; font-style: normal; font-weight: 400; font-display: swap; src: url("../assets/fonts/Jua-subset.woff2") format("woff2"); }

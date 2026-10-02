@@ -13,10 +13,11 @@ const CACHE = 'ride-it-v4';
 const CORE = [
   './',
   'index.html',
-  'css/ui-tokens.css', 'css/ui.css', 'css/title.css', 'css/hud.css',
+  'css/fonts.css', 'css/ui-tokens.css', 'css/ui.css', 'css/title.css', 'css/hud.css',
+  'assets/fonts/NotoSansKR-subset.woff2', 'assets/fonts/Jua-subset.woff2',
   'manifest.webmanifest',
   'js/quality.js', 'js/style.js', 'js/audio.js', 'js/stages.js', 'js/track.js', 'js/cart.js',
-  'js/camera.js', 'js/input.js', 'js/ui.js', 'js/tutorial.js', 'js/main.js',
+  'js/camera.js', 'js/input.js', 'js/strings.js', 'js/popup.js', 'js/ui.js', 'js/tutorial.js', 'js/main.js',
   'assets/icons/icon-192.png', 'assets/icons/icon-512.png',
   'assets/vendor/polyhaven/sky_256.env',
   'assets/vendor/kenney-coaster-kit/Textures/colormap.png',

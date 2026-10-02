@@ -231,3 +231,5 @@
 
 @media (max-height: 620px) { /* 아주 낮은 화면 */ .stage-btn { min-height: 56px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
+
+body.popup-open .tut-ring, body.popup-open .tut-finger { display: none !important; }

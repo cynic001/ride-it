@@ -16,10 +16,7 @@ window.LapsManager = LapsManager;
 
 // 조작 방식(13번: 양손 조작으로 통일) — 'twohand'(기본: 왼쪽 아래 ◀ ▶ + 오른쪽 아래 BOOST) / 'tilt'(◀ ▶ 대신 폰 기울기로 밸런스).
 // 예전 저장값 'onehand'(엄지 패드, legacy/onehand-pad.js로 이동)는 'twohand'로 읽음
-const CONTROL_MODES = {
-  twohand: { label: '버튼 ◀ ▶', desc: '왼쪽 ◀ ▶ 밸런스, 오른쪽 BOOST' },
-  tilt: { label: '기울기', desc: '폰을 기울여 밸런스, 부스트는 BOOST 버튼' },
-};
+const CONTROL_MODES = { twohand: {}, tilt: {} }; // 라벨·설명은 strings.js의 control.* 키
 const ControlSettings = {
   mode: localStorage.getItem('rc_control') === 'tilt' ? 'tilt' : 'twohand',
   set(mode) {
@@ -222,14 +219,6 @@ const UI = {
     this.root.innerHTML = html;
   },
 
-  _modal(id, inner, { solid = false } = {}) {
-    const el = document.createElement('div');
-    el.className = `screen modal-overlay${solid ? ' solid' : ''}`;
-    el.id = id;
-    el.innerHTML = `<div class="card">${inner}</div>`;
-    this.root.appendChild(el);
-    return el;
-  },
 
   showTitle(onStart) {
     this._setScreen(`
@@ -344,51 +333,47 @@ const UI = {
     });
   },
 
-  /** 설정 — 그래픽 품질/스타일, 사운드, 조작 방식 + 조작법/크레딧 링크 */
+  /** 설정 팝업 — 행(라벨 + 컨트롤) 단위로 자동 페이지 */
   showSettings() {
-    const seg = (key, options, current) => `<div class="seg" data-setting="${key}">${options.map(([v, l]) =>
-      `<button class="seg-btn${v === current ? ' on' : ''}" data-value="${v}">${l}</button>`).join('')}</div>`;
-    const el = this._modal('settingsOverlay', `
-      <h2>설정</h2>
-      <div class="field"><span class="field-label">그래픽</span>
-        <button class="btn wide graphics-open" id="graphicsBtn">${ICONS.sparkle}<span id="graphicsSummary">${this._graphicsSummary()}</span></button></div>
-      <div class="field"><span class="field-label">시점</span>
-        ${seg('view', [['third', '3인칭'], ['first', '1인칭']], ViewSettings.mode)}
-        <p class="field-desc" id="viewDesc">${this._viewDesc(ViewSettings.mode)}</p></div>
-      <div class="field"><span class="field-label">사운드</span>
-        ${seg('audio', [['on', '켜기'], ['off', '끄기']], AudioManager.enabled ? 'on' : 'off')}
-        <p class="field-desc">소리가 안 나면 무음 모드를 꺼주세요</p></div>
-      <div class="field"><span class="field-label">밸런스 조작</span>
-        ${seg('control', Object.entries(CONTROL_MODES).map(([k, v]) => [k, v.label]), ControlSettings.mode)}
-        <p class="field-desc" id="controlDesc">${CONTROL_MODES[ControlSettings.mode].desc}</p></div>
-      <div class="field"><span class="field-label">레일 이탈</span>
-        ${seg('derail', [['on', '켜기'], ['off', '끄기']], DerailSettings.on ? 'on' : 'off')}
-        <p class="field-desc">커브에 실패하면 이탈! 3번이면 실패</p></div>
-      <div class="actions row">
-        <button id="settingsHowtoBtn" class="btn">${ICONS.help}조작법</button>
-        <button id="creditsBtn" class="btn">${ICONS.info}크레딧</button>
-      </div>
-      <button id="settingsTutorialBtn" class="btn wide">${ICONS.play}튜토리얼 다시 하기</button>
-      <div class="actions"><button id="settingsCloseBtn" class="btn primary wide">닫기</button></div>
-    `, { solid: true });
+    const seg = (key, options, current) => `<div class="seg" role="radiogroup" data-setting="${key}">${options.map(([v, l]) =>
+      `<button class="seg-btn${v === current ? ' on' : ''}" role="radio" aria-checked="${v === current}" data-value="${v}" type="button">${l}</button>`).join('')}</div>`;
+    const sw = (key, on) => `<button class="switch" role="switch" aria-checked="${on}" data-setting="${key}" type="button"><span class="sw-text on">${t('common.on')}</span><span class="sw-text off">${t('common.off')}</span><span class="sw-knob"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12 10 17 19 7"/></svg></span></button>`;
+    const ctl = Popup.open({
+      id: 'settingsOverlay', title: t('settings.title'),
+      blocks: [
+        Popup.row(t('settings.graphics'), `<button class="btn small" id="graphicsBtn" type="button">${ICONS.sparkle}<span id="graphicsSummary">${this._graphicsSummary()}</span></button>`),
+        Popup.row(t('settings.view'), seg('view', [['third', t('settings.view.third')], ['first', t('settings.view.first')]], ViewSettings.mode), `<span id="viewDesc">${this._viewDesc(ViewSettings.mode)}</span>`),
+        Popup.row(t('settings.sound'), sw('audio', AudioManager.enabled), t('settings.soundDesc')),
+        Popup.row(t('settings.control'), seg('control', Object.keys(CONTROL_MODES).map(k => [k, t(`control.${k}`)]), ControlSettings.mode), `<span id="controlDesc">${t(`control.${ControlSettings.mode}Desc`)}</span>`),
+        Popup.row(t('settings.derail'), sw('derail', DerailSettings.on), t('settings.derailDesc')),
+        Popup.half(`<button id="settingsHowtoBtn" class="btn wide" type="button">${ICONS.help}${t('settings.howto')}</button>`),
+        Popup.half(`<button id="creditsBtn" class="btn wide" type="button">${ICONS.info}${t('settings.credits')}</button>`),
+        Popup.half(`<button id="settingsTutorialBtn" class="btn wide" type="button">${ICONS.play}${t('settings.tutorial')}</button>`),
+      ],
+      actions: [{ id: 'settingsCloseBtn', label: t('common.close'), primary: true, onClick: (e, c) => c.close() }],
+    });
+    const el = ctl.el, $ = id => el.querySelector(`#${id}`);
     el.querySelectorAll('.seg').forEach(group => group.querySelectorAll('.seg-btn').forEach(b => b.addEventListener('click', () => {
       const v = b.dataset.value;
-      group.querySelectorAll('.seg-btn').forEach(x => x.classList.toggle('on', x === b));
+      group.querySelectorAll('.seg-btn').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
       const key = group.dataset.setting;
-      if (key === 'view') { ViewSettings.set(v); document.getElementById('viewDesc').textContent = this._viewDesc(v); }
-      else if (key === 'audio') AudioManager.setEnabled(v === 'on');
-      else if (key === 'derail') DerailSettings.set(v === 'on');
+      if (key === 'view') { ViewSettings.set(v); $('viewDesc').textContent = this._viewDesc(v); }
       else if (key === 'control') {
         ControlSettings.set(v);
-        document.getElementById('controlDesc').textContent = CONTROL_MODES[v].desc;
+        $('controlDesc').textContent = t(`control.${v}Desc`);
         if (v === 'tilt' && window.InputController && InputController.requestTiltPermission) InputController.requestTiltPermission(); // 이 탭이 권한 요청 제스처
       }
     })));
-    document.getElementById('graphicsBtn').addEventListener('click', () => this.showGraphics());
-    document.getElementById('settingsHowtoBtn').addEventListener('click', () => this.showHowTo());
-    document.getElementById('creditsBtn').addEventListener('click', () => this.showCredits());
-    document.getElementById('settingsTutorialBtn').addEventListener('click', () => { el.remove(); Game.loadTutorial(); });
-    document.getElementById('settingsCloseBtn').addEventListener('click', () => el.remove());
+    el.querySelectorAll('.switch').forEach(b => b.addEventListener('click', () => {
+      const on = b.getAttribute('aria-checked') !== 'true';
+      b.setAttribute('aria-checked', on);
+      if (b.dataset.setting === 'audio') AudioManager.setEnabled(on);
+      else if (b.dataset.setting === 'derail') DerailSettings.set(on);
+    }));
+    $('graphicsBtn').addEventListener('click', () => this.showGraphics(() => { const sm = $('graphicsSummary'); if (sm) sm.textContent = this._graphicsSummary(); }));
+    $('settingsHowtoBtn').addEventListener('click', () => this.showHowTo());
+    $('creditsBtn').addEventListener('click', () => this.showCredits());
+    $('settingsTutorialBtn').addEventListener('click', () => { Popup.closeAll(); Game.loadTutorial(); });
   },
 
   /** 스테이지 카드 오른쪽 배지 — 클리어 시 최고 랭크 + 최고 점수, 미클리어는 NEW */
@@ -402,68 +387,55 @@ const UI = {
     return { low: '낮음', medium: '보통', high: '높음' }[QualityManager.current] || QualityManager.current;
   },
 
+  /** 조작법 팝업 — 항목마다 짧은 설명, 화면에 안 들어가면 페이지로 */
   showHowTo(onClose) {
-    const item = (ico, title, desc) => `<div class="howto-item"><span class="ico">${ico}</span><span><b>${title}</b><span>${desc}</span></span></div>`;
-    const tilt = ControlSettings.mode === 'tilt';
-    const el = this._modal('howtoOverlay', `
-      <h2>조작법</h2>
-      <div class="howto-list">
-        ${item(ICONS.arrowUp, '출발', '스타트 바를 아래로 당겼다가 위로 휙! 많이 당기고 빨리 올릴수록 세게 (키보드 ↓ 충전, ↑ 발사)')}
-        ${item(ICONS.swipe, tilt ? '밸런스 — 기울기(현재)' : '밸런스 — 왼쪽 아래 ◀ ▶', tilt
-          ? '폰을 커브 방향으로 기울여요'
-          : '커브 방향 버튼을 누르고 있으면 기울고, 떼면 돌아와요 (키보드 ← →)')}
-        <div class="howto-item legend"><span><b>밸런스 게이지 읽는 법</b>
-          <span>▼ 커서를 초록 띠에 넣고 <b class="em">1.5초 연속</b> 버티면 성공! 파란 띠 안이면 Perfect</span>
-          <div class="tut-pic">${this.gaugeDiagram()}</div></span></div>
-        ${item(ICONS.tap, '부스트 — 오른쪽 아래 BOOST', '바깥 원이 안쪽 원과 겹치는 순간 누르면 PERFECT (키보드 ↑ / Space)')}
-        ${item(ICONS.retry, '뒤로 떨어지기', '언덕에서 뒤로 미끄러져요! 부스터가 쏴 주거나 BOOST 연타로 올라가요')}
-        ${item(ICONS.camera, '시점', '카메라 버튼으로 잠깐 시점 전환 (고정은 설정에서)')}
-        <div class="howto-item legend"><span><b>바닥 표시</b><span class="legend-row">
-          <i style="background:#ffc61a"></i>부스트 <i style="background:#59ff8c"></i>커브 방향
-          <i style="background:#ff801a"></i>급하강·물 <i style="background:#ff4099"></i>뒤로 떨어짐(2랩부터)</span></span></div>
-      </div>
-      <p class="field-desc">처음이라면 맨 위 <b>튜토리얼</b>부터!</p>
-      <div class="actions"><button id="howtoCloseBtn" class="btn primary wide">알겠어요!</button></div>
-    `, { solid: true });
-    document.getElementById('howtoCloseBtn').addEventListener('click', () => {
-      el.remove();
-      localStorage.setItem('rc_howto_seen', '1');
-      if (onClose) onClose();
+    const holds = STAGES.map(s => s.balance && s.balance.holdSec).filter(Boolean);
+    const hold = Math.min(...holds) === Math.max(...holds) ? `${holds[0]}` : `${Math.min(...holds)}~${Math.max(...holds)}`; // 스테이지마다 다름(코드 값)
+    const dot = c => `<i style="background:${c}"></i>`;
+    const ctl = Popup.open({
+      id: 'howtoOverlay', title: t('howto.title'),
+      blocks: [
+        Popup.item(ICONS.arrowUp, t('howto.launch'), `${t('howto.launchText')} ${t('howto.launchKeys')}`),
+        Popup.item(ICONS.swipe, t('howto.balance'), `${t('howto.balanceText', { hold })} ${t('howto.balanceKeys')} ${t('howto.balancePerfect')}`),
+        Popup.item(ICONS.tap, t('howto.boost'), `${t('howto.boostText')} ${t('howto.boostKeys')}`),
+        Popup.item(ICONS.retry, t('howto.rollback'), t('howto.rollbackText')),
+        Popup.item(ICONS.camera, t('howto.view'), t('howto.viewText')),
+        Popup.item(ICONS.sparkle, t('howto.derail'), t('howto.derailText', { hearts: DERAIL_HITS })),
+        Popup.raw(`<div class="popup-item"><span class="txt"><b>${t('howto.floor')}</b><span class="legend-row">${dot('#ffc61a')}${t('howto.floorBoost')} ${dot('#59ff8c')}${t('howto.floorCurve')} ${dot('#ff801a')}${t('howto.floorDrop')} ${dot('#ff4099')}${t('howto.floorBack', { lap: 2 })}</span></span></div>`),
+        Popup.item(ICONS.info, t('howto.judge'), t('howto.judgeText')),
+        Popup.p(t('howto.tutorialTip'), 'lead'),
+      ],
+      actions: [{ id: 'howtoCloseBtn', label: t('common.ok'), primary: true, onClick: (e, c) => c.close() }],
+      onClose: () => { localStorage.setItem('rc_howto_seen', '1'); if (onClose) onClose(); },
     });
+    return ctl;
   },
 
-  /** 처음 실행 권유 — 답하면(예/건너뛰기) 다시 묻지 않음 */
+  /** 처음 실행 권유 — 답하면(해 볼래요/건너뛰기) 다시 묻지 않음 */
   showTutorialAsk() {
-    const el = this._modal('tutorialAsk', `
-      <div class="ribbon">환영해요!</div>
-      <h2>튜토리얼부터 해볼까요?</h2>
-      <p>꼬마 열차 연습장에서 출발·밸런스·부스트를 하나씩 직접 해봐요. 1분이면 끝나요.</p>
-      <div class="actions">
-        <button id="tutAskYes" class="btn primary wide big">${ICONS.play}해볼래요</button>
-        <button id="tutAskNo" class="btn wide">건너뛰기</button>
-      </div>`);
-    const answer = () => { try { localStorage.setItem('rc_tutorial_asked', '1'); } catch (e) { /* 무시 */ } el.remove(); };
-    document.getElementById('tutAskYes').addEventListener('click', () => { answer(); Game.loadTutorial(); });
-    document.getElementById('tutAskNo').addEventListener('click', answer);
+    const answer = c => { try { localStorage.setItem('rc_tutorial_asked', '1'); } catch (e) { /* 무시 */ } c.close(); };
+    Popup.open({
+      id: 'tutorialAsk', title: t('tutAsk.title'), cancelable: false,
+      blocks: [Popup.p(t('tutAsk.heading'), 'lead'), Popup.p(t('tutAsk.text'))],
+      actions: [
+        { id: 'tutAskNo', label: t('tutAsk.no'), onClick: (e, c) => answer(c) },
+        { id: 'tutAskYes', label: t('tutAsk.yes'), icon: ICONS.play, primary: true, onClick: (e, c) => { answer(c); Game.loadTutorial(); } },
+      ],
+    });
   },
 
   /** 튜토리얼 완료 — 기록 저장 없이, 1단계로 바로 */
   showTutorialDone() {
-    this._setScreen(`
-      <div class="screen modal-overlay" id="tutorialDone">
-        <div class="card">
-          <div class="ribbon">준비 완료!</div>
-          <h2>이제 진짜 코스터로!</h2>
-          <p>출발 · 밸런스 · 부스트 · 연타 · 피니쉬 모두 해냈어요.</p>
-          <div class="actions">
-            <button id="tutGoStage1" class="btn primary wide big">${ICONS.play}1단계 출발</button>
-            <button id="tutToSelect" class="btn wide">${ICONS.list}스테이지 선택</button>
-          </div>
-        </div>
-      </div>`);
+    this._setScreen('');
+    Popup.open({
+      id: 'tutorialDone', title: t('tutDone.title'), cancelable: false,
+      blocks: [Popup.p(t('tutDone.text'), 'lead')],
+      actions: [
+        { id: 'tutToSelect', label: t('common.stageSelect'), icon: ICONS.list, onClick: (e, c) => { c.close(); this.showStageSelect(STAGES, i => Game.loadStage(i)); } },
+        { id: 'tutGoStage1', label: t('tutDone.go'), icon: ICONS.play, primary: true, onClick: (e, c) => { c.close(); Game.loadStage(0); } },
+      ],
+    });
     AudioManager.playSample('cheer', { volume: 0.7 });
-    document.getElementById('tutGoStage1').addEventListener('click', () => Game.loadStage(0));
-    document.getElementById('tutToSelect').addEventListener('click', () => this.showStageSelect(STAGES, i => Game.loadStage(i)));
   },
 
   /** 밸런스 게이지 읽는 법 그림(튜토리얼 카드·조작법 공용) — 오른쪽 커브 예시 */
@@ -503,69 +475,54 @@ const UI = {
   },
 
   _viewDesc(m) {
-    return m === 'first' ? '계속 카트 좌석 시점' : '부스트·큰 낙하 때만 잠깐 1인칭';
+    return t(m === 'first' ? 'settings.view.firstDesc' : 'settings.view.thirdDesc');
   },
 
   _graphicsSummary() {
-    return `${this._qualityLabel()} · ${STYLES[StyleManager.current].label}`;
+    return `${t(`graphics.quality.${QualityManager.current}`)} · ${t(`graphics.style.${StyleManager.current}`)}`;
   },
 
-  /** 그래픽 팝업 — 품질(Low/Medium/High)과 스타일을 한곳에서. 각 선택지에 설명 한 줄, 스타일은 하늘/지면 색 미리보기 */
-  showGraphics() {
-    const Q = {
-      low: ['낮음', 'SE2 등 저사양용 — 그림자·블러 끔, 프레임 우선'],
-      medium: ['보통', '균형 — 가벼운 부스트 블러와 색보정'],
-      high: ['높음', '최고 — 실시간 그림자, 모션·방사형 블러, 색수차'],
-    };
-    const S = {
-      day: '선명한 하늘색 + 몽글몽글 구름, 밝고 캐주얼한 낮',
-      standard: '사실적인 조명 + 맑은 하늘(HDRI)',
-      toon: '단계형 음영 + 외곽선 + 노을빛 — 고속에서 형태가 가장 또렷',
-      pastel: '부드러운 단계형 음영 + 따뜻한 파스텔',
-    };
-    const preview = k => {
-      const st = STYLES[k];
-      const sky = st.sky ? `linear-gradient(180deg, ${st.sky.join(',')})` : 'linear-gradient(180deg, #4f8fe0, #cfe6ff)';
-      const g = st.ground || [1, 1, 1]; // 잔디 기본색(#5a9a3c)에 스타일 지면 색조를 곱한 색
-      const ground = `rgb(${[90, 154, 60].map((c, i) => Math.round(Math.min(255, c * g[i]))).join(',')})`;
-      return `<span class="gfx-preview" style="background:${sky}"><span style="background:${ground}"></span>${st.outline ? '<i></i>' : ''}</span>`;
-    };
-    const opt = (group, k, title, desc, on, extra = '') =>
-      `<button class="gfx-opt${on ? ' on' : ''}" data-group="${group}" data-value="${k}">${extra}<span><b>${title}</b><small>${desc}</small></span></button>`;
-    const el = this._modal('graphicsOverlay', `
-      <h2>그래픽</h2>
-      <div class="field"><span class="field-label">품질</span>
-        ${Object.entries(Q).map(([k, [t, d]]) => opt('quality', k, t, d, k === QualityManager.current)).join('')}</div>
-      <div class="field"><span class="field-label">스타일</span>
-        ${['day', 'toon', 'pastel', 'standard'].map(k => opt('style', k, STYLES[k].label, S[k] || '', k === StyleManager.current, preview(k))).join('')}</div>
-      <div class="actions"><button id="graphicsCloseBtn" class="btn primary wide">확인</button></div>
-    `, { solid: true });
-    el.querySelectorAll('.gfx-opt').forEach(b => b.addEventListener('click', () => {
-      const { group, value } = b.dataset;
-      el.querySelectorAll(`.gfx-opt[data-group="${group}"]`).forEach(x => x.classList.toggle('on', x === b));
-      if (group === 'quality') { QualityManager.setPreset(value); if (Game.scene) Game._applyQualitySettings(); }
-      else StyleManager.set(value);
-      const sum = document.getElementById('graphicsSummary');
-      if (sum) sum.textContent = this._graphicsSummary();
-    }));
-    document.getElementById('graphicsCloseBtn').addEventListener('click', () => el.remove());
+  /** 그래픽 팝업 — 화질·화면 스타일을 세그먼트로, 고른 항목의 설명을 아래에 */
+  showGraphics(onChange) {
+    const seg = (key, options, current) => `<div class="seg" role="radiogroup" data-setting="${key}">${options.map(([v, l]) =>
+      `<button class="seg-btn${v === current ? ' on' : ''}" role="radio" aria-checked="${v === current}" data-value="${v}" type="button">${l}</button>`).join('')}</div>`;
+    const sw = (key, on) => `<button class="switch" role="switch" aria-checked="${on}" data-setting="${key}" type="button"><span class="sw-text on">${t('common.on')}</span><span class="sw-text off">${t('common.off')}</span><span class="sw-knob"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12 10 17 19 7"/></svg></span></button>`;
+    const styles = ['day', 'toon', 'pastel', 'standard'];
+    const desc = () => `${t(`graphics.quality.${QualityManager.current}Desc`)}<br>${t(`graphics.style.${StyleManager.current}Desc`)}`;
+    const ctl = Popup.open({
+      id: 'graphicsOverlay', title: t('graphics.title'),
+      blocks: [
+        Popup.row(t('graphics.quality'), seg('quality', ['low', 'medium', 'high'].map(k => [k, t(`graphics.quality.${k}`)]), QualityManager.current)),
+        Popup.row(t('graphics.style'), seg('style', styles.map(k => [k, t(`graphics.style.${k}`)]), StyleManager.current)),
+        Popup.p(`<span id="gfxDesc">${desc()}</span>`),
+      ],
+      actions: [{ id: 'graphicsCloseBtn', label: t('common.ok'), primary: true, onClick: (e, c) => c.close() }],
+    });
+    ctl.el.querySelectorAll('.seg').forEach(group => group.querySelectorAll('.seg-btn').forEach(b => b.addEventListener('click', () => {
+      group.querySelectorAll('.seg-btn').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
+      if (group.dataset.setting === 'quality') { QualityManager.setPreset(b.dataset.value); if (Game.scene) Game._applyQualitySettings(); }
+      else StyleManager.set(b.dataset.value);
+      ctl.el.querySelector('#gfxDesc').innerHTML = desc();
+      if (onChange) onChange();
+    })));
   },
 
-  /** 서드파티 에셋 표기 — Kenney/Poly Haven 모두 CC0라 의무는 없지만 감사 표기 */
+  /** 서드파티 에셋 표기 — Kenney/Poly Haven 모두 CC0라 의무는 없지만 감사 표기. 글꼴은 OFL */
   showCredits() {
-    const el = this._modal('creditsOverlay', `
-      <h2>크레딧</h2>
-      <div class="credits-list">
-        <p><strong>떨어진다!!! RIDE IT</strong><br>chaechae studio</p>
-        <div class="tester-card"><small>TESTER</small><b>Chaewon</b></div>
-        <p><strong>3D 모델</strong><br>Coaster Kit · Nature Kit — <a href="https://kenney.nl" target="_blank" rel="noopener">Kenney.nl</a> (CC0)</p>
-        <p><strong>하늘 HDRI</strong><br>Kloofendal 43d Clear (Pure Sky) — Greg Zaal, <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a> (CC0)</p>
-        <p><strong>효과음</strong><br>환호 "Cheers", "OoOoOo" — Nocturnal_Vanguard<br>물소리 "40 CC0 water / splash / slime SFX" — rubberduck<br>(<a href="https://opengameart.org" target="_blank" rel="noopener">OpenGameArt.org</a>, CC0)<br>음성 Voiceover Pack — <a href="https://kenney.nl" target="_blank" rel="noopener">Kenney.nl</a> (CC0)<br>그 밖의 소리·배경음악은 Web Audio 합성</p>
-        <p><strong>엔진</strong><br>Babylon.js</p>
-      </div>
-      <div class="actions"><button id="creditsCloseBtn" class="btn primary wide">닫기</button></div>
-    `, { solid: true });
-    document.getElementById('creditsCloseBtn').addEventListener('click', () => el.remove());
+    const link = (href, text) => `<a href="${href}" target="_blank" rel="noopener">${text}</a>`;
+    Popup.open({
+      id: 'creditsOverlay', title: t('credits.title'),
+      blocks: [
+        Popup.raw(`<p><b>${t('credits.game')}</b><br>${t('credits.studio')}</p>`, 'popup-credit'),
+        Popup.raw(`<div class="tester-card"><small>${t('credits.tester')}</small><b>Chaewon</b></div>`),
+        Popup.raw(`<p><b>${t('credits.model')}</b><br>Coaster Kit · Nature Kit — ${link('https://kenney.nl', 'Kenney.nl')} (CC0)</p>`, 'popup-credit'),
+        Popup.raw(`<p><b>${t('credits.sky')}</b><br>Kloofendal 43d Clear (Pure Sky) — Greg Zaal, ${link('https://polyhaven.com', 'Poly Haven')} (CC0)</p>`, 'popup-credit'),
+        Popup.raw(`<p><b>${t('credits.sfx')}</b><br>${t('credits.sfxText')}</p>`, 'popup-credit'),
+        Popup.raw(`<p><b>${t('credits.font')}</b><br>${t('credits.fontText')}</p>`, 'popup-credit'),
+        Popup.raw(`<p><b>${t('credits.engine')}</b><br>Babylon.js</p>`, 'popup-credit'),
+      ],
+      actions: [{ id: 'creditsCloseBtn', label: t('common.close'), primary: true, onClick: (e, c) => c.close() }],
+    });
   },
 
   /** 피니쉬 아치 통과 큰 표시 — "LAP 2/3" / "FINAL LAP" / "FINISH!" */
@@ -612,45 +569,36 @@ const UI = {
 
   showLoadingOverlay() {
     this._setScreen(`
-      <div class="screen modal-overlay solid" id="loadingOverlay">
-        <div class="card loading-card">
-          ${LOGO(true)}
-          <div class="spinner"></div>
-          <p>코스터 준비 중...</p>
-        </div>
+      <div class="screen loading-screen" id="loadingOverlay">
+        <div class="spinner"></div>
+        <p>${t('loading.text')}</p>
       </div>
     `);
   },
 
   showLoadError(retryFn) {
-    this._setScreen(`
-      <div class="screen modal-overlay solid">
-        <div class="card">
-          <h2>불러오기 실패</h2>
-          <p>에셋을 불러오지 못했어요.<br>네트워크를 확인해주세요.</p>
-          <div class="actions"><button id="retryLoadBtn" class="btn primary wide">${ICONS.retry}다시 시도</button></div>
-        </div>
-      </div>
-    `);
-    document.getElementById('retryLoadBtn').addEventListener('click', retryFn);
+    this._setScreen('');
+    Popup.open({
+      id: 'loadErrorOverlay', title: t('loadError.title'), cancelable: false,
+      blocks: [Popup.p(t('loadError.text'), 'lead')],
+      actions: [{ id: 'retryLoadBtn', label: t('loadError.retry'), icon: ICONS.retry, primary: true, onClick: () => retryFn() }],
+    });
   },
 
   showPauseOverlay() {
-    this._modal('pauseOverlay', `
-      <div class="ribbon">일시정지</div>
-      <p>잠깐 쉬어가요</p>
-      <div class="actions">
-        <button id="resumeBtn" class="btn primary wide">${ICONS.play}계속하기</button>
-        <button id="pauseExitBtn" class="btn wide">${ICONS.list}스테이지 선택</button>
-      </div>
-    `);
-    document.getElementById('resumeBtn').addEventListener('click', () => Game.resumeGame());
-    document.getElementById('pauseExitBtn').addEventListener('click', () => Game.exitToStageSelect());
+    const name = (Game.track && Game.track.stageData && Game.track.stageData.name) || '';
+    this._pause = Popup.open({
+      id: 'pauseOverlay', title: t('pause.title'), cancelable: false,
+      blocks: [Popup.p(t('pause.stage', { name }), 'lead')],
+      actions: [
+        { id: 'pauseExitBtn', label: t('common.stageSelect'), icon: ICONS.list, onClick: () => Game.exitToStageSelect() },
+        { id: 'resumeBtn', label: t('pause.resume'), icon: ICONS.play, primary: true, onClick: () => Game.resumeGame() },
+      ],
+    });
   },
 
   hidePauseOverlay() {
-    const el = document.getElementById('pauseOverlay');
-    if (el) el.remove();
+    if (this._pause) { this._pause.close(); this._pause = null; }
   },
 
   showStartPrompt(name, motif, { tutorial = false, derail = false } = {}) {
@@ -951,25 +899,22 @@ const UI = {
     };
   },
 
-  /** 레일 이탈 3번 — 스테이지 실패(기록 저장 없음) */
+  /** 탈선을 다 써서 스테이지 실패 — 기록 저장 없음 */
   showFail(stageIndex) {
     const stageData = STAGES[stageIndex];
-    this._setScreen(`
-      <div class="screen modal-overlay" id="failScreen">
-        <div class="card result-card">
-          <div class="ribbon fail">실패…</div>
-          <div class="result-stage">${stageData.name}</div>
-          <div class="hearts big" aria-hidden="true">${'<i class="heart off">♥</i>'.repeat(DERAIL_HITS)}</div>
-          <p class="fail-text">레일에서 ${DERAIL_HITS}번 이탈했어요</p>
-          <div class="actions">
-            <button id="retryBtn" class="btn primary wide">${ICONS.retry}다시 도전</button>
-            <button id="stageSelectBtn" class="btn wide">${ICONS.list}스테이지 선택</button>
-          </div>
-        </div>
-      </div>
-    `);
-    document.getElementById('retryBtn').addEventListener('click', () => Game.loadStage(stageIndex));
-    document.getElementById('stageSelectBtn').addEventListener('click', () => this.showStageSelect(STAGES, i => Game.loadStage(i)));
+    const heart = '<svg class="heart-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.5-9.6A5.2 5.2 0 0 1 12 7.7a5.2 5.2 0 0 1 9.5 3.7C19.5 16.4 12 21 12 21z" stroke-linejoin="round"/></svg>';
+    this._setScreen('');
+    Popup.open({
+      id: 'failScreen', title: t('fail.title'), cancelable: false,
+      blocks: [
+        Popup.raw(`<div class="result-stage">${stageData.name}</div><div class="hearts-row">${heart.repeat(DERAIL_HITS)}</div>`, 'center'),
+        Popup.p(t('fail.text', { hearts: DERAIL_HITS }), 'lead'),
+      ],
+      actions: [
+        { id: 'stageSelectBtn', label: t('common.stageSelect'), icon: ICONS.list, onClick: () => this.showStageSelect(STAGES, i => Game.loadStage(i)) },
+        { id: 'retryBtn', label: t('common.retry'), icon: ICONS.retry, primary: true, onClick: () => Game.loadStage(stageIndex) },
+      ],
+    });
   },
 
   showResult(cart, stageIndex) {
@@ -981,7 +926,7 @@ const UI = {
     const rec = ProgressManager.record(stageData.id, score, sum.rank, cart.totalLaps, cart.derailEnabled);
     if (rec.newBest) AudioManager.playSample('voice_newbest', { volume: 0.6, delay: 0.9 });
     this._setScreen(`
-      <div class="screen modal-overlay" id="resultScreen">
+      <div class="screen result-screen" id="resultScreen">
         <div class="card result-card">
           <div class="ribbon">완주!</div>
           <div class="result-stage">${stageData.name}</div>

@@ -44,7 +44,7 @@ const Tutorial = {
     (this._listeners || []).forEach(([t, f]) => window.removeEventListener(t, f));
     this._listeners = [];
     this._clearFocus();
-    document.querySelectorAll('.tut-card-overlay').forEach(el => el.remove());
+    Popup.closeAll();
     this.active = false;
     this.hold = false;
     this.step = null;
@@ -241,29 +241,26 @@ const Tutorial = {
     if (hint) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
   },
 
-  /** 설명 카드 — 게임을 멈추고(hold) 확인 버튼(또는 Enter/Space)으로 계속 */
+  /** 설명 카드 — 게임을 멈추고(hold) 공통 팝업으로 보여 줌. 글이 길면 페이지로 나뉘고 마지막 페이지의 확인 버튼(Enter)으로 계속 */
   card(title, body, pic, onOk) {
     this.hold = true;
     if (this.game.input) this.game.input.blocked = true;
     this.banner(null);
     this._clearFocus();
-    const el = document.createElement('div');
-    el.className = 'screen modal-overlay tut-card-overlay';
-    el.id = 'tutCard';
-    el.innerHTML = `<div class="card tut-card"><div class="tut-step">${this._stepLabel}</div><h2>${title}</h2>${pic ? `<div class="tut-pic">${pic}</div>` : ''}<p>${body}</p>
-      <div class="actions"><button class="btn primary wide" id="tutOkBtn">해볼게요!</button></div></div>`;
-    (UI.root || document.body).appendChild(el);
-    const ok = () => {
-      window.removeEventListener('keydown', onKey);
-      el.remove();
-      this.hold = false;
-      if (this.game.input) this.game.input.blocked = false;
-      this.game.lastTime = performance.now(); this.game.accumulator = 0;
-      onOk && onOk();
-    };
-    const onKey = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ok(); } };
-    window.addEventListener('keydown', onKey);
-    el.querySelector('#tutOkBtn').addEventListener('click', ok);
+    Popup.open({
+      id: 'tutCard', title, meta: this._stepLabel, cancelable: false,
+      blocks: [...(pic ? [Popup.fig(pic)] : []), Popup.p(body)],
+      actions: [{
+        id: 'tutOkBtn', label: t('tutorial.ok'), primary: true,
+        onClick: (e, c) => {
+          c.close();
+          this.hold = false;
+          if (this.game.input) this.game.input.blocked = false;
+          this.game.lastTime = performance.now(); this.game.accumulator = 0;
+          onOk && onOk();
+        },
+      }],
+    });
   },
 
   /** 강조: 대상들 둘레 깜빡이는 테두리 + finger 대상 위 손가락 아이콘 */

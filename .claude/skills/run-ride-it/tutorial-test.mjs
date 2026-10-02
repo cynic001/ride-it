@@ -58,7 +58,15 @@ async function run(browser, mode) {
       return !(cx >= a.left && cx <= a.right && cy >= a.top && cy <= a.bottom) || b.right > innerWidth + 8 || b.bottom > innerHeight + 8; });
     return { ok: !bad.length, sels: f.sels, bad, rects: bad.map((sel, i) => { const t = document.querySelector(sel).getBoundingClientRect(), r = rings[f.sels.indexOf(sel)].getBoundingClientRect(); return [t.left, t.top, t.right, t.bottom, r.left, r.top, r.right, r.bottom].map(Math.round); }), ih: innerHeight };
   });
-  const okCard = async () => { if (touch) await tap('#tutOkBtn'); else await page.keyboard.press('Enter'); };
+  // 설명 카드는 글이 길면 페이지로 나뉨 — 확인 버튼이 보일 때까지 '다음'(키보드는 Enter)을 누름
+  const okCard = async () => {
+    for (let i = 0; i < 12; i++) {
+      if (!(await page.$('#tutCard'))) return;
+      if (touch) { const ok = await page.$('#tutOkBtn'); if (ok && await ok.isVisible()) { await tap('#tutOkBtn'); return; } await tap('#tutCard .popup-next'); }
+      else await page.keyboard.press('Enter');
+      await sleep(120);
+    }
+  };
   // 밸런스: 커브 방향(이 트랙은 오른쪽) 버튼/키 누르고 있기
   const leanDown = async () => { if (touch) { const [x, y] = await center('#leanRightBtn'); await tStart(1, x, y); } else await page.keyboard.down('ArrowRight'); };
   const leanUp = async () => { if (touch) await tEnd(1); else await page.keyboard.up('ArrowRight'); };
@@ -74,6 +82,7 @@ async function run(browser, mode) {
     await tap('#titleScreen');
     await page.waitForSelector('#tutorialAsk', { timeout: 10000 });
     if (mode === 'keyboard') await shot('00_ask');
+    for (let i = 0; i < 6 && !(await page.locator('#tutAskYes').isVisible().catch(() => false)); i++) await tap('.popup-next'); // 권유 팝업도 가로에서는 페이지로 나뉨
     await tap('#tutAskYes');
     await page.waitForSelector('#tutBanner.on', { timeout: 30000 });
     await sleep(500);
@@ -196,6 +205,7 @@ async function run(browser, mode) {
       check(`${tag} skip → stage select, tutorial ended, nothing saved`, await page.evaluate(() => !Tutorial.active && !Game.tutorialMode && !localStorage.getItem('rc_progress')));
       // 재진입: 설정 → 튜토리얼 다시 하기
       await tap('#settingsBtn');
+      for (let i = 0; i < 8 && !(await page.locator('#settingsTutorialBtn').isVisible().catch(() => false)); i++) await tap('.popup-next'); // 설정 팝업은 페이지로 나뉨
       await tap('#settingsTutorialBtn');
       await page.waitForSelector('#tutBanner.on', { timeout: 30000 });
       check(`${tag} settings → tutorial re-entry`, await page.evaluate(() => Tutorial.active && Tutorial.step === 'start'));
