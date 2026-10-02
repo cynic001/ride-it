@@ -377,7 +377,7 @@ async function main() {
     await multiTouchTest(browser, base, pageErrors);
 
     // 진행 저장(D): 새로고침 후에도 클리어 배지/최고 기록이 남아 있어야 함
-    const prog = await page.evaluate(() => JSON.parse(localStorage.getItem('rc_progress') || '{}'));
+    const prog = await page.evaluate(() => JSON.parse(localStorage.getItem('rc_progress_v2') || '{}'));
     check('progress saved', Object.keys(prog).length === STAGES.length, JSON.stringify(prog));
     await page.reload({ waitUntil: 'load' });
     if (await page.locator('#titleScreen').count()) await page.locator('#titleScreen').click();

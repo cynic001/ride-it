@@ -134,6 +134,42 @@ section('tutlayout', async () => {
   }
 });
 
+// ── 4 랩 수 × 이탈 설정별 기록: 예전 기록은 1랩·이탈 ON으로 이전, 조건별 따로 저장·NEW BEST, 상세 화면 즉시 갱신, 결과 화면 OFF 표시
+section('progress', async () => {
+  const id = await (async () => { const t = await start({ browser: BROWSER, port: 8201 }); const v = await t.page.evaluate(() => STAGES[0].id); await t.close(); return v; })();
+  const old = JSON.stringify({ [id]: { cleared: true, best: 1234, rank: 'A', plays: 3 } });
+  const { page, errors, close } = await start({ browser: BROWSER, init: { rc_progress: old, rc_laps: '1', rc_derail: 'on' } });
+  const mig = await page.evaluate(id => ({ a: ProgressManager.get(id, 1, true), b: ProgressManager.get(id, 1, false), c: ProgressManager.get(id, 3, true), kept: !!localStorage.getItem('rc_progress'), n: ProgressManager.clearedCount }), id);
+  check('기록 이전: 예전 기록 = 1랩·이탈 ON, 다른 조건은 비어 있음, 원본 키 유지', mig.a && mig.a.best === 1234 && mig.a.rank === 'A' && !mig.b && !mig.c && mig.kept && mig.n === 1, JSON.stringify(mig));
+  const rec = await page.evaluate(id => {
+    const r1 = ProgressManager.record(id, 2000, 'B', 3, true); const r2 = ProgressManager.record(id, 900, 'C', 3, false); const r3 = ProgressManager.record(id, 800, 'C', 3, false); const r4 = ProgressManager.record(id, 3000, 'S', 3, false);
+    return { r1, r2, r3, r4, on3: ProgressManager.get(id, 3, true), off3: ProgressManager.get(id, 3, false), one: ProgressManager.get(id, 1, true), saved: !!localStorage.getItem('rc_progress_v2') };
+  }, id);
+  check('조건별 따로 저장: 3랩 ON/OFF 분리, 1랩 기록 그대로', rec.on3.best === 2000 && rec.off3.best === 3000 && rec.one.best === 1234 && rec.saved, JSON.stringify(rec));
+  check('NEW BEST는 같은 조건 안에서만 (첫 클리어 / 낮은 점수 아님 / 높은 점수)', rec.r1.firstClear && rec.r2.firstClear && !rec.r3.newBest && rec.r4.newBest, JSON.stringify([rec.r1, rec.r2, rec.r3, rec.r4]));
+  // 상세 화면: 랩·이탈 바꾸면 그 조건 기록으로
+  await page.evaluate(() => UI.showStageDetail(0)); await page.waitForTimeout(300);
+  const txt = () => page.evaluate(() => document.getElementById('detailStats').innerText.replace(/\s+/g, ' '));
+  const t1 = await txt();
+  await page.click('#lapSeg [data-laps="3"]'); const t3 = await txt();
+  await page.click('#derailTag'); const t3off = await txt();
+  const tag = await page.evaluate(() => document.getElementById('derailTag').textContent);
+  await page.click('#derailTag'); await page.click('#lapSeg [data-laps="1"]'); const t1b = await txt();
+  check('상세 화면: 1랩 ON → 1234', t1.includes('1,234') && t1.includes('1랩'), t1);
+  check('상세 화면: 3랩 ON → 2000, 3랩 이탈 OFF → 3000 + OFF 표시', t3.includes('2,000') && t3off.includes('3,000') && t3off.includes('이탈 OFF') && tag === '이탈 OFF', `${t3} | ${t3off} | ${tag}`);
+  check('상세 화면: 다시 1랩 ON → 1234 (설정 저장 유지)', t1b.includes('1,234') && await page.evaluate(() => localStorage.getItem('rc_derail')) === 'on', t1b);
+  // 결과 화면: 이탈 OFF 3랩 완주 → 같은 조건(3랩·OFF) 기록과 비교, OFF 표시
+  await page.evaluate(() => { DerailSettings.set(false); LapsManager.setLaps(2); Game.loadStage(0); }); await page.waitForSelector('#startBar');
+  const resTxt = await page.evaluate(() => {
+    const c = Game.cart; c.launch(1, 1); let n = 0;
+    while (!c.isFinished && n++ < 200000) { c.leanInput = 0; c.update(1 / 60); }
+    UI.showResult(c, 0); return { t: document.getElementById('resultScreen').innerText.replace(/\s+/g, ' '), laps: c.totalLaps, rec: ProgressManager.get(STAGES[0].id, 2, false) };
+  });
+  check('결과 화면: 2랩 · 이탈 OFF 표시 + 그 조건 기록 저장(첫 클리어)', resTxt.t.includes('2랩') && resTxt.t.includes('이탈 OFF') && resTxt.t.includes('첫 클리어') && resTxt.rec && resTxt.rec.plays === 1, JSON.stringify(resTxt).slice(0, 300));
+  check('progress page error 0', errors.length === 0, errors.join('|'));
+  await close();
+});
+
 for (const [name, fn] of sections) {
   if (ONLY && !ONLY.includes(name)) continue;
   try { await fn(); } catch (e) { check(`${name} 실행`, false, String(e.message).split('\n')[0]); }

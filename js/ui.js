@@ -41,31 +41,47 @@ const DerailSettings = {
 };
 window.DerailSettings = DerailSettings;
 
-// 스테이지별 진행 저장 — { [stage.id]: { cleared, best, rank, plays } } (인덱스가 아닌 id 기준이라 순서가 바뀌어도 유지)
+// 스테이지별 진행 저장 — rc_progress_v2: { [stage.id]: { "L{랩 수}-{on|off}": { cleared, best, rank, plays } } }
+// (랩이 많을수록 총점이 높고 이탈 OFF는 더 쉬워서 조건별로 따로 저장·비교. 인덱스가 아닌 id 기준이라 순서가 바뀌어도 유지.
+//  나중에 리더보드(Firebase)도 같은 축으로: leaderboards/{stageId}/{L{laps}-{on|off}})
 const RANK_ORDER = 'CBAS';
+const progressKey = (laps, derail) => `L${laps}-${derail ? 'on' : 'off'}`;
 const ProgressManager = {
   _data: (() => {
-    try { return JSON.parse(localStorage.getItem('rc_progress')) || {}; } catch (e) { return {}; }
+    try {
+      const v2 = JSON.parse(localStorage.getItem('rc_progress_v2'));
+      if (v2) return v2;
+      // 예전 기록(rc_progress, 1랩·이탈 개념 없음) → 1랩·이탈 ON 기록으로 옮김. 원본 키는 지우지 않음
+      const old = JSON.parse(localStorage.getItem('rc_progress')) || {};
+      const moved = {};
+      for (const id of Object.keys(old)) moved[id] = { [progressKey(1, true)]: old[id] };
+      return moved;
+    } catch (e) { return {}; }
   })(),
-  get(stageId) {
-    return this._data[stageId] || null;
+  /** 조건(랩 수, 이탈 설정)별 기록 — 기본은 지금 설정 */
+  get(stageId, laps = LapsManager.current, derail = DerailSettings.on) {
+    const st = this._data[stageId];
+    return (st && st[progressKey(laps, derail)]) || null;
   },
-  /** 완주 기록 반영 — 반환값 { firstClear, newBest }로 결과 화면 배지 결정 */
-  record(stageId, score, rank) {
-    const prev = this._data[stageId];
+  /** 완주 기록 반영 — 반환값 { firstClear, newBest }(같은 조건 기준)로 결과 화면 배지 결정 */
+  record(stageId, score, rank, laps, derail) {
+    const key = progressKey(laps, derail);
+    const st = this._data[stageId] || (this._data[stageId] = {});
+    const prev = st[key];
     const firstClear = !prev;
     const newBest = !!prev && score > prev.best;
-    this._data[stageId] = {
+    st[key] = {
       cleared: true,
       best: Math.max(score, prev ? prev.best : 0),
       rank: prev && RANK_ORDER.indexOf(prev.rank) > RANK_ORDER.indexOf(rank) ? prev.rank : rank,
       plays: (prev ? prev.plays : 0) + 1,
     };
-    try { localStorage.setItem('rc_progress', JSON.stringify(this._data)); } catch (e) { /* 저장 불가(사파리 개인정보 보호 모드 등) — 이번 세션 메모리에만 유지 */ }
+    try { localStorage.setItem('rc_progress_v2', JSON.stringify(this._data)); } catch (e) { /* 저장 불가(사파리 개인정보 보호 모드 등) — 이번 세션 메모리에만 유지 */ }
     return { firstClear, newBest };
   },
+  /** 어떤 조건으로든 클리어한 스테이지 수 */
   get clearedCount() {
-    return Object.values(this._data).filter(p => p.cleared).length;
+    return Object.values(this._data).filter(st => Object.values(st).some(p => p.cleared)).length;
   },
 };
 window.ProgressManager = ProgressManager;
@@ -272,7 +288,6 @@ const UI = {
   /** 스테이지 상세 — 모티브 설명, 최고 기록, 랩 수 선택, START */
   showStageDetail(i) {
     const s = STAGES[i];
-    const p = ProgressManager.get(s.id);
     this._setScreen(`
       <div class="screen stage-detail">
         ${MENU_BG}
@@ -286,12 +301,8 @@ const UI = {
           <h2>${s.name}</h2>
           <p class="detail-motif">${s.motif}</p>
           ${s.rollback ? `<p class="detail-warn">⚠ 뒤로 떨어지는 구간이 있어요${s.rollback.mode === 'mash' ? ' — 부스트 연타로 다시 올라가요!' : ' — 부스터가 다시 쏘아 올려줘요'}</p>` : ''}
-          <div class="detail-meta"><span class="stars">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><span>최고 ${Math.round(s.baseSpeedKmh * 1.5)}km/h</span><span class="derail-tag${DerailSettings.on ? ' on' : ''}" id="derailTag">이탈 ${DerailSettings.on ? 'ON' : 'OFF'}</span></div>
-          <div class="stats">
-            <div class="stat"><small>최고 랭크</small><b>${p ? p.rank : '-'}</b></div>
-            <div class="stat"><small>최고 점수</small><b>${p ? p.best.toLocaleString() : '-'}</b></div>
-            <div class="stat full"><small>플레이 ${p ? p.plays : 0}회</small></div>
-          </div>
+          <div class="detail-meta"><span class="stars">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><span>최고 ${Math.round(s.baseSpeedKmh * 1.5)}km/h</span><button class="derail-tag${DerailSettings.on ? ' on' : ''}" id="derailTag" aria-label="레일 이탈 켜기/끄기">이탈 ${DerailSettings.on ? 'ON' : 'OFF'}</button></div>
+          <div class="stats" id="detailStats"></div>
           <div class="field">
             <span class="field-label">랩 수</span>
             <div class="seg" id="lapSeg">
@@ -302,11 +313,26 @@ const UI = {
         </div>
       </div>
     `);
+    // 최고 기록 칸 — 랩 수·이탈 설정을 바꾸면 그 조건의 기록으로 즉시 갱신
+    const renderStats = () => {
+      const q = ProgressManager.get(s.id);
+      const cond = `${LapsManager.current}랩${DerailSettings.on ? '' : ' · 이탈 OFF'}`;
+      document.getElementById('detailStats').innerHTML = `
+        <div class="stat"><small>최고 랭크</small><b>${q ? q.rank : '-'}</b></div>
+        <div class="stat"><small>최고 점수</small><b>${q ? q.best.toLocaleString() : '-'}</b></div>
+        <div class="stat full"><small>${cond} · 플레이 ${q ? q.plays : 0}회</small></div>`;
+      const tag = document.getElementById('derailTag');
+      tag.textContent = `이탈 ${DerailSettings.on ? 'ON' : 'OFF'}`;
+      tag.classList.toggle('on', DerailSettings.on);
+    };
+    renderStats();
+    document.getElementById('derailTag').addEventListener('click', () => { DerailSettings.set(!DerailSettings.on); renderStats(); });
     document.getElementById('detailBackBtn').addEventListener('click', () => this.showStageSelect(STAGES, this._onStart));
     document.getElementById('settingsBtn').addEventListener('click', () => this.showSettings());
     this.root.querySelectorAll('#lapSeg .seg-btn').forEach(b => b.addEventListener('click', () => {
       LapsManager.setLaps(Number(b.dataset.laps));
       this.root.querySelectorAll('#lapSeg .seg-btn').forEach(x => x.classList.toggle('on', x === b));
+      renderStats();
     }));
     document.getElementById('stageStartBtn').addEventListener('click', () => {
       // 기울기 모드는 iOS 권한 요청이 사용자 탭 안에서만 가능 — START 탭을 그 제스처로 사용
@@ -936,7 +962,7 @@ const UI = {
     const sum = this._summarize(cart, stageData);
     const score = Math.round(cart.score);
     const bd = cart.scoreBreakdown;
-    const rec = ProgressManager.record(stageData.id, score, sum.rank);
+    const rec = ProgressManager.record(stageData.id, score, sum.rank, cart.totalLaps, cart.derailEnabled);
     if (rec.newBest) AudioManager.playSample('voice_newbest', { volume: 0.6, delay: 0.9 });
     this._setScreen(`
       <div class="screen modal-overlay" id="resultScreen">
@@ -945,7 +971,8 @@ const UI = {
           <div class="result-stage">${stageData.name}</div>
           <div class="rank ${sum.rank}">${sum.rank}</div>
           <div class="result-score"><small>SCORE</small>${score.toLocaleString()}</div>
-          ${rec.firstClear ? '<div class="new-best">첫 클리어!</div>' : rec.newBest ? '<div class="new-best">NEW BEST!</div>' : `<div class="result-stage">최고 ${ProgressManager.get(stageData.id).best.toLocaleString()}</div>`}
+          ${rec.firstClear ? '<div class="new-best">첫 클리어!</div>' : rec.newBest ? '<div class="new-best">NEW BEST!</div>' : `<div class="result-stage">최고 ${ProgressManager.get(stageData.id, cart.totalLaps, cart.derailEnabled).best.toLocaleString()}</div>`}
+          <div class="result-cond">${cart.totalLaps}랩${cart.derailEnabled ? '' : ' · <span class="off-tag">이탈 OFF</span>'}</div>
           <div class="breakdown">
             ${[
               ['게이트', bd.gate],
