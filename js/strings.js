@@ -97,6 +97,16 @@ const STRINGS = {
   'credits.fontText': 'Noto Sans KR · Jua — SIL Open Font License 1.1',
   'credits.engine': '엔진',
 
+  // ── 그림 설명 ──
+  'diagram.target': '목표',
+  'diagram.knob': '내 노브',
+
+  // ── 주행 중 ──
+  'hud.balanceBar': '균형 바',
+  'hud.curveLeft': '◀ 왼쪽 커브',
+  'hud.curveRight': '오른쪽 커브 ▶',
+  'hud.fallbackBar': '바를 끌어 주세요',
+
   // ── 일시정지·불러오기·실패·튜토리얼 안내 ──
   'pause.title': '잠깐 쉬어가요',
   'pause.stage': '{name}',

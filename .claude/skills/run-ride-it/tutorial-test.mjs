@@ -68,7 +68,7 @@ async function run(browser, mode) {
     }
   };
   // 밸런스: 커브 방향(이 트랙은 오른쪽) 버튼/키 누르고 있기
-  const leanDown = async () => { if (touch) { const [x, y] = await center('#leanRightBtn'); await tStart(1, x, y); } else await page.keyboard.down('ArrowRight'); };
+  const leanDown = async () => { if (touch) { const r = await page.locator('#balRail').boundingBox(); await tStart(1, r.x + r.width * 0.85, r.y + r.height / 2); } else await page.keyboard.down('ArrowRight'); }; // 바 오른쪽(+0.7) 또는 → 키
   const leanUp = async () => { if (touch) await tEnd(1); else await page.keyboard.up('ArrowRight'); };
   const boost = async () => { if (touch) { const [x, y] = await center('#boostBtn'); await tStart(2, x, y); await sleep(30); await tEnd(2); } else await page.keyboard.press('ArrowUp'); };
   /** 다가오는 게이트의 판정 오차가 target초가 되는 순간 부스트(실제 입력) */
@@ -115,7 +115,7 @@ async function run(browser, mode) {
     await okCard();
     await sleep(300);
     const f2 = await focusOk();
-    check(`${tag} 2 balance: focus on gauge${touch ? ' + ◀▶' : ''}`, f2.ok && f2.sels.includes('#balGauge') && (!touch || f2.sels.includes('.lean-btns')), JSON.stringify(f2));
+    check(`${tag} 2 balance: focus on balance bar`, f2.ok && f2.sels.includes('#balGauge'), JSON.stringify(f2));
     await shot('02_balance_play');
     await waitFor(() => Game.cart.tScale === 0, 30000); // 그냥 두면 커브 85% 지점에서 멈춰 기다림
     await sleep(300);

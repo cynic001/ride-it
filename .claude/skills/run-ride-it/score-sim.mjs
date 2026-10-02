@@ -27,7 +27,7 @@ const SCALE = args.scale ? Number(args.scale) : null; // 게임 속도 배율 �
 const HOLD0 = !!args.hold0; // 실험: 정상 멈칫 끄기
 const SLOPPY = Number(args.sloppy ?? 0.25);        // 평균 플레이어가 커브마다 "엉성"하게 누를 확률(기본 25% — 기존 기준선)
 const D_SLOPPY = Number(args.dsloppy ?? 0.12);      // 레일 이탈 시뮬(derailSim)의 평균 플레이어: 이탈 규칙을 아는 플레이어는 커브의 12%만 놓친다고 가정(초보 25%는 failRateNovice)
-const DEVICE = args.device || 'button'; // 밸런스 입력 모델: button(◀▶, 기본) | keyboard | tilt — pad(한손 엄지 패드)는 13번에서 제거, 비교용으로만 남김
+const DEVICE = args.device || 'bar'; // 밸런스 입력 모델: bar(균형 바 드래그, 기본: 손가락 위치로 노브가 22/초로 따라감) | keyboard(← → 초당 1.2씩 이동) | tilt(기울기, 6/초) | button(예전 ◀▶ 0.3초 램프, 비교용으로만 남김)
 
 const server = http.createServer((req, res) => {
   const f = path.join(ROOT, decodeURIComponent(req.url.split('?')[0]));
@@ -96,17 +96,20 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE, SLOPPY, D_S
           if (time >= plan.pressUntil) { plan.pressOn = r() < (DEVICE === 'keyboard' ? 0.6 : 0.55); plan.pressUntil = time + 0.25; }
           press = plan.pressOn;
         }
-        const goal = press ? dirS : 0, stepA = 1 / 60 / 0.3;
-        cart.leanInput = goal > cart.leanInput ? Math.min(goal, cart.leanInput + stepA) : Math.max(goal, cart.leanInput - stepA);
+        const goal = press ? dirS : 0, upStep = DEVICE === 'keyboard' ? 1.2 / 60 : 1 / 60 / 0.3, downStep = 1 / 60 / 0.3; // 키보드는 누르는 동안 천천히(1.2/초), 놓으면 0.3초에 복귀
+        const cur = cart.leanInput;
+        if (goal === 0) cart.leanInput = cur > 0 ? Math.max(0, cur - downStep) : Math.min(0, cur + downStep);
+        else cart.leanInput = goal > cur ? Math.min(goal, cur + upStep) : Math.max(goal, cur - upStep);
       } else {
         // 패드/기울기: 같은 실력 = 같은 오차 모델(0.25초마다 새 오차, 60Hz 떨림 아님). 차이는 실제 input.js 추종 속도만(패드 18/s, 기울기 6/s)
-        if (time >= (plan.errUntil || 0)) { plan.errMul = plan.good ? 1 : 0.1 + r() * 1.2; plan.errAdd = gauss(r) * (plan.good ? 0.12 : 0.25); plan.errUntil = time + 0.25; }
+        // 바는 손가락으로 위치를 직접 정해 기울기보다 흔들림이 작다고 가정(좋은 플랜 σ 0.06, 엉성 0.15 — 기울기/버튼은 0.12/0.25)
+        if (time >= (plan.errUntil || 0)) { plan.errMul = plan.good ? 1 : 0.1 + r() * 1.2; plan.errAdd = gauss(r) * (plan.good ? (DEVICE === 'bar' ? 0.06 : 0.12) : (DEVICE === 'bar' ? 0.15 : 0.25)); plan.errUntil = time + 0.25; }
         let desired;
         if (model === 'perfect') desired = target;
         else if (reacting) desired = 0;
         else desired = target * plan.errMul + plan.errAdd;
         desired = Math.max(-1, Math.min(1, desired));
-        const follow = DEVICE === 'tilt' ? 6 : 18;
+        const follow = DEVICE === 'tilt' ? 6 : DEVICE === 'bar' ? 22 : 18;
         cart.leanInput = model === 'perfect' ? desired : cart.leanInput + (desired - cart.leanInput) * (1 - Math.exp(-follow / 60));
       }
       if (cart.rollback && cart.rollback.phase === 'mash') { mashAcc += mashRate / 60; while (mashAcc >= 1) { mashAcc -= 1; cart.mashTap(); } }

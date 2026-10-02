@@ -134,6 +134,7 @@ const LOGO = (small = false) => `
 // 부스트 타이밍 팝업(13번): 바깥 원 반지름 = POP_R0 × (1 − err / POP_RANGE) — err(지금 누르면 판정될 오차, 초)가 0인 순간 안쪽 원(POP_R0)과 겹침.
 // Good/Perfect 띠는 안쪽 원 둘레에 ±good/±perfect초에 해당하는 두께로 그림 → 판정값과 그림이 같은 식이라 어긋날 수 없음
 const POP_R0 = 30, POP_RANGE = 0.8; // viewBox 120 기준 반지름, 팝업이 뜨는 시점 = 중심 도달 0.8초 전
+const BAL_RING_C = 2 * Math.PI * 20; // 균형 바 노브 둘레 링(r=20) 길이 — 진행도 = stroke-dashoffset
 const DERAIL_HITS = 3; // cart.js DERAIL.maxHits와 같은 값(HUD 하트 개수)
 const JUDGE_LABEL = { perfect: 'PERFECT!', good: 'GOOD', miss: 'MISS' };
 const GATE_LABEL = { boost: 'BOOST', finish: 'FINISH' };
@@ -438,23 +439,19 @@ const UI = {
     AudioManager.playSample('cheer', { volume: 0.7 });
   },
 
-  /** 밸런스 게이지 읽는 법 그림(튜토리얼 카드·조작법 공용) — 오른쪽 커브 예시 */
+  /** 균형 바 읽는 법 그림(튜토리얼 카드·조작법 공용) — 오른쪽 커브 예시: 목표 ▼, 초록 띠(사선), 진한 Perfect 띠, 노브(노란 링 + 아래 화살표) */
   gaugeDiagram() {
-    return `<svg class="diagram" viewBox="0 0 300 150" role="img" aria-label="밸런스 게이지 읽는 법">
-      <text x="268" y="34" font-size="24" fill="#3ddc84" stroke="#141a33" stroke-width="4" paint-order="stroke">▶</text>
-      <text x="206" y="18" font-size="12" fill="#141a33" text-anchor="end">커브 방향</text>
-      <rect x="20" y="50" width="260" height="20" rx="6" fill="#6b7390" stroke="#141a33" stroke-width="2"/>
-      <rect x="167" y="52" width="111" height="16" fill="#5dff9a"/>
-      <rect x="165.5" y="52" width="3" height="16" fill="#0b3d22"/><polygon points="163,77 171,77 167,71" fill="#2fbf6b"/>
-      <rect x="186" y="53" width="52" height="14" rx="4" fill="#2563eb" stroke="#fff" stroke-width="2"/>
-      <polygon points="200,34 216,34 208,46" fill="#ffb80d" stroke="#141a33" stroke-width="1.5"/>
-      <rect x="206.5" y="44" width="3" height="28" fill="#ffb80d" stroke="#141a33" stroke-width="1"/>
-      <rect x="20" y="78" width="260" height="8" rx="4" fill="#c9d0e4"/><rect x="20" y="78" width="170" height="8" rx="4" fill="#3ddc84"/>
-      <line x1="150" y1="70" x2="150" y2="76" stroke="#141a33" stroke-width="2"/>
-      <text x="150" y="44" font-size="12" fill="#141a33" text-anchor="end">내 기울기 ▼</text>
-      <text x="20" y="104" font-size="12" fill="#141a33">아래 막대 = 1.5초 유지 진행도</text>
-      <text x="280" y="122" font-size="12" fill="#1f8a4c" text-anchor="end">초록 = 성공(최소선부터 끝까지, 더 기울여도 OK)</text>
-      <text x="280" y="140" font-size="12" fill="#2563eb" text-anchor="end">파란 띠 = Perfect(보너스)</text>
+    return `<svg class="diagram" viewBox="0 0 300 120" role="img" aria-label="${t('hud.balanceBar')}">
+      <defs><pattern id="gdStripe" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="#168A4C"/><rect width="5" height="10" fill="#2BAA68"/></pattern></defs>
+      <rect x="10" y="44" width="280" height="48" rx="24" fill="#E6DDC8" stroke="#141a33" stroke-width="2"/>
+      <rect x="150" y="56" width="112" height="24" rx="4" fill="url(#gdStripe)" stroke="#141a33" stroke-width="2"/>
+      <rect x="196" y="52" width="40" height="32" rx="4" fill="#0A3D22" stroke="#fff" stroke-width="2"/><rect x="196" y="52" width="40" height="32" rx="4" fill="none" stroke="#141a33" stroke-width="1"/>
+      <polygon points="216,12 228,12 222,26" fill="#141a33"/><rect x="220.5" y="8" width="3" height="26" fill="#141a33"/>
+      <circle cx="110" cy="68" r="22" fill="#F1EBDD" stroke="#141a33" stroke-width="2"/><circle cx="110" cy="68" r="26" fill="none" stroke="#FFB80D" stroke-width="4"/>
+      <polygon points="103,102 117,102 110,92" fill="#141a33"/>
+      <text x="110" y="75" font-size="20" text-anchor="middle" fill="#141a33" font-weight="700">●</text>
+      <text x="222" y="104" font-size="14" text-anchor="middle" fill="#141a33" font-weight="700">${t('diagram.target')}</text>
+      <text x="110" y="118" font-size="14" text-anchor="middle" fill="#141a33" font-weight="700">${t('diagram.knob')}</text>
     </svg>`;
   },
 
@@ -658,7 +655,7 @@ const UI = {
     this._hud = {
       speed: $('speedLabel'), speedo: $('speedo'), comboMult: $('comboMult'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'), lap: $('lapLabel'),
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'),
-      bal: $('balGauge'), balDir: $('balDir'), balBand: $('balBand'), balPerfect: $('balPerfect'), balCursor: $('balCursor'), balMin: $('balMin'), balMinTick: $('balMinTick'), balProg: $('balProg'), balResult: $('balResult'),
+      bal: $('balGauge'), balDir: $('balDir'), balBand: $('balBand'), balPerfect: $('balPerfect'), balKnob: $('balKnob'), balTarget: $('balTarget'), balRing: $('balRing'), balResult: $('balResult'), balLast: null,
       pop: $('gatePop'), popLabel: $('gatePopLabel'), popGood: $('gatePopGood'), popPerfect: $('gatePopPerfect'), popRing: $('gatePopRing'), popResult: $('gatePopResult'), popFlash: $('gatePopFlash'), popKey: null, popResultUntil: 0, popPrevErr: null, popTick: 0,
       judge: $('judgeToast'), hearts: $('hearts'), lastDerails: 0,
       rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
@@ -704,10 +701,10 @@ const UI = {
       if (dc) dc.classList.add('on');
     };
     if (this._fallbackHandler) window.removeEventListener('control-fallback', this._fallbackHandler);
-    this._fallbackHandler = () => { // 기울기 센서 불가 → ◀ ▶ 버튼 표시 + 짧은 신호
+    this._fallbackHandler = () => { // 기울기 센서 불가 → 바 끌기로 전환 + 짧은 신호
       const dc = $('driveControls');
       if (dc) dc.classList.remove('tilt');
-      this.flashSignal('◀ ▶ 버튼으로');
+      this.flashSignal(t('hud.fallbackBar'));
     };
     window.addEventListener('control-fallback', this._fallbackHandler);
     // 게이트 판정 결과 = 타이밍 팝업 자리에 크게(게이트 없는 곳의 탭 = 'none'은 표시하지 않음)
@@ -731,21 +728,20 @@ const UI = {
     window.addEventListener('balance-judge', this._balJudgeHandler);
   },
 
-  /** 주행 조작 DOM — 왼쪽 아래 ◀ ▶(기울기 모드면 숨김), 오른쪽 아래 BOOST. 발사 전에는 숨겨 두고(스타트 바가 하단 중앙 사용)
+  /** 주행 조작 DOM — 왼쪽 아래 균형 바(손으로 끌기 / 기울기·키보드는 노브가 따라 움직임), 오른쪽 아래 BOOST. 발사 전에는 숨겨 두고(스타트 바가 하단 중앙 사용)
    * cart-launched에서 표시. 두 영역은 화면 양 끝(엄지 위치)에 붙이고 가운데를 비워 손가락이 겹치지 않게 */
   _driveControlsHTML() {
     const tilt = ControlSettings.mode === 'tilt';
     return `<div class="drive-controls twohand${tilt ? ' tilt' : ''}" id="driveControls">
       <div class="ctl-left" id="ctlLeft">
-        <div class="bal-gauge" id="balGauge" aria-hidden="true">
-          <div class="bal-dir" id="balDir"></div>
-          <div class="bal-result" id="balResult"></div>
-          <div class="bal-bar"><div class="bal-band" id="balBand"></div><div class="bal-min" id="balMin"></div><div class="bal-perfect" id="balPerfect"></div><i class="bal-zero"></i></div>
-          <div class="bal-min-tick" id="balMinTick"></div>
-          <div class="bal-cursor" id="balCursor"></div>
-          <div class="bal-prog"><div class="bal-prog-fill" id="balProg"></div></div>
+        <div class="bal-bar${tilt ? ' locked' : ''}" id="balGauge" role="slider" aria-label="${t('hud.balanceBar')}" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0">
+          <div class="bal-top"><span class="bal-dir" id="balDir"></span><span class="bal-result" id="balResult"></span></div>
+          <div class="bal-track" id="balTrack"><div class="bal-rail" id="balRail">
+            <div class="bal-band" id="balBand"></div><div class="bal-perfect" id="balPerfect"></div><i class="bal-zero"></i>
+            <i class="bal-target" id="balTarget"></i>
+            <div class="bal-knob" id="balKnob"><svg class="bal-ring" viewBox="0 0 50 50" aria-hidden="true"><circle class="base" cx="25" cy="25" r="20"/><circle class="prog" id="balRing" cx="25" cy="25" r="20"/></svg><b class="bal-state" aria-hidden="true"></b></div>
+          </div></div>
         </div>
-        <div class="lean-btns"><button class="ctl-btn lean" id="leanLeftBtn" aria-label="왼쪽으로 기울이기">◀</button><button class="ctl-btn lean" id="leanRightBtn" aria-label="오른쪽으로 기울이기">▶</button></div>
       </div>
       <div class="ctl-right" id="ctlRight"><button class="ctl-btn boost" id="boostBtn">BOOST</button></div>
     </div>`;
@@ -800,9 +796,13 @@ const UI = {
       const overall = ((cart.currentLap - 1) + Math.min(1, cart.t)) / cart.totalLaps;
       h.progress.style.width = `${(overall * 100).toFixed(1)}%`;
 
-      // 밸런스 게이지(13번): 회색 바 = −1(왼쪽 끝)~+1(오른쪽 끝). 초록 띠 = 성공 범위(최소선~커브 쪽 끝), 파란 띠(흰 테두리) = Perfect,
-      // 삼각형 커서 + 세로선 = 지금 내 기울기, 아래 막대 = holdSec초 연속 유지 진행도(범위를 벗어나면 즉시 0)
+      // 균형 바: 노브 = 지금 내 입력값(−1~1, 손/키보드/기울기 모두 같은 바에 표시). 커브 구간이면 목표 ▼ · 성공 띠(초록 + 사선 무늬 + 테두리) ·
+      // 그 안의 Perfect 띠(더 진한 색 + 흰 테두리) · 방향 글자가 나타나고, 노브 둘레 링 = holdSec초 연속 유지 진행도(벗어나면 즉시 0)
       const pct = v => (Math.max(-1, Math.min(1, v)) + 1) * 50;
+      const inp = window.Game && Game.input;
+      h.bal.classList.toggle('locked', !!inp && (inp.mode === 'tilt' || inp._keyLean() !== 0));
+      h.balKnob.style.left = `${pct(cart.leanInput).toFixed(1)}%`;
+      h.bal.setAttribute('aria-valuenow', cart.leanInput.toFixed(2));
       const bs = cart.launched && !cart.rollback ? cart.balanceState : null;
       if (bs) {
         const a = pct(bs.dir * bs.minLean), b = pct(bs.dir);
@@ -811,17 +811,16 @@ const UI = {
         const p0 = pct(bs.dir * Math.max(bs.minLean, bs.target - bs.perfectRange)), p1 = pct(bs.dir * Math.min(1, bs.target + bs.perfectRange));
         h.balPerfect.style.left = `${Math.min(p0, p1).toFixed(1)}%`;
         h.balPerfect.style.right = `${(100 - Math.max(p0, p1)).toFixed(1)}%`;
-        h.balMin.style.left = h.balMinTick.style.left = `${a.toFixed(1)}%`;
-        h.balCursor.style.left = `${pct(cart.leanInput).toFixed(1)}%`;
-        h.balProg.style.width = `${(bs.progress * 100).toFixed(1)}%`;
-        h.balDir.textContent = bs.dir < 0 ? '◀' : '▶';
-        h.balDir.classList.toggle('right', bs.dir > 0);
+        h.balTarget.style.left = `${pct(bs.dir * bs.target).toFixed(1)}%`;
+        h.balRing.style.strokeDashoffset = (BAL_RING_C * (1 - Math.max(0, Math.min(1, bs.progress)))).toFixed(1);
+        if (h.balLast !== bs.dir) { h.balDir.textContent = t(bs.dir < 0 ? 'hud.curveLeft' : 'hud.curveRight'); h.balDir.classList.toggle('right', bs.dir > 0); h.balLast = bs.dir; }
         h.bal.classList.toggle('in', bs.inBand);
         h.bal.classList.toggle('perfect', bs.inBand && bs.perfectNow);
         h.bal.classList.toggle('done', !!bs.done);
-        h.bal.classList.add('on');
+        h.bal.classList.add('active');
       } else {
-        h.bal.classList.remove('on', 'in', 'perfect', 'done');
+        h.bal.classList.remove('active', 'in', 'perfect', 'done');
+        h.balLast = null;
       }
 
       // 부스트 타이밍 팝업: 다가오는 게이트(중심까지 POP_RANGE초 이내)에서 등장, 바깥 원이 줄어 안쪽 원과 겹치는 순간 = 정타.

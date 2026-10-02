@@ -66,21 +66,22 @@ const Tutorial = {
   /** 단계별 안내 문구(입력 환경별) */
   _text(key) {
     const k = this.kind();
-    const lean = { keyboard: '<b>← →</b> 키', tilt: '<b>폰을 좌우로 기울여</b>', touch: '왼쪽 아래 <b>◀ ▶</b>' }[k];
+    const lean = { keyboard: '<b>← →</b> 키로', tilt: '<b>폰을 기울여서</b>', touch: '왼쪽 아래 <b>바</b>를 끌어서' }[k];
+    const hold = this.track.stageData.balance.holdSec; // 스테이지마다 다른 유지 시간(코드 값)
     const boost = k === 'keyboard' ? '<b>↑</b> 또는 <b>Space</b>' : '오른쪽 아래 <b>BOOST</b>';
     return {
-      start: k === 'keyboard' ? '<b>↓</b>를 누르고 있다가 <b>↑</b>로 출발!' : '스타트 바를 <b>아래로 당겼다가 위로 휙</b> 밀어 올려요',
-      balanceCard: `커브에선 ${lean}${k === 'tilt' ? '서' : '로'} <b>▼ 커서</b>를 <b>초록 띠</b> 안에 넣고 <b>1.5초</b> 버텨요. 파란 띠(Perfect)면 보너스!<small class="tut-note">실패하면 레일에서 이탈할 수 있어요 (설정에서 끌 수 있어요)</small>`,
-      balanceBanner: '초록 띠 안에서 1.5초!',
-      balanceHint: `커서(▼)를 초록 띠 안으로! ${lean}`,
+      start: k === 'keyboard' ? '<b>↓</b> 누르고 있다가 <b>↑</b>로 출발!' : '<b>아래로 당겼다가 위로</b> 확 밀어요',
+      balanceCard: `커브에서는 ${lean} <b>노브</b>를 <b>초록 띠</b> 안에 두세요. <b>${hold}초</b> 동안 있으면 성공! 진한 띠는 PERFECT예요.<small class="tut-note">실패하면 레일에서 탈선할 수 있어요 (설정에서 끌 수 있어요)</small>`,
+      balanceBanner: `노브를 초록 띠에 ${hold}초!`,
+      balanceHint: `노브를 초록 띠 안으로!`,
       boostCard: `<b>바깥 원이 안쪽 원과 겹치는 순간</b> ${boost}!`,
-      boostBanner: `원이 겹칠 때 ${boost}`,
+      boostBanner: `링이 닿을 때 ${boost}`,
       comboCard: `이번엔 동시에! 밸런스를 유지하면서 원이 겹칠 때 ${boost}.`,
-      comboBanner: '밸런스 유지 + 부스트',
+      comboBanner: '바 유지 + 부스트!',
       rollbackCard: `언덕에서 <b>뒤로 미끄러져요!</b> ${boost}를 <b>빠르게 연타</b>하면 올라가요.`,
-      rollbackBanner: `${boost} 연타!`,
+      rollbackBanner: `${boost} 마구 누르기!`,
       finishCard: '<b>피니쉬 아치</b>를 지나면 완주! 원이 겹칠 때 누르면 보너스 점수!',
-      finishBanner: '아치를 통과하면 완주!',
+      finishBanner: '결승선을 지나면 끝!',
     }[key];
   },
 
@@ -126,10 +127,10 @@ const Tutorial = {
       const seg = S[1];
       if (!this._carded && this._secTo(seg.tStart) <= TUT_CARD_LEAD) {
         this._carded = true;
-        this.card('밸런스 게이지 읽는 법', this._text('balanceCard'), UI.gaugeDiagram(), () => {
+        this.card('균형 바 읽는 법', this._text('balanceCard'), UI.gaugeDiagram(), () => {
           c.tScale = TUT_SLOW;
           this.banner(this._text('balanceBanner'));
-          this.focus(['#balGauge', this.kind() === 'touch' ? '.lean-btns' : null].filter(Boolean), this.kind() === 'touch' ? this._dirBtn(seg) : '#balGauge');
+          this.focus(['#balGauge'], '#balKnob'); // 손가락 아이콘은 노브 위
         });
       }
       // 구간 85%까지 못 채우면 그 자리에서 기다림(구간을 벗어나지 않으니 Miss 없음) + 힌트
@@ -174,8 +175,6 @@ const Tutorial = {
     }
   },
 
-  /** 커브 방향 버튼(◀/▶) — 손가락 아이콘 위치 */
-  _dirBtn(seg) { return seg.curveDirection === 'left' ? '#leanLeftBtn' : '#leanRightBtn'; },
 
   _onBalance(result) {
     if (this.step !== 'balance' || !this._carded || result === 'miss') return;
@@ -234,7 +233,7 @@ const Tutorial = {
     const el = document.getElementById('tutBanner');
     if (!el) return;
     if (!html) { el.classList.remove('on'); return; }
-    el.innerHTML = `<small>${this._stepLabel || ''}</small>${html}`;
+    el.innerHTML = `<small>${this._stepLabel || ''}</small><span class="tb-text">${html}</span>`;
     el.classList.toggle('hint', hint);
     el.classList.toggle('top', this.step === 'start');
     el.classList.add('on');

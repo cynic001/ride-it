@@ -127,7 +127,7 @@ section('tutlayout', async () => {
       return out;
     });
     for (const c of cards) check(`tutorial ${name} 카드 ${c.key}: 화면 안, 글 16px 이상`, c.top >= 0 && c.bottom <= c.H && !c.scroll && c.fs >= 16, JSON.stringify(c));
-    const note = await page.evaluate(() => Tutorial._text('balanceCard').includes('레일에서 이탈할 수 있어요 (설정에서 끌 수 있어요)'));
+    const note = await page.evaluate(() => Tutorial._text('balanceCard').includes('탈선할 수 있어요 (설정에서 끌 수 있어요)'));
     check(`tutorial ${name} 밸런스 카드에 이탈 안내 한 줄`, note);
     check(`tutorial ${name} page error 0`, errors.length === 0, errors.join('|'));
     await close();
@@ -217,9 +217,13 @@ section('overlap', async () => {
     const { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_derail: 'on' } });
     await loadStage(page, 0);
     await page.evaluate(() => window.dispatchEvent(new CustomEvent('cart-launched', { detail: { strength: 1, flickMultiplier: 1 } })));
-    const r = await page.evaluate(() => {
+    await page.evaluate(() => {
       document.getElementById('gatePop').classList.add('on'); document.getElementById('balGauge').classList.add('on');
       UI.showLapBanner('FINAL LAP', true); UI.flashSignal('GOOD', 'good'); UI._showPopResult('perfect');
+    });
+    await page.waitForTimeout(100);
+    const r = await page.evaluate(() => {
+      document.querySelectorAll('.lap-banner, #judgeToast, #gatePopResult').forEach(e => { e.style.animation = 'none'; e.style.opacity = '1'; e.style.transform = e.id === 'gatePopResult' ? 'translate(-50%, -50%)' : 'none'; }); // 팝 애니메이션(확대·회전)을 멈춰 자리 잡은 모습으로 측정
       const R = (sel, pad = 0) => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width }; };
       const popLabel = R('#gatePop'), lbl = R('#gatePopLabel');
       const pop = { l: popLabel.l, r: popLabel.r, t: popLabel.t, b: Math.max(popLabel.b, lbl ? lbl.b : 0) };
@@ -258,22 +262,19 @@ section('input', async () => {
   const launched = await page.evaluate(() => ({ l: Game.cart.launched, sp: Game.cart.speed }));
   check('입력: 스타트 바 당겼다 밀어 올리기 → 발사', launched.l && launched.sp > 3, JSON.stringify(launched));
   await page.waitForSelector('#boostBtn');
-  // 밸런스: ▶ 누르고 있으면 0.3초 램프로 1.0, 떼면 0
-  await ev('#leanRightBtn', 'pointerdown', 1); await page.waitForTimeout(450);
+  // 균형 바: 손가락 위치로 노브가 따라가고(+0.7), 다른 손가락 BOOST를 눌렀다 떼도 유지, 두 번째 손가락이 바를 눌러도 무시, 첫 손가락을 떼면 0.3초에 0
+  const rail = await page.evaluate(() => { const b = document.getElementById('balRail').getBoundingClientRect(); return { l: b.left, w: b.width, y: b.top + b.height / 2 }; });
+  const X = v => rail.l + (v + 1) / 2 * rail.w;
+  await ev('#balGauge', 'pointerdown', 1, X(0), rail.y); await ev('#balGauge', 'pointermove', 1, X(0.7), rail.y); await page.waitForTimeout(350);
   const lean1 = await page.evaluate(() => Game.cart.leanInput);
-  // 양손: 다른 손가락으로 BOOST를 누르고 뗌 — ▶는 유지되어야 함
   await ev('#boostBtn', 'pointerdown', 2); await page.waitForTimeout(80); await ev('#boostBtn', 'pointerup', 2); await page.waitForTimeout(150);
   const lean2 = await page.evaluate(() => Game.cart.leanInput);
-  await ev('#leanRightBtn', 'pointerup', 1); await page.waitForTimeout(450);
+  await ev('#balGauge', 'pointerdown', 3, X(-0.9), rail.y); await page.waitForTimeout(250);
   const lean3 = await page.evaluate(() => Game.cart.leanInput);
-  check('입력: ▶ 누르면 1.0까지, 다른 손가락 BOOST를 떼도 유지, 떼면 0', lean1 > 0.95 && lean2 > 0.95 && Math.abs(lean3) < 0.02, `${lean1.toFixed(2)} ${lean2.toFixed(2)} ${lean3.toFixed(2)}`);
-  // 두 손가락이 ◀ ▶를 동시에 눌러도 마지막 누른 쪽, 한쪽 떼면 남은 쪽
-  await ev('#leanLeftBtn', 'pointerdown', 1); await page.waitForTimeout(100); await ev('#leanRightBtn', 'pointerdown', 2); await page.waitForTimeout(450);
-  const both = await page.evaluate(() => Game.cart.leanInput);
-  await ev('#leanRightBtn', 'pointerup', 2); await page.waitForTimeout(800); // +1 → −1은 램프(0.3초에 1.0)로 약 0.6초
-  const left = await page.evaluate(() => Game.cart.leanInput);
-  await ev('#leanLeftBtn', 'pointerup', 1);
-  check('입력: ◀+▶ 동시 → 나중에 누른 ▶, ▶만 떼면 ◀ 유지', both > 0.9 && left < -0.9, `${both.toFixed(2)} ${left.toFixed(2)}`);
+  await ev('#balGauge', 'pointerup', 3, X(-0.9), rail.y);
+  await ev('#balGauge', 'pointerup', 1, X(0.7), rail.y); await page.waitForTimeout(450);
+  const lean4 = await page.evaluate(() => Game.cart.leanInput);
+  check('입력: 바 끌기 → +0.7, 다른 손가락 BOOST·바 터치는 영향 없음, 놓으면 0', Math.abs(lean1 - 0.7) < 0.06 && Math.abs(lean2 - 0.7) < 0.06 && Math.abs(lean3 - 0.7) < 0.06 && Math.abs(lean4) < 0.02, `${lean1.toFixed(2)} ${lean2.toFixed(2)} ${lean3.toFixed(2)} ${lean4.toFixed(2)}`);
   // 부스트 판정: 게이트가 정타일 때 BOOST 누름 → Perfect
   const near = await page.evaluate(() => {
     Game.engine.stopRenderLoop(); const c = Game.cart; let key = null, n = 0;
@@ -284,7 +285,7 @@ section('input', async () => {
   const gate = await page.evaluate(() => { const r = Game.cart._gateResults; return r.length ? r[r.length - 1].result : 'none'; });
   check('입력: BOOST 탭 정타 → perfect', near !== null && gate === 'perfect', `err=${near} → ${gate}`);
   // 회전: 가로로 바뀌면 눌려 있던 입력 해제
-  await ev('#leanRightBtn', 'pointerdown', 4); await page.waitForTimeout(100);
+  await ev('#balGauge', 'pointerdown', 4, X(0.7), rail.y); await page.waitForTimeout(150);
   await page.setViewportSize({ width: 667, height: 375 }); await page.waitForTimeout(500);
   const rel = await page.evaluate(() => ({ lean: Game.cart.leanInput, held: Game.input._btnPointers.size }));
   check('입력: 회전하면 눌려 있던 버튼 해제', rel.held === 0 && Math.abs(rel.lean) < 0.7, JSON.stringify(rel));

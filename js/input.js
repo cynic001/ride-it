@@ -5,12 +5,12 @@
  * 입력 레이어 분리 (SE2 등 작은 화면에서 겹치지 않도록 영역 분리):
  *  - 스타트 전: 화면 하단 중앙 "스타트 바" DOM 안에서만 — 아래로 당겨(pull, 힘 게이지) 위로 빠르게 밀어 올리면 발사.
  *    힘 = 당긴 거리 × 밀어 올린 속도(flick). 위로 밀지 않고 손을 떼면 발사 취소(바가 제자리로). 키보드: ↓ 누르고 있기 = 충전, ↑ = 발사
- *  - 주행 중(양손 조작으로 통일, 13번): 왼쪽 아래 ◀ ▶ = 밸런스(누르는 동안 0.3초 램프로 ±1.0, 떼면 0.3초에 0 — 톡톡 눌러 중간 값),
+ *  - 주행 중(양손 조작): 왼쪽 아래 균형 바 = 노브를 좌우로 끌어 leanInput(−1~1) 조절(손가락 위치에 노브가 거의 즉시 따라감, 놓으면 0.3초에 가운데로 복귀),
  *    오른쪽 아래 BOOST = 부스트(누르는 순간 시간 기준 판정, 뒤로 떨어지기 연타 구간에선 연타).
- *    설정에서 "기울기"를 켜면 ◀ ▶ 대신 폰 좌우 기울기 = 밸런스(출발 순간 각도 기준, 데드존 3°) — 센서 없음/권한 거부 시 ◀ ▶로 자동 전환.
- *    키보드(항상): ← → 밸런스, ↑ 또는 Space 부스트
- *  - 멀티터치: 손가락마다 pointerId로 따로 추적하고, 터치가 시작된 버튼에만 묶음(버튼 단위 setPointerCapture — 살짝 밖으로
- *    미끄러져도 유지). 한 손가락을 떼도 다른 손가락 입력은 그대로. 캡처가 실패해도 window의 pointerup/cancel이 그 pointerId만 해제
+ *    설정에서 "기울기"를 켜면 폰 좌우 기울기가 같은 바의 노브를 움직임(출발 순간 각도 기준, 데드존 3°, 손으로는 못 끎) — 센서 없음/권한 거부 시 바 끌기로 자동 전환.
+ *    키보드(항상): ← → 누르는 동안 노브가 천천히 이동(초당 1.2), ↑ 또는 Space 부스트, 키보드가 눌려 있는 동안엔 바를 손으로 못 끎
+ *  - 멀티터치: 손가락마다 pointerId로 따로 추적하고, 터치가 시작된 바/버튼에만 묶음(setPointerCapture — 바 밖으로 미끄러져도 드래그 유지,
+ *    캡처가 실패해도 window pointermove/up이 그 pointerId만 따라감). 한 손가락을 떼도 다른 손가락 입력은 그대로
  *  - 손 들기(에어타임)와 한손 엄지 패드는 13번에서 제거 — 패드 코드는 legacy/onehand-pad.js에 보관
  *  - 캔버스 자체는 입력을 받지 않음(예전 "캔버스 탭=게이트 / 길게 누르기=에어타임" 방식은 대체됨)
  */
@@ -25,7 +25,9 @@ const KEY_CHARGE_SECONDS = 0.8;    // 키보드 ↓를 이만큼 누르면 최�
 const KEY_FLICK_MULTIPLIER = 1.25; // 키보드 발사 flick(속도 정보가 없어 고정)
 const TILT = { deadzone: 3, full: 22, fallbackSec: 1.2 }; // 도(°) — 데드존 이하 무시, full°에서 최대 기울기
 const LEAN_FOLLOW = { direct: 18 }; // 기울기 leanInput 추종 속도(1/초) — 거의 즉시
-const LEAN_RAMP_SEC = 0.3; // 버튼(◀▶)/키보드(← →): 누르고 있으면 이 시간에 걸쳐 0→1.0, 떼면 같은 속도로 0 — 톡톡 눌러 중간 값 가능
+const BAR_FOLLOW = 22;       // 바 드래그: 손가락 위치로 노브가 따라가는 속도(1/초) — 거의 즉시지만 급격한 튐은 완화
+const KEY_LEAN_RATE = 1.2;   // 키보드 ← →: 누르는 동안 노브가 움직이는 속도(초당, 0→1.0에 약 0.83초)
+const LEAN_RETURN_SEC = 0.3; // 손/키를 떼면 이 시간에 걸쳐 가운데(0)로 부드럽게 복귀
 
 class InputController {
   /** @param {HTMLElement} startBarElement - 스타트 전 드래그를 받는 전용 DOM(ui.js가 렌더) */
@@ -49,8 +51,9 @@ class InputController {
     this.mode = mode === 'tilt' ? 'tilt' : 'twohand';
     this._leanTarget = 0;
     this._leanRate = LEAN_FOLLOW.direct;
-    this._btnPointers = new Map(); // pointerId → 'left'|'right'|'boost' — 손가락마다 그 손가락이 누른 버튼만 기억
-    this._leanOrder = [];          // 눌려 있는 ◀/▶ 손가락(pointerId) 순서 — 둘 다 누르면 나중에 누른 쪽
+    this._btnPointers = new Map(); // pointerId → 'boost' — 손가락마다 그 손가락이 누른 버튼만 기억
+    this._barPtr = null;           // 균형 바를 끌고 있는 손가락 { id, x }
+    this._rel = null;              // 놓은 뒤 가운데로 복귀 중인 상태 { from, t }
     this._keys = new Set();
     this.lastInputKind = null;     // 'touch' | 'mouse' | 'keyboard' — 튜토리얼 안내 문구 기준
     this.blocked = false;          // 튜토리얼 설명 카드가 떠 있는 동안 주행 입력 무시
@@ -100,9 +103,30 @@ class InputController {
       el.addEventListener('lostpointercapture', up, opt);
       el.addEventListener('contextmenu', e => e.preventDefault(), opt);
     };
-    bindBtn('leanLeftBtn', 'left');
-    bindBtn('leanRightBtn', 'right');
     bindBtn('boostBtn', 'boost');
+    // 균형 바: 바(패널) 어디를 눌러도 그 손가락의 x 위치로 노브가 이동 — 한 손가락만, 놓으면 0.3초에 가운데로
+    const bar = document.getElementById('balGauge');
+    if (bar) {
+      this._bar = bar;
+      this._rail = document.getElementById('balRail');
+      bar.addEventListener('pointerdown', e => {
+        if (this.state !== 'launched' || this.blocked || this.mode !== 'twohand' || this._keyLean() || this._barPtr) return;
+        e.preventDefault();
+        this.lastInputKind = e.pointerType === 'mouse' ? 'mouse' : 'touch';
+        try { bar.setPointerCapture(e.pointerId); } catch (err) { /* iOS Safari 대응 */ }
+        this._barPtr = { id: e.pointerId, x: e.clientX };
+        this._syncPressed();
+      }, opt);
+      const up = e => { if (this._barPtr && e.pointerId === this._barPtr.id) { this._barPtr = null; this._syncPressed(); } };
+      bar.addEventListener('pointerup', up, opt);
+      bar.addEventListener('pointercancel', up, opt);
+      bar.addEventListener('lostpointercapture', up, opt);
+      bar.addEventListener('contextmenu', e => e.preventDefault(), opt);
+      // 캡처가 안 되는 환경(바 밖으로 나간 손가락의 move/up)도 그 pointerId만 따라감
+      window.addEventListener('pointermove', e => { if (this._barPtr && e.pointerId === this._barPtr.id) this._barPtr.x = e.clientX; }, opt);
+      window.addEventListener('pointerup', up, opt);
+      window.addEventListener('pointercancel', up, opt);
+    }
     // 캡처가 실패해 다른 곳에서 손가락을 뗀 경우의 안전장치 — 그 pointerId만 해제(다른 손가락은 그대로)
     const anyUp = e => { if (this._btnPointers.has(e.pointerId)) this._release(e.pointerId); };
     window.addEventListener('pointerup', anyUp, opt);
@@ -259,7 +283,6 @@ class InputController {
   _press(pointerId, name) {
     this._btnPointers.set(pointerId, name);
     if (name === 'boost') this._boost();
-    else { this._leanOrder = this._leanOrder.filter(id => id !== pointerId); this._leanOrder.push(pointerId); }
     this._syncPressed();
   }
 
@@ -268,7 +291,6 @@ class InputController {
     const cur = this._btnPointers.get(pointerId);
     if (!cur || (name && cur !== name)) return;
     this._btnPointers.delete(pointerId);
-    this._leanOrder = this._leanOrder.filter(id => id !== pointerId);
     this._syncPressed();
   }
 
@@ -277,24 +299,25 @@ class InputController {
     if (this.state === 'pulling') this._onPullUp(); // 스타트 바를 당기던 중 회전 → 발사 취소(바 복귀)
     this._keyCharging = false;
     this._btnPointers.clear();
-    this._leanOrder = [];
+    this._barPtr = null;
     this._keys.clear();
     this._syncPressed();
   }
 
-  /** 눌린 버튼 표시 + 현재 ◀▶ 방향 */
+  /** 눌린 부스트 버튼·바 드래그 표시 */
   _syncPressed() {
-    const held = new Set(this._btnPointers.values());
-    for (const [id, name] of [['leanLeftBtn', 'left'], ['leanRightBtn', 'right'], ['boostBtn', 'boost']]) {
-      const el = document.getElementById(id);
-      if (el) el.classList.toggle('pressed', held.has(name));
-    }
+    const boost = document.getElementById('boostBtn');
+    if (boost) boost.classList.toggle('pressed', [...this._btnPointers.values()].includes('boost'));
+    if (this._bar) this._bar.classList.toggle('holding', !!this._barPtr);
   }
 
-  get _btnLean() {
-    const last = this._leanOrder[this._leanOrder.length - 1];
-    const name = last === undefined ? null : this._btnPointers.get(last);
-    return name === 'left' ? -1 : name === 'right' ? 1 : 0;
+  /** 키보드 ← → 방향(−1/0/1) */
+  _keyLean() { return (this._keys.has('ArrowRight') ? 1 : 0) - (this._keys.has('ArrowLeft') ? 1 : 0); }
+
+  /** 손가락 x → 바 값(−1~1): 노브 중심이 다니는 레일(#balRail) 기준 */
+  _valueAt(x) {
+    const r = (this._rail || this._bar).getBoundingClientRect();
+    return Math.max(-1, Math.min(1, ((x - r.left) / Math.max(1, r.width)) * 2 - 1));
   }
 
   _onDriveKey(e, down) {
@@ -322,23 +345,37 @@ class InputController {
     window.dispatchEvent(new CustomEvent('gate-result', { detail: { type: this.cart.lastGateType, result } }));
   }
 
-  /** main.js 고정 스텝마다(cart.update 전) — 버튼/키보드/기울기를 leanInput으로 합성 */
+  /** main.js 고정 스텝마다(cart.update 전) — 바 드래그/키보드/기울기를 leanInput으로 합성.
+   * 우선순위: 손가락 드래그 > 키보드(천천히 이동) > 기울기 > 아무것도 없으면 0.3초에 걸쳐 가운데 복귀 */
   update(dt) {
     if (this.state !== 'launched') return;
-    const keyLean = (this._keys.has('ArrowRight') ? 1 : 0) - (this._keys.has('ArrowLeft') ? 1 : 0);
-    const held = keyLean || this._btnLean;
-    if (this.mode === 'tilt' && !held) {
+    const c = this.cart;
+    const keyLean = this._keyLean();
+    if (this._barPtr && this.mode === 'twohand' && !keyLean) {
+      const target = this._valueAt(this._barPtr.x);
+      c.leanInput += (target - c.leanInput) * (1 - Math.exp(-dt * BAR_FOLLOW));
+      this._rel = null;
+      return;
+    }
+    if (keyLean) {
+      c.leanInput = Math.max(-1, Math.min(1, c.leanInput + keyLean * KEY_LEAN_RATE * dt));
+      this._rel = null;
+      return;
+    }
+    if (this.mode === 'tilt') {
       this._updateTilt();
       if (this.mode === 'tilt') { // 기울기: 지수 추종(거의 즉시)
-        this.cart.leanInput += (this._leanTarget - this.cart.leanInput) * (1 - Math.exp(-dt * this._leanRate));
+        c.leanInput += (this._leanTarget - c.leanInput) * (1 - Math.exp(-dt * this._leanRate));
+        this._rel = null;
         return;
       }
     }
-    // 버튼/키: 일정 속도(1/LEAN_RAMP_SEC)로 선형 램프 — 누르면 0.3초에 1.0, 떼면 0.3초에 0
-    const goal = held || 0;
-    const stepAmt = dt / LEAN_RAMP_SEC;
-    const cur = this.cart.leanInput;
-    this.cart.leanInput = goal > cur ? Math.min(goal, cur + stepAmt) : Math.max(goal, cur - stepAmt);
+    // 손을 뗐다: 놓은 순간의 값에서 0까지 0.3초 ease-out
+    if (Math.abs(c.leanInput) < 1e-4) { c.leanInput = 0; this._rel = null; return; }
+    if (!this._rel) this._rel = { from: c.leanInput, t: 0 };
+    this._rel.t += dt;
+    const u = Math.min(1, this._rel.t / LEAN_RETURN_SEC);
+    c.leanInput = this._rel.from * (1 - u * (2 - u));
   }
 
   _updateTilt() {
@@ -346,7 +383,7 @@ class InputController {
     if (!this._tiltInit) { this._tiltInit = true; this._tiltBase = InputController._gamma; this._tiltStart = now; } // 출발 순간 각도 = 정면
     const stale = !InputController._tiltSeenAt || now - InputController._tiltSeenAt > TILT.fallbackSec * 1000;
     if (InputController._tiltPermission === 'denied' || (stale && now - this._tiltStart > TILT.fallbackSec * 1000)) {
-      this.mode = 'twohand'; // 센서를 쓸 수 없음 → ◀ ▶ 버튼으로 자동 전환
+      this.mode = 'twohand'; // 센서를 쓸 수 없음 → 바 끌기로 자동 전환
       window.dispatchEvent(new CustomEvent('control-fallback', { detail: 'twohand' }));
       return;
     }

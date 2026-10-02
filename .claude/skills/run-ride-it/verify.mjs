@@ -236,53 +236,60 @@ async function main() {
       check(`${tag} booster assist`, asg.at > 0 && asg.r >= 0.6, `assist=${asg.at.toFixed(2)}s speed=${(asg.r * 100).toFixed(0)}% of base`);
       if (!launched) continue;
 
-      // 양손 조작(13번): 왼쪽 아래 ▶ 누르고 있기 = 밸런스(0.3초 램프), 떼면 중립 복귀
+      // 양손 조작: 왼쪽 아래 균형 바 = 노브를 끌어 −1~1 입력(손가락 위치로 거의 즉시), 놓으면 0.3초에 가운데로 복귀
       await page.waitForSelector('#driveControls.on');
-      const rb_ = await page.locator('#leanRightBtn').boundingBox();
+      const rail = await page.locator('#balRail').boundingBox();
       const bb = await page.locator('#boostBtn').boundingBox();
       const px = bb.x + bb.width / 2, py = bb.y + bb.height / 2; // 부스트 버튼 중심(아래 게이트 정타 탭에 사용)
-      await page.mouse.move(rb_.x + rb_.width / 2, rb_.y + rb_.height / 2); await page.mouse.down();
-      await sleep(450);
+      const barY = rail.y + rail.height / 2, barX = v => rail.x + (v + 1) / 2 * rail.width;
+      await page.mouse.move(barX(0), barY); await page.mouse.down();
+      await page.mouse.move(barX(0.6), barY, { steps: 4 }); await sleep(350);
       const lean = await page.evaluate(() => Game.cart.leanInput);
-      if (s === STAGES[0]) await shot(`${tag}_2b_lean_btn`);
-      await page.mouse.up();
-      await sleep(450);
+      if (s === STAGES[0]) await shot(`${tag}_2b_bar_drag`);
+      await page.mouse.move(barX(1.2), barY - 90, { steps: 4 }); await sleep(350); // 바 밖(위·오른쪽)으로 미끄러져도 드래그 유지, 값은 끝(1.0)에 고정
+      const leanOut = await page.evaluate(() => Game.cart.leanInput);
+      await page.mouse.up(); await sleep(150);
+      const leanMid = await page.evaluate(() => Game.cart.leanInput);
+      await sleep(400);
       const leanAfter = await page.evaluate(() => Game.cart.leanInput);
-      check(`${tag} ▶ hold = balance, release = neutral`, lean > 0.95 && Math.abs(leanAfter) < 0.01, `lean=${lean.toFixed(2)} → ${leanAfter.toFixed(2)}`);
+      check(`${tag} bar drag follows finger (0.6 → 1.0 even outside), release → returns to 0 in 0.3s`, Math.abs(lean - 0.6) < 0.06 && leanOut > 0.97 && leanMid > 0.05 && leanMid < 0.9 && Math.abs(leanAfter) < 0.01, `0.6→${lean.toFixed(2)} outside→${leanOut.toFixed(2)} +150ms→${leanMid.toFixed(2)} +550ms→${leanAfter.toFixed(2)}`);
       if (s === STAGES[0]) {
-        // 키보드 →: 0.3초 램프로 1.0, 짧게 톡 = 중간 값, 떼면 부드럽게 0
-        await page.keyboard.down('ArrowRight'); await sleep(90);
-        const kMid = await page.evaluate(() => Game.cart.leanInput);
-        await sleep(350);
+        // 키보드 →: 누르는 동안 초당 1.2씩 천천히(0.4초에 ≈0.48, 1초면 1.0), 노브가 따라 움직이고 손으로는 못 끎. 떼면 0.3초에 가운데로
+        await page.keyboard.down('ArrowRight'); await sleep(400);
+        const kMid = await page.evaluate(() => ({ lean: Game.cart.leanInput, knob: parseFloat(document.getElementById('balKnob').style.left), locked: document.getElementById('balGauge').classList.contains('locked') }));
+        await page.mouse.move(barX(-0.8), barY); await page.mouse.down(); await sleep(150); // 키보드가 눌려 있는 동안 바 터치는 무시
+        const kIgnore = await page.evaluate(() => ({ lean: Game.cart.leanInput, holding: document.getElementById('balGauge').classList.contains('holding') }));
+        await page.mouse.up();
+        await sleep(600);
         const kFull = await page.evaluate(() => Game.cart.leanInput);
         await page.keyboard.up('ArrowRight'); await sleep(100);
         const kDecay = await page.evaluate(() => Game.cart.leanInput);
         await sleep(400);
         const kZero = await page.evaluate(() => Game.cart.leanInput);
-        check(`${tag} key ramp (0.3s → 1.0, release → 0)`, kMid > 0.1 && kMid < 0.8 && kFull > 0.99 && kDecay > 0.2 && kDecay < 0.9 && Math.abs(kZero) < 0.01,
-          `90ms=${kMid.toFixed(2)} 440ms=${kFull.toFixed(2)} +100ms=${kDecay.toFixed(2)} +500ms=${kZero.toFixed(2)}`);
-        // 밸런스 1.5초 유지 판정(13번): 커브 시작으로 옮겨 진행을 아주 느리게 → 커브 방향 키를 0.7초 누름(진행도 ≈0.47) → 떼면 범위를 벗어나 0으로
-        // → 다시 holdSec+0.4초 누름 → balance-judge(good, 1.0은 Perfect 범위 밖) 1회
+        check(`${tag} key slow move (1.2/s), knob follows & locked, release → 0`, kMid.lean > 0.35 && kMid.lean < 0.75 && Math.abs(kMid.knob - (kMid.lean + 1) * 50) < 4 && kMid.locked && kIgnore.lean > 0.5 && !kIgnore.holding && kFull > 0.99 && kDecay > 0.1 && kDecay < 0.9 && Math.abs(kZero) < 0.01,
+          `400ms=${JSON.stringify(kMid)} touchWhileKey=${JSON.stringify(kIgnore)} 1.1s=${kFull.toFixed(2)} +100ms=${kDecay.toFixed(2)} +500ms=${kZero.toFixed(2)}`);
+        // 균형 유지 판정(13번): 커브 시작으로 옮겨 진행을 아주 느리게 → 커브 방향 키를 0.7초 누름(진행도 > 0) → 떼면 범위를 벗어나 0으로
+        // → 다시 holdSec+0.4초 누름 → balance-judge(good: 키 이동은 Perfect 범위를 빨리 지나쳐 Perfect 비율 < 60%) 1회
         const bal = await page.evaluate(() => {
           const c = Game.cart, seg = Game.track.segmentRanges.find(x => x.requiredLean > 0);
           window.__bj = []; if (!window.__bjHooked) { window.__bjHooked = true; window.addEventListener('balance-judge', e => window.__bj.push(e.detail)); }
           c._finalizeCurve(); c.t = seg.tStart + 0.003; Cart.speedScale = 0.02; window.__bj = [];
           return { key: seg.curveDirection === 'left' ? 'ArrowLeft' : 'ArrowRight', hold: c.balanceRule.holdSec };
         });
-        await page.keyboard.down(bal.key); await sleep(700);
-        const b1 = await page.evaluate(() => ({ p: Game.cart.balanceState && Game.cart.balanceState.progress, on: document.getElementById('balGauge').classList.contains('on'), inn: document.getElementById('balGauge').classList.contains('in') }));
+        await page.keyboard.down(bal.key); await sleep(900);
+        const b1 = await page.evaluate(() => ({ p: Game.cart.balanceState && Game.cart.balanceState.progress, on: document.getElementById('balGauge').classList.contains('active'), inn: document.getElementById('balGauge').classList.contains('in') }));
         if (s === STAGES[0]) await shot(`${tag}_2e_balance_in`);
         await page.keyboard.up(bal.key); await sleep(450);
         const b2 = await page.evaluate(() => Game.cart.balanceState && Game.cart.balanceState.progress);
         if (s === STAGES[0]) await shot(`${tag}_2f_balance_out`);
-        await page.keyboard.down(bal.key); await sleep(bal.hold * 1000 + 400);
+        await page.keyboard.down(bal.key); await sleep(bal.hold * 1000 + 700);
         const b3 = await page.evaluate(() => ({ j: window.__bj.slice(), done: Game.cart.balanceState && Game.cart.balanceState.done, txt: document.getElementById('balResult').textContent }));
         await page.keyboard.up(bal.key);
         await page.evaluate(() => { Cart.speedScale = GAME_SPEED_SCALE; });
-        check(`${tag} balance: hold builds progress, leaving resets, ${bal.hold}s hold confirms`, b1.on && b1.inn && b1.p > 0.25 && b1.p < 0.75 && b2 === 0 && b3.j.length === 1 && b3.j[0] === 'good' && b3.done === 'good' && b3.txt === 'GOOD',
-          `0.7s→${(b1.p ?? -1).toFixed(2)} release→${b2} hold→${JSON.stringify(b3)}`);
-        const g = await page.evaluate(() => ['#balBand', '#balPerfect', '#balCursor', '#balProg', '#balDir'].map(q => !!document.querySelector(q)));
-        check(`${tag} balance gauge: band + perfect + cursor + progress + direction`, g.every(Boolean), JSON.stringify(g));
+        check(`${tag} balance: hold builds progress, leaving resets, ${bal.hold}s hold confirms`, b1.on && b1.inn && b1.p > 0.2 && b1.p < 0.9 && b2 === 0 && b3.j.length === 1 && ['good', 'perfect'].includes(b3.j[0]) && b3.done === b3.j[0] && b3.txt.length > 0,
+          `0.9s→${(b1.p ?? -1).toFixed(2)} release→${b2} hold→${JSON.stringify(b3)}`);
+        const g = await page.evaluate(() => ['#balBand', '#balPerfect', '#balKnob', '#balRing', '#balTarget', '#balDir'].map(q => !!document.querySelector(q)));
+        check(`${tag} balance bar: band + perfect + knob + progress ring + target + direction`, g.every(Boolean), JSON.stringify(g));
       }
       // BOOST 버튼 = 부스트(게이트 판정 이벤트) — 누를 때마다 1회
       await page.evaluate(() => { window.__gates = 0; if (!window.__gateHooked) { window.__gateHooked = true; window.addEventListener('gate-result', () => window.__gates++); } });
@@ -442,7 +449,7 @@ async function multiTouchTest(browser, base, pageErrors) {
   // CDP touchEnd의 touchPoints = 이번에 떼는 손가락(남은 손가락을 넘기면 엉뚱한 손가락이 떼어짐 — 실측)
   const up = async (...ids) => { const gone = ids.map(id => ({ id, x: pts.get(id)[0], y: pts.get(id)[1], radiusX: 6, radiusY: 6, force: 1 })); ids.forEach(i => pts.delete(i)); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: gone }); };
   const center = async sel => { const b = await tp.locator(sel).boundingBox(); return [b.x + b.width / 2, b.y + b.height / 2]; };
-  const st = () => tp.evaluate(() => ({ lean: Game.cart.leanInput, boosts: window.__boosts, pressed: [...document.querySelectorAll('.ctl-btn.pressed')].map(e => e.id).join(','), zoom: visualViewport.scale }));
+  const st = () => tp.evaluate(() => ({ lean: Game.cart.leanInput, boosts: window.__boosts, pressed: [...document.querySelectorAll('.ctl-btn.pressed')].map(e => e.id).join(','), holding: !!document.querySelector('.bal-bar.holding'), zoom: visualViewport.scale }));
   try {
     await tp.goto(`${base}/index.html`, { waitUntil: 'load' });
     if (await tp.locator('#titleScreen').count()) await tp.locator('#titleScreen').tap();
@@ -455,78 +462,82 @@ async function multiTouchTest(browser, base, pageErrors) {
     await tp.waitForSelector('#driveControls.on');
     // 게이트/뒤로 떨어지기와 무관한 직선 구간에서 반복 테스트 — 진행을 멈춰 둠(입력·leanInput 램프는 그대로 돌아감)
     await tp.evaluate(() => { window.__boosts = 0; window.addEventListener('gate-result', () => window.__boosts++); Game.cart.t = 0.001; Cart.speedScale = 0; });
-    const R = await center('#leanRightBtn'), L = await center('#leanLeftBtn'), B = await center('#boostBtn');
-    // A) ▶ 누른 채 BOOST 탭 → ▶ 유지, 부스트 1회
-    await down(0, ...R); await sleep(400);
+    const rail = await tp.locator('#balRail').boundingBox(), B = await center('#boostBtn');
+    const barY = rail.y + rail.height / 2, X = v => rail.x + (v + 1) / 2 * rail.width;
+    const near = (v, t, tol = 0.07) => Math.abs(v - t) <= tol;
+    // A) 바를 끌어 +0.6에 둔 채 BOOST 탭 → 균형 값 유지, 부스트 1회
+    await down(0, X(0), barY); await move(0, X(0.6), barY); await sleep(400);
     await down(1, ...B); await sleep(60); await up(1); await sleep(300);
     let a = await st();
-    check('touch A: hold ▶ + tap BOOST → lean kept, 1 boost', a.lean > 0.99 && a.boosts === 1 && a.pressed === 'leanRightBtn', JSON.stringify(a));
+    check('touch A: drag bar to +0.6 + tap BOOST → lean kept, 1 boost', near(a.lean, 0.6) && a.boosts === 1 && a.holding && !a.pressed, JSON.stringify(a));
     await up(0); await sleep(450);
     a = await st();
-    check('touch A2: release ▶ → neutral, nothing stuck', Math.abs(a.lean) < 0.01 && !a.pressed, JSON.stringify(a));
-    // B) BOOST 누른 채 ◀ 누르기 → 왼쪽으로 기울고, ◀ 먼저 떼면 BOOST는 계속 눌린 상태(추가 부스트 없음)
+    check('touch A2: release bar → back to 0, nothing stuck', Math.abs(a.lean) < 0.01 && !a.pressed && !a.holding, JSON.stringify(a));
+    // B) BOOST 누른 채 바를 −0.8로 끌기 → 균형 값 −0.8, 바를 먼저 놓으면 BOOST는 계속 눌린 상태(추가 부스트 없음)
     await down(1, ...B); await sleep(60);
-    await down(0, ...L); await sleep(400);
+    await down(0, X(0), barY); await move(0, X(-0.8), barY); await sleep(400);
     let b = await st();
-    check('touch B: hold BOOST + hold ◀ → lean left, boost once', b.lean < -0.99 && b.boosts === 2 && b.pressed.includes('leanLeftBtn') && b.pressed.includes('boostBtn'), JSON.stringify(b));
+    check('touch B: hold BOOST + drag bar to −0.8 → lean −0.8, boost once', near(b.lean, -0.8) && b.boosts === 2 && b.pressed === 'boostBtn' && b.holding, JSON.stringify(b));
     await up(0); await sleep(450);
     b = await st();
-    check('touch B2: release ◀ first → BOOST still pressed, lean neutral', Math.abs(b.lean) < 0.01 && b.pressed === 'boostBtn' && b.boosts === 2, JSON.stringify(b));
+    check('touch B2: release bar first → BOOST still pressed, lean back to 0', Math.abs(b.lean) < 0.01 && b.pressed === 'boostBtn' && !b.holding && b.boosts === 2, JSON.stringify(b));
     await up(1); await sleep(100);
-    // C) ▶ + BOOST를 같은 순간에 떼기
-    await down(0, ...R); await down(1, ...B); await sleep(400);
+    // C) 바 + BOOST를 같은 순간에 떼기
+    await down(0, X(0.5), barY); await down(1, ...B); await sleep(400);
     await up(0, 1); await sleep(450);
     const c = await st();
-    check('touch C: release both at once → nothing stuck', Math.abs(c.lean) < 0.01 && !c.pressed && c.boosts === 3, JSON.stringify(c));
-    // D) ▶를 누른 채 버튼 밖으로 미끄러져도 유지(버튼 단위 캡처), 밖에서 떼면 해제
-    await down(0, ...R); await sleep(200);
-    await move(0, R[0] + 20, R[1] - 70); await sleep(300);
+    check('touch C: release both at once → nothing stuck', Math.abs(c.lean) < 0.01 && !c.pressed && !c.holding && c.boosts === 3, JSON.stringify(c));
+    // D) 바를 끌다가 바 밖(위·오른쪽 끝 너머)으로 미끄러져도 유지(값은 끝에 고정), 밖에서 떼면 해제
+    await down(0, X(0.5), barY); await sleep(200);
+    await move(0, X(1.3), barY - 140); await sleep(300);
     const d = await st();
     await up(0); await sleep(450);
     const d2 = await st();
-    check('touch D: slide off ▶ keeps input, release outside clears', d.lean > 0.99 && d.pressed === 'leanRightBtn' && Math.abs(d2.lean) < 0.01 && !d2.pressed, `${JSON.stringify(d)} → ${JSON.stringify(d2)}`);
-    // E) 두 손가락 벌리기(핀치) — 페이지 확대 없음
-    await down(0, ...L); await down(1, ...B);
-    for (let i = 1; i <= 6; i++) { await move(0, L[0] - i * 3, L[1] - i * 10); await move(1, B[0] + i * 3, B[1] - i * 10); await sleep(16); }
-    await up(0, 1); await sleep(300);
+    check('touch D: slide out of the bar keeps drag (clamped to 1.0), release outside clears', d.lean > 0.97 && d.holding && Math.abs(d2.lean) < 0.01 && !d2.holding, `${JSON.stringify(d)} → ${JSON.stringify(d2)}`);
+    // E) 두 손가락 벌리기(핀치) — 페이지 확대 없음, 아무것도 눌린 채 남지 않음
+    await down(0, X(-0.3), barY); await down(1, ...B);
+    for (let i = 1; i <= 6; i++) { await move(0, X(-0.3) - i * 3, barY - i * 10); await move(1, B[0] + i * 3, B[1] - i * 10); await sleep(16); }
+    await up(0, 1); await sleep(500);
     const e = await st();
-    check('touch E: two-finger spread → no zoom, nothing stuck', e.zoom === 1 && !e.pressed && Math.abs(e.lean) < 0.01, JSON.stringify(e));
-    // G) ◀ 누른 채 ▶를 눌렀다 떼면 다시 ◀로(예전 코드는 ◀ 입력이 사라짐 — 진단 1-2)
-    await down(0, ...L); await sleep(350);
-    await down(1, ...R); await sleep(700);
+    check('touch E: two-finger spread → no zoom, nothing stuck', e.zoom === 1 && !e.pressed && !e.holding && Math.abs(e.lean) < 0.01, JSON.stringify(e));
+    // G) 바를 끌며 −0.5 → +0.5로 옮기면 따라가고, 두 번째 손가락이 바를 눌러도 무시(첫 손가락만), 첫 손가락을 떼면 0
+    await down(0, X(-0.5), barY); await sleep(350);
+    const g0 = await st();
+    await move(0, X(0.5), barY); await sleep(300);
+    await down(1, X(-0.9), barY); await sleep(300);
     const g1 = await st();
-    await up(1); await sleep(700);
+    await up(1); await sleep(200);
     const g2 = await st();
     await up(0); await sleep(450);
-    check('touch G: hold ◀, press/release ▶ → back to ◀', g1.lean > 0.99 && g2.lean < -0.99 && g2.pressed === 'leanLeftBtn', `${g1.lean.toFixed(2)} → ${g2.lean.toFixed(2)} ${g2.pressed}`);
-    // F) 키보드 ← 누른 채 ↑ → 왼쪽 유지 + 부스트 1회
+    check('touch G: drag −0.5 → +0.5 follows, 2nd finger on the bar ignored, release → 0', near(g0.lean, -0.5) && near(g1.lean, 0.5) && near(g2.lean, 0.5) && g2.holding, `${g0.lean.toFixed(2)} → ${g1.lean.toFixed(2)} → ${g2.lean.toFixed(2)}`);
+    // F) 키보드 ← 누른 채 ↑ → 왼쪽으로 천천히(0.4초에 ≈−0.48) + 부스트 1회
     const n0 = (await st()).boosts;
-    await tp.keyboard.down('ArrowLeft'); await sleep(400); await tp.keyboard.press('ArrowUp'); await sleep(200);
+    await tp.keyboard.down('ArrowLeft'); await sleep(400); await tp.keyboard.press('ArrowUp'); await sleep(100);
     const f = await st();
-    await tp.keyboard.up('ArrowLeft');
-    check('keys: hold ← + press ↑ → lean left kept, 1 boost', f.lean < -0.99 && f.boosts === n0 + 1, JSON.stringify(f));
+    await tp.keyboard.up('ArrowLeft'); await sleep(450);
+    check('keys: hold ← + press ↑ → lean moves slowly left (≈−0.5), 1 boost', f.lean < -0.35 && f.lean > -0.8 && f.boosts === n0 + 1, JSON.stringify(f));
     // H) 회전(13번 2-6): ▶를 누른 채 가로로 → 눌려 있던 입력 안전 해제, 조작은 양쪽 끝(가운데 150px 이상 비움), 겹침·화면 밖 없음, 회전 안내 없음
     const layout = () => tp.evaluate(() => {
       const r = el => { const b = (typeof el === 'string' ? document.querySelector(el) : el).getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
-      const box = { L: r('#leanLeftBtn'), R: r('#leanRightBtn'), B: r('#boostBtn'), G: r('#balGauge'), P: r('#gatePop'), C: r('.hud-controls'), T: r('.hud-row') };
+      const box = { B: r('#boostBtn'), G: r('#balGauge'), P: r('#gatePop'), C: r('.hud-controls'), T: r('.hud-row') };
       const W = innerWidth, H = innerHeight;
       const hit = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
       const inView = Object.values(box).every(x => x.l >= 0 && x.t >= 0 && x.r <= W && x.b <= H);
-      const overlaps = [['P', 'C'], ['P', 'T'], ['G', 'B'], ['R', 'B'], ['G', 'P']].filter(([a, b]) => hit(box[a], box[b])).map(x => x.join(''));
-      return { W, H, gap: Math.round(box.B.l - box.R.r), inView, overlaps, rotate: !!document.getElementById('rotateWarning') };
+      const overlaps = [['P', 'C'], ['P', 'T'], ['G', 'B'], ['G', 'P']].filter(([a, b]) => hit(box[a], box[b])).map(x => x.join(''));
+      return { W, H, gap: Math.round(box.B.l - box.G.r), inView, overlaps, rotate: !!document.getElementById('rotateWarning') };
     });
-    await down(0, ...R); await sleep(350);
+    await down(0, X(0.7), barY); await sleep(350);
     await tp.setViewportSize({ width: 667, height: 375 }); await sleep(600);
     const h1 = await st();
     const lay = await layout();
     await tp.evaluate(() => { const c = Game.cart, g = Game.track.gateCenters()[0]; c.t = g.t - 0.006; Cart.speedScale = 0; c.leanInput = 0.6; Game._fixedUpdate(1 / 60); UI.updateHUD(c, Game.track); });
     await sleep(250);
     await tp.screenshot({ path: path.join(OUT, 'touch_landscape.png') });
-    check('rotate: held ▶ released on rotation, landscape layout OK', Math.abs(h1.lean) < 0.01 && !h1.pressed && lay.inView && !lay.overlaps.length && lay.gap >= 150 && !lay.rotate, `${JSON.stringify(h1)} ${JSON.stringify(lay)}`);
+    check('rotate: held bar released on rotation, landscape layout OK', Math.abs(h1.lean) < 0.05 && !h1.pressed && !h1.holding && lay.inView && !lay.overlaps.length && lay.gap >= 150 && !lay.rotate, `${JSON.stringify(h1)} ${JSON.stringify(lay)}`);
     await up(0);
     await tp.setViewportSize({ width: 375, height: 667 }); await sleep(500);
     const lay2 = await layout();
-    check('rotate back: portrait layout OK', lay2.inView && !lay2.overlaps.length && lay2.gap >= 60, JSON.stringify(lay2));
+    check('rotate back: portrait layout OK', lay2.inView && !lay2.overlaps.length && lay2.gap >= 8, JSON.stringify(lay2));
     await tp.screenshot({ path: path.join(OUT, 'touch_multi.png') });
   } catch (err) {
     check('multi-touch flow', false, err.message.split('\n')[0]);
