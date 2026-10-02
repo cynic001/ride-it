@@ -66,6 +66,10 @@ ride-it/
   복귀 구간 재설계 필요 — 개발기록.md 참고)
 - 리더보드(Firebase)는 의도적으로 후순위 — 기본 플레이가 안정된 후 진행
 
+## 스킬 사본·보호 폴더
+- run-ride-it 스킬은 `.claude`와 `.agents` 두 곳에 사본이 있으니 고칠 때 둘 다 맞출 것.
+- `blender/`, `assets/vendor/`, `assets/models/legacy/` 는 Edit/Write 도구뿐 아니라 셸 명령(sed, cp, mv 덮어쓰기 등)으로도 기존 파일 내용을 수정하지 말 것. 고쳐야 하면 다른 경로로 복사해서 수정.
+
 ## 디자인 규칙 (UI/DOM 화면)
 - frontend-design 플러그인을 쓰더라도 **아래 프로젝트 규칙이 우선**한다.
 - 밝고 캐주얼한 톤. 브랜드 색: 옐로우 `#FFB80D`, 네이비 `#141a33`.
