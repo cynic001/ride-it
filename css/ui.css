@@ -124,7 +124,7 @@ a:focus-visible,
 
 /* ── 세그먼트: 홈(inset) 위에서 선택 칩이 raised + 굵은 글자 + 노란 점 ── */
 .seg { display: flex; gap: 4px; padding: 4px; border-radius: var(--r-md); background: var(--nm-bg-deep); box-shadow: var(--sh-inset-sm); }
-.seg-btn { flex: 1; min-height: 44px; padding: 0 var(--s-1); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ink-2);
+.seg-btn { flex: 1 1 0; min-width: 0; white-space: nowrap; min-height: 44px; padding: 0 var(--s-1); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ink-2);
   font-family: inherit; font-size: 16px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;
   transition: transform var(--t-press) var(--ease); touch-action: manipulation; white-space: nowrap; }
 .seg-btn:active { transform: scale(var(--press-scale)); }
@@ -312,3 +312,4 @@ a:focus-visible,
   .popup-block .row-desc { display: none; }
   .popup-block.half > .btn.wide { width: 100%; }
 }
+@media (orientation: landscape) and (max-height: 500px) { .seg { gap: 2px; } .seg-btn { padding: 0 2px; gap: 3px; } }

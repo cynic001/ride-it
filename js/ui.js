@@ -459,7 +459,7 @@ const UI = {
       id: 'graphicsOverlay', title: t('graphics.title'),
       blocks: [
         Popup.row(t('graphics.quality'), seg('quality', ['low', 'medium', 'high'].map(k => [k, t(`graphics.quality.${k}`)]), QualityManager.current)),
-        Popup.row(t('graphics.style'), seg('style', styles.map(k => [k, t(`graphics.style.${k}`)]), StyleManager.current)),
+        { ...Popup.row(t('graphics.style'), seg('style', styles.map(k => [k, t(`graphics.style.${k}`)]), StyleManager.current)), cls: '' },
         Popup.p(`<span id="gfxDesc">${desc()}</span>`),
       ],
       actions: [{ id: 'graphicsCloseBtn', label: t('common.ok'), primary: true, onClick: (e, c) => c.close() }],
