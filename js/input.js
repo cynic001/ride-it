@@ -51,8 +51,7 @@ class InputController {
     this.mode = mode === 'tilt' ? 'tilt' : 'twohand';
     this._leanTarget = 0;
     this._leanRate = LEAN_FOLLOW.direct;
-    this._btnPointers = new Map(); // pointerId → 'boost' — 손가락마다 그 손가락이 누른 버튼만 기억
-    this._barPtr = null;           // 균형 바를 끌고 있는 손가락 { id, x }
+    this._ptr = new Map();         // pointerId → { role: 'slider' | 'boost', x } — 손가락마다 자기 역할만 기억
     this._rel = null;              // 놓은 뒤 가운데로 복귀 중인 상태 { from, t }
     this._keys = new Set();
     this.lastInputKind = null;     // 'touch' | 'mouse' | 'keyboard' — 튜토리얼 안내 문구 기준
@@ -86,53 +85,26 @@ class InputController {
     window.addEventListener('keydown', e => this._onStartKey(e, true), opt);
     window.addEventListener('keyup', e => this._onStartKey(e, false), opt);
 
-    // 주행 버튼: ◀ ▶(누르고 있기) · BOOST(누르는 순간) — 손가락(pointerId)마다 따로
-    const bindBtn = (id, name) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('pointerdown', e => {
-        e.preventDefault();
-        if (this.state !== 'launched' || this.blocked) return;
-        this.lastInputKind = e.pointerType === 'mouse' ? 'mouse' : 'touch';
-        try { el.setPointerCapture(e.pointerId); } catch (err) { /* iOS Safari 대응 */ }
-        this._press(e.pointerId, name);
-      }, opt);
-      const up = e => this._release(e.pointerId, name);
-      el.addEventListener('pointerup', up, opt);
-      el.addEventListener('pointercancel', up, opt);
-      el.addEventListener('lostpointercapture', up, opt);
-      el.addEventListener('contextmenu', e => e.preventDefault(), opt);
-    };
-    bindBtn('boostBtn', 'boost');
-    // 균형 바: 바(패널) 어디를 눌러도 그 손가락의 x 위치로 노브가 이동 — 한 손가락만, 놓으면 0.3초에 가운데로
-    const bar = document.getElementById('balGauge');
-    if (bar) {
-      this._bar = bar;
-      this._rail = document.getElementById('balRail');
-      bar.addEventListener('pointerdown', e => {
-        if (this.state !== 'launched' || this.blocked || this.mode !== 'twohand' || this._keyLean() || this._barPtr) return;
-        e.preventDefault();
-        this.lastInputKind = e.pointerType === 'mouse' ? 'mouse' : 'touch';
-        try { bar.setPointerCapture(e.pointerId); } catch (err) { /* iOS Safari 대응 */ }
-        this._barPtr = { id: e.pointerId, x: e.clientX };
-        this._syncPressed();
-      }, opt);
-      const up = e => { if (this._barPtr && e.pointerId === this._barPtr.id) { this._barPtr = null; this._syncPressed(); } };
-      bar.addEventListener('pointerup', up, opt);
-      bar.addEventListener('pointercancel', up, opt);
-      bar.addEventListener('lostpointercapture', up, opt);
-      bar.addEventListener('contextmenu', e => e.preventDefault(), opt);
-      // 캡처가 안 되는 환경(바 밖으로 나간 손가락의 move/up)도 그 pointerId만 따라감
-      window.addEventListener('pointermove', e => { if (this._barPtr && e.pointerId === this._barPtr.id) this._barPtr.x = e.clientX; }, opt);
-      window.addEventListener('pointerup', up, opt);
-      window.addEventListener('pointercancel', up, opt);
+    // 주행 조작: 하나의 입력 관리자 — pointerId → 역할('slider' | 'boost') 맵. 역할은 pointerdown 대상 요소의 data-input-role로 정하고,
+    // 이후 move/up/cancel/lostpointercapture는 자기 pointerId만 처리(한 손가락이 떼어지거나 취소돼도 다른 역할은 그대로)
+    const dc = document.getElementById('driveControls');
+    this._bar = document.getElementById('balGauge');
+    this._rail = document.getElementById('balRail');
+    this._boostBtn = document.getElementById('boostBtn');
+    if (dc) {
+      dc.addEventListener('pointerdown', e => this._onDown(e), opt);
+      dc.addEventListener('pointerup', e => this._onEnd(e), opt);
+      dc.addEventListener('pointercancel', e => this._onEnd(e), opt);
+      dc.addEventListener('lostpointercapture', e => this._onEnd(e), opt);
+      dc.addEventListener('contextmenu', e => e.preventDefault(), opt);
     }
-    // 캡처가 실패해 다른 곳에서 손가락을 뗀 경우의 안전장치 — 그 pointerId만 해제(다른 손가락은 그대로)
-    const anyUp = e => { if (this._btnPointers.has(e.pointerId)) this._release(e.pointerId); };
-    window.addEventListener('pointerup', anyUp, opt);
-    window.addEventListener('pointercancel', anyUp, opt);
+    // 캡처가 안 되는 환경(바 밖으로 나간 손가락의 move/up)도 그 pointerId만 따라감
+    window.addEventListener('pointermove', e => { const p = this._ptr.get(e.pointerId); if (p && p.role === 'slider') p.x = e.clientX; }, opt);
+    window.addEventListener('pointerup', e => this._onEnd(e), opt);
+    window.addEventListener('pointercancel', e => this._onEnd(e), opt);
     // 회전·앱 전환·창 포커스 잃음: 눌려 있던 입력을 모두 안전하게 해제(손가락이 화면에서 떨어진 걸 못 받는 경우)
     window.addEventListener('blur', () => this.releaseAll(), opt);
+    window.addEventListener('popup-open', () => this.releaseAll(), opt); // 팝업이 열리면 눌려 있던 입력 해제
     window.addEventListener('orientationchange', () => this.releaseAll(), opt);
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.releaseAll(); }, opt);
     this._orient = window.innerWidth > window.innerHeight;
@@ -140,13 +112,9 @@ class InputController {
       const o = window.innerWidth > window.innerHeight;
       if (o !== this._orient) { this._orient = o; this.releaseAll(); }
     }, opt);
-    // 두 손가락 핀치 확대(iOS gesture 이벤트)·길게 누르기 메뉴 차단
+    // 두 손가락 핀치 확대(iOS gesture 이벤트)·길게 누르기 메뉴 차단. 스크롤·더블탭 확대는 CSS(touch-action: none)가 막음 — touchstart/touchend preventDefault(JS 더블탭 방지)는 쓰지 않음
     ['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false, signal: this._abort.signal }));
-    const dc = document.getElementById('driveControls');
-    if (dc) {
-      dc.addEventListener('contextmenu', e => e.preventDefault(), opt);
-      dc.addEventListener('touchstart', e => { if (e.cancelable) e.preventDefault(); }, { passive: false, signal: this._abort.signal }); // 텍스트 선택·돋보기·스크롤
-    }
+    document.addEventListener('contextmenu', e => e.preventDefault(), opt);
 
     // 주행 키보드: ← → 밸런스, ↑ 또는 Space 부스트
     window.addEventListener('keydown', e => this._onDriveKey(e, true), opt);
@@ -158,16 +126,34 @@ class InputController {
       InputController._gamma = e.gamma;
       InputController._tiltSeenAt = performance.now();
     }, opt);
-
-    // iOS Safari 더블탭 줌 방지 (JS 레벨) — 조작 영역 전체(두 손가락을 거의 동시에 떼는 경우도 포함)
-    let lastTouchEnd = 0;
-    const controls = document.getElementById('driveControls') || this.canvas;
-    controls.addEventListener('touchend', e => {
-      const now = Date.now();
-      if (now - lastTouchEnd <= 300) e.preventDefault();
-      lastTouchEnd = now;
-    }, { passive: false, signal: this._abort.signal });
   }
+
+  /** 주행 조작 pointerdown — 역할(data-input-role)별로 그 손가락만 기억 */
+  _onDown(e) {
+    if (this.state !== 'launched' || this.blocked) return;
+    const el = e.target.closest && e.target.closest('[data-input-role]');
+    if (!el) return;
+    const role = el.dataset.inputRole;
+    if (this._ptr.has(e.pointerId)) return;
+    if (role === 'slider' && (this.mode !== 'twohand' || this._keyLean() || this._sliderEntry())) return; // 바는 한 손가락만(두 번째 손가락은 무시)
+    e.preventDefault();
+    this.lastInputKind = e.pointerType === 'mouse' ? 'mouse' : 'touch';
+    try { el.setPointerCapture(e.pointerId); } catch (err) { /* iOS Safari 대응 */ }
+    this._ptr.set(e.pointerId, { role, x: e.clientX });
+    if (role === 'boost') this._boost(e); // 누르는 순간(pointerdown 시각) 판정
+    this._syncPressed();
+  }
+
+  /** up/cancel/lostpointercapture — 그 pointerId만 해제 */
+  _onEnd(e) {
+    if (!this._ptr.delete(e.pointerId)) return;
+    this._syncPressed();
+  }
+
+  /** 지금 눌려 있는 손가락 [{id, role}] — 진단 화면·테스트용 */
+  pointers() { return [...this._ptr].map(([id, p]) => ({ id, role: p.role })); }
+
+  _sliderEntry() { for (const p of this._ptr.values()) if (p.role === 'slider') return p; return null; }
 
   _onPullDown(e) {
     if (this.state !== 'idle') return;
@@ -279,36 +265,20 @@ class InputController {
     }
   }
 
-  /** 버튼 누름 — pointerId별로 기억. BOOST는 누르는 순간 판정 */
-  _press(pointerId, name) {
-    this._btnPointers.set(pointerId, name);
-    if (name === 'boost') this._boost();
-    this._syncPressed();
-  }
-
-  /** 버튼 뗌 — 그 손가락(pointerId)만. name을 주면 그 버튼에 묶인 손가락일 때만 */
-  _release(pointerId, name) {
-    const cur = this._btnPointers.get(pointerId);
-    if (!cur || (name && cur !== name)) return;
-    this._btnPointers.delete(pointerId);
-    this._syncPressed();
-  }
-
   /** 모든 입력 해제(회전/백그라운드/포커스 잃음) */
   releaseAll() {
     if (this.state === 'pulling') this._onPullUp(); // 스타트 바를 당기던 중 회전 → 발사 취소(바 복귀)
     this._keyCharging = false;
-    this._btnPointers.clear();
-    this._barPtr = null;
+    this._ptr.clear();
     this._keys.clear();
     this._syncPressed();
   }
 
   /** 눌린 부스트 버튼·바 드래그 표시 */
   _syncPressed() {
-    const boost = document.getElementById('boostBtn');
-    if (boost) boost.classList.toggle('pressed', [...this._btnPointers.values()].includes('boost'));
-    if (this._bar) this._bar.classList.toggle('holding', !!this._barPtr);
+    const roles = new Set([...this._ptr.values()].map(p => p.role));
+    if (this._boostBtn) this._boostBtn.classList.toggle('pressed', roles.has('boost'));
+    if (this._bar) this._bar.classList.toggle('holding', roles.has('slider'));
   }
 
   /** 키보드 ← → 방향(−1/0/1) */
@@ -335,14 +305,26 @@ class InputController {
     }
   }
 
+  /** 판정 기준 = 손가락이 닿은 시각. 시뮬레이션 상태(마지막 고정 스텝)와 이벤트 시각의 차이만큼 오차(err)를 보정(±40ms로 제한).
+   * 키보드(ev 없음)나 Game 루프 정보가 없으면 현재 상태 그대로 */
+  _snapshotAt(ev) {
+    if (!ev || typeof Game === 'undefined' || !Game.lastTime || performance.now() - Game.lastTime > 100) return undefined; // 루프가 멈춘(테스트·탭 전환) 상태는 보정 안 함
+    const g = this.cart.gateTiming();
+    if (!g) return undefined;
+    const simMs = Game.lastTime - Game.accumulator * 1000;      // 현재 cart 상태가 가리키는 실제 시각
+    const dt = Math.max(-0.04, Math.min(0.04, (ev.timeStamp - simMs) / 1000)); // 이벤트가 상태보다 뒤(+)/앞(−)
+    g.err += dt;
+    return g;
+  }
+
   /** 부스트 입력(BOOST 버튼/↑/Space) — 실제 시간 기준 게이트 판정 */
-  _boost() {
+  _boost(ev) {
     // 뒤로 떨어지기: 연타 구간에선 부스트 입력 = 연타, 그 밖의 뒤로 가는 동안은 무시
     if (this.cart.rollback) {
       if (this.cart.mashTap()) window.dispatchEvent(new CustomEvent('mash-tap'));
       return;
     }
-    const result = this.cart.resolveGate();
+    const result = this.cart.resolveGate(this._snapshotAt(ev));
     window.dispatchEvent(new CustomEvent('gate-result', { detail: { type: this.cart.lastGateType, result } }));
   }
 
@@ -352,8 +334,9 @@ class InputController {
     if (this.state !== 'launched') return;
     const c = this.cart;
     const keyLean = this._keyLean();
-    if (this._barPtr && this.mode === 'twohand' && !keyLean) {
-      const target = this._valueAt(this._barPtr.x);
+    const slider = this._sliderEntry();
+    if (slider && this.mode === 'twohand' && !keyLean) {
+      const target = this._valueAt(slider.x);
       c.leanInput += (target - c.leanInput) * (1 - Math.exp(-dt * BAR_FOLLOW));
       this._rel = null;
       return;

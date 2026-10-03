@@ -24,6 +24,7 @@ const Popup = {
    * @returns {{ el: HTMLElement, close: Function, goto: Function, pages: number }}
    */
   open({ id, title, meta = '', blocks, actions = [], cancelable = true, onClose, center = false }) {
+    window.dispatchEvent(new Event('popup-open')); // 입력 관리자가 눌려 있던 입력을 모두 해제
     actions = actions.map((a, i) => ({ ...a, id: a.id || `${id || 'popup'}Act${i}` })); // 모든 버튼에 id(이벤트 연결용)
     const prevFocus = document.activeElement;
     const overlay = document.createElement('div');

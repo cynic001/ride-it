@@ -650,6 +650,7 @@ window.addEventListener('DOMContentLoaded', () => {
     return;
   }
   Game.init();
+  if (new URLSearchParams(location.search).has('touch-debug')) { const k = document.createElement('script'); k.src = 'js/touch-debug.js'; document.body.appendChild(k); } // 개발 전용 터치 진단(?touch-debug)
   UI.showTitle(() => UI.showStageSelect(STAGES, stageIndex => Game.loadStage(stageIndex)));
 });
 

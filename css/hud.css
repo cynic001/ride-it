@@ -319,3 +319,7 @@ body.popup-open .tut-ring, body.popup-open .tut-finger { display: none !importan
 @keyframes judgePopC { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.4); } 40% { transform: translate(-50%, -50%) scale(1.05); }
   70% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(1); } }
 @media (orientation: landscape) and (max-height: 500px) { .timing-pop { top: calc(104px + env(safe-area-inset-top, 0px)); } }
+
+/* 제스처 차단: 조작 화면 전체에서 브라우저 기본 동작(스크롤·핀치·더블탭 확대·길게 누르기)이 포인터를 가로채지 않게 — JS 더블탭 방지 대신 CSS */
+html, body, #uiRoot, #renderCanvas, .hud, .drive-controls, .drive-controls * { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+html, body { overscroll-behavior: none; }

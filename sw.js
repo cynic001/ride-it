@@ -68,7 +68,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
   // 개발 전용 UI 키트(?ui-kit, js/ui-kit.js)는 캐시에 넣지 않고 항상 네트워크로
-  if (url.searchParams.has('ui-kit') || /\/ui-kit\.(js|css)$/.test(url.pathname)) return;
+  if (url.searchParams.has('ui-kit') || url.searchParams.has('touch-debug') || /\/(ui-kit|touch-debug)\.(js|css)$/.test(url.pathname)) return;
   const networkFirst = sameOrigin && (req.mode === 'navigate' || /\.(html|js|css|webmanifest)$/.test(url.pathname) || url.pathname.endsWith('/'));
 
   if (networkFirst) {

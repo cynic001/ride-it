@@ -692,7 +692,7 @@ const UI = {
     const tilt = ControlSettings.mode === 'tilt';
     return `<div class="drive-controls twohand${tilt ? ' tilt' : ''}" id="driveControls">
       <div class="ctl-left" id="ctlLeft">
-        <div class="bal-bar${tilt ? ' locked' : ''}" id="balGauge" role="slider" aria-label="${t('hud.balanceBar')}" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0">
+        <div class="bal-bar${tilt ? ' locked' : ''}" id="balGauge" data-input-role="slider" role="slider" aria-label="${t('hud.balanceBar')}" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0">
           <div class="bal-top"><span class="bal-dir" id="balDir"></span><span class="bal-result" id="balResult"></span></div>
           <div class="bal-track" id="balTrack"><div class="bal-rail" id="balRail">
             <div class="bal-band" id="balBand"></div><div class="bal-perfect" id="balPerfect"></div><i class="bal-zero"></i>
@@ -713,7 +713,7 @@ const UI = {
             <circle class="br-flash" id="brFlash" cx="72" cy="72" r="${BR_T}"/>
             <g class="br-stars"><path class="star" transform="translate(114 30)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/><path class="star" transform="translate(30 30)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/><path class="star" transform="translate(30 114)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/><path class="star" transform="translate(114 114)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/></g>
           </svg>
-          <button class="ctl-btn boost" id="boostBtn" type="button">BOOST</button>
+          <button class="ctl-btn boost" id="boostBtn" data-input-role="boost" type="button">BOOST</button>
         </div>
       </div>
     </div>`;

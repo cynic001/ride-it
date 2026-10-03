@@ -323,7 +323,7 @@ section('input', async () => {
   // 회전: 가로로 바뀌면 눌려 있던 입력 해제
   await ev('#balGauge', 'pointerdown', 4, X(0.7), rail.y); await page.waitForTimeout(150);
   await page.setViewportSize({ width: 667, height: 375 }); await page.waitForTimeout(500);
-  const rel = await page.evaluate(() => ({ lean: Game.cart.leanInput, held: Game.input._btnPointers.size }));
+  const rel = await page.evaluate(() => ({ lean: Game.cart.leanInput, held: Game.input.pointers().length }));
   check('입력: 회전하면 눌려 있던 버튼 해제', rel.held === 0 && Math.abs(rel.lean) < 0.7, JSON.stringify(rel));
   check('input page error 0', errors.length === 0, errors.join('|'));
   await close();
