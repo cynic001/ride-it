@@ -179,8 +179,8 @@
 .combo-chip { flex-direction: column; gap: 0; min-height: 44px; padding: 2px var(--s-2); text-align: center; line-height: 1.15; border-radius: var(--r-md); }
 .combo-chip small { font-size: 12px; font-weight: 700; } .combo-chip b { font-family: var(--font-display); font-size: 20px; font-weight: 400; }
 .combo-chip.bump { animation: bump 220ms var(--ease-pop); } @keyframes bump { 50% { transform: scale(1.12); } }
-.hud-hearts { align-self: flex-start; gap: 2px; padding: 0 var(--s-1); pointer-events: none; }
-.hud-hearts .heart-ico { width: 24px; height: 24px; color: var(--danger); fill: var(--danger); stroke: var(--ink); stroke-width: 1.5; }
+.hud-hearts { align-self: flex-start; gap: 2px; padding: 0 4px; pointer-events: none; }
+.hud-hearts .heart-ico { width: 22px; height: 22px; color: var(--danger); fill: var(--danger); stroke: var(--ink); stroke-width: 1.5; }
 .hud-hearts .heart-ico.off { fill: none; color: var(--ink-disabled); stroke: var(--ink-disabled); stroke-dasharray: 3 2; }
 .hud-hearts .heart-ico.lose { animation: heartLose 400ms var(--ease-pop); } @keyframes heartLose { 0% { transform: scale(1.5); } 100% { transform: scale(1); } }
 .hud-controls { position: absolute; top: calc(88px + env(safe-area-inset-top, 0px)); right: var(--s-2); display: flex; align-items: center; gap: var(--s-1); pointer-events: auto; }
@@ -238,7 +238,7 @@ body.popup-open .tut-ring, body.popup-open .tut-finger { display: none !importan
 .bal-result.perfect { color: var(--yellow); } .bal-result.good { color: var(--green); } .bal-result.miss { color: var(--red); }
 
 /* ── 튜토리얼 안내줄: 화면 위쪽 작은 한 줄(조작부·균형 바·부스트 표시를 가리지 않음) ── */
-.tut-banner { position: absolute; left: 50%; top: calc(80px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); max-width: min(92vw, 420px); display: flex; align-items: center; gap: var(--s-1);
+.tut-banner { position: absolute; left: 50%; top: calc(120px + min(40vw, 38vh) + env(safe-area-inset-top, 0px)); transform: translateX(-50%); max-width: min(92vw, 420px); display: flex; align-items: center; gap: var(--s-1);
   min-height: 32px; padding: 0 var(--s-2); border-radius: var(--r-md); background: var(--hud-bg); border: var(--hud-border); box-shadow: var(--hud-shadow); color: var(--ink);
   font-size: 16px; font-weight: 700; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity var(--t-ui) var(--ease); }
 .tut-banner.on { opacity: 1; }
@@ -249,7 +249,7 @@ body.popup-open .tut-ring, body.popup-open .tut-finger { display: none !importan
 .tut-banner.shake { animation: nudgeX .4s ease; }
 .hud-controls { top: calc(120px + env(safe-area-inset-top, 0px)); }
 @media (orientation: landscape) and (max-height: 500px) {
-  .tut-banner { top: calc(68px + env(safe-area-inset-top, 0px)); }
+  .tut-banner { top: calc(86px + min(40vw, 38vh) + env(safe-area-inset-top, 0px)); }
   .hud-controls { top: calc(8px + env(safe-area-inset-top, 0px)); }
   .lap-banner, .lap-banner.big { left: 270px; right: 130px; font-size: 32px; top: 77%; -webkit-text-stroke-width: 6px; }
   .judge { left: 270px; right: 130px; top: 90%; font-size: 26px; line-height: 1.1; -webkit-text-stroke-width: 5px; }
@@ -263,7 +263,7 @@ body.popup-open .tut-ring, body.popup-open .tut-finger { display: none !importan
 .view-btn svg { width: 28px; height: 28px; }
 .view-btn:active, .view-btn.pressed { opacity: 1; }
 .view-btn:disabled { opacity: .5; }
-.view-flash { position: absolute; right: calc(var(--s-2) + env(safe-area-inset-right, 0px)); top: calc(36% + 60px); min-height: 32px; opacity: 0; pointer-events: none; }
+.view-flash { position: absolute; right: calc(var(--s-2) + env(safe-area-inset-right, 0px)); top: calc(max(36%, 224px + env(safe-area-inset-top, 0px)) + 58px); min-height: 32px; opacity: 0; pointer-events: none; }
 .view-flash.show { animation: viewFlash 1.4s var(--ease) both; }
 @keyframes viewFlash { 0% { opacity: 0; transform: translateY(-6px); } 12% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
 @media (orientation: landscape) and (max-height: 500px) { .view-btn { top: 34%; } .view-flash { top: calc(34% + 60px); } }
@@ -274,7 +274,8 @@ body.popup-open .tut-ring, body.popup-open .tut-finger { display: none !importan
    reduced-motion이면 점멸 없이 고정된 무지개빛 테두리 ── */
 .drive-controls { --boost: min(100px, 24vw); }
 .ctl-right { position: relative; }
-.boost-wrap { position: relative; width: calc(var(--boost) * 1.44); height: calc(var(--boost) * 1.44); }
+.boost-btn-wrap { position: relative; width: calc(var(--boost) * 1.44); height: calc(var(--boost) * 1.44); }
+.boost-wrap { position: absolute; inset: 0; }
 .boost-ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; opacity: 0; transform-origin: 50% 50%; }
 .boost-wrap.on .boost-ring { opacity: 1; }
 .br-good { fill: none; stroke: #FFD84D; opacity: .85; } .br-perfect { fill: none; stroke: #168A4C; }
@@ -309,53 +310,35 @@ body.popup-open .tut-ring, body.popup-open .tut-finger { display: none !importan
 .ctl-btn.boost.pressed, .ctl-btn.boost:active { transform: translateY(3px) scale(var(--press-scale)); box-shadow: 0 2px 0 #A66E00; } .ctl-btn.boost.pressed::after, .ctl-btn.boost:active::after { opacity: 1; }
 .ctl-btn.boost:focus-visible { box-shadow: 0 0 0 2px var(--accent), 0 0 0 4px var(--ink) !important; outline: none; }
 /* 중앙: 판정 글자(PERFECT!/GOOD/MISS)와 결승선 알림만 — 링은 BOOST 버튼 바깥 */
-.timing-pop { position: absolute; left: 50%; top: calc(172px + env(safe-area-inset-top, 0px)); width: min(54vw, 240px); height: 72px; margin-left: calc(min(54vw, 240px) / -2); display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0; transition: opacity var(--t-press) var(--ease); }
-.timing-pop.on { opacity: 1; }
-.tp-label { position: absolute; top: 0; left: 50%; transform: translateX(-50%); }
+/* ── 주행 중 큰 표시는 화면 상단 한 자리(.topdisp): 상단 HUD 줄 바로 아래 가운데, 3D 장면 위(HUD 맨 위 레이어). 부스트 링 = 크기 min(40vw, 38vh), 반투명 바탕 원판 + 굵은 외곽선 ── */
+.topdisp { --ring: min(40vw, 38vh); position: absolute; left: 0; right: 0; top: calc(112px + env(safe-area-inset-top, 0px)); height: var(--ring); display: flex; justify-content: center; pointer-events: none; z-index: 5; }
+.timing-pop { position: relative; width: var(--ring); height: var(--ring); flex: none; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0; transition: opacity var(--t-press) var(--ease); }
+.timing-pop.on, .timing-pop.ring { opacity: 1; }
+.td-disc { position: absolute; inset: 0; border-radius: var(--r-pill); background: rgba(255, 255, 255, .55); border: 5px solid var(--ink); opacity: 0; transition: opacity var(--t-press) var(--ease); }
+.timing-pop.on .td-disc, .timing-pop.ring .td-disc { opacity: 1; }
+.tp-label { position: absolute; bottom: 14%; left: 50%; transform: translateX(-50%); }
 .timing-pop.result .tp-label { opacity: 0; }
-.tp-result { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-family: var(--font-display); font-size: 54px; line-height: 1; opacity: 0; -webkit-text-stroke: 9px var(--navy); paint-order: stroke fill; }
+.tp-result { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-family: var(--font-display); font-size: clamp(32px, calc(var(--ring) * .36), 54px); line-height: 1; opacity: 0; -webkit-text-stroke: 8px var(--navy); paint-order: stroke fill; }
 .tp-result.show { animation: judgePopC .7s var(--ease-pop) forwards; }
 .tp-result.perfect { color: var(--yellow); } .tp-result.good { color: var(--green); } .tp-result.miss { color: var(--red); }
 @keyframes judgePopC { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.4); } 40% { transform: translate(-50%, -50%) scale(1.05); }
   70% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(1); } }
-@media (orientation: landscape) and (max-height: 500px) { .timing-pop { top: calc(104px + env(safe-area-inset-top, 0px)); } }
+@media (orientation: landscape) and (max-height: 500px) { .topdisp { top: calc(78px + env(safe-area-inset-top, 0px)); } }
 
 /* 제스처 차단: 조작 화면 전체에서 브라우저 기본 동작(스크롤·핀치·더블탭 확대·길게 누르기)이 포인터를 가로채지 않게 — JS 더블탭 방지 대신 CSS */
 html, body, #uiRoot, #renderCanvas, .hud, .drive-controls, .drive-controls * { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 html, body { overscroll-behavior: none; }
 
-/* ── 동시 구간 표시(부스트 가속 지점이 균형 구간 안에 겹칠 때만): 화면 위쪽 한 자리. 세로 = 링 위 · 압축 균형 아래, 가로 = 균형 왼쪽 · 링 오른쪽.
-   링은 기존 80%, 균형은 기존 60%. 입력을 받지 않음(pointer-events none). opacity/transform만 전환 ── */
-.simul { position: absolute; left: 50%; top: calc(172px + env(safe-area-inset-top, 0px)); transform: translateX(-50%) scale(.86); transform-origin: 50% 0; display: flex; flex-direction: column; align-items: center; gap: var(--s-1);
-  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity var(--t-ui) var(--ease), transform var(--t-ui) var(--ease), visibility 0s linear var(--t-ui); }
-.simul.on { opacity: 1; visibility: visible; transform: translateX(-50%) scale(1); transition-delay: 0s; }
-.simul-ring { --boost: min(80px, 19.2vw); /* 기존 링(--boost 100px → 144px)의 80% */ flex: none; }
-.simul-ring .boost-ring { opacity: 0; } .simul-ring.on .boost-ring { opacity: 1; }
-.simul-ring.result .boost-ring { opacity: .25; }
-.simul-ring .tp-result { font-size: 26px; -webkit-text-stroke-width: 6px; }
-.boost-wrap.simul-moved:not(.simul-ring) .boost-ring { opacity: 0; } /* 동시 구간엔 BOOST 둘레 링을 위쪽 표시로 옮김 */
-.simul-bal { position: relative; flex: none; width: calc(min(55vw, 280px) * .6); /* 기존 균형 바의 60% */ padding: 6px 8px 8px; border-radius: var(--r-md); background: var(--hud-bg); border: var(--hud-border); box-shadow: var(--hud-shadow); }
-.sb-rail { position: relative; height: 29px; margin: 0 14px; border-radius: var(--r-pill); }
-.sb-rail::before { content: ''; position: absolute; left: -14px; right: -14px; top: 0; bottom: 0; border-radius: var(--r-pill); background: var(--nm-bg-deep); box-shadow: var(--sh-inset-sm); }
-.sb-band { position: absolute; top: 7px; bottom: 7px; border-radius: 3px; border: 1.5px solid var(--ink); background: repeating-linear-gradient(135deg, var(--good-band) 0 4px, #2BAA68 4px 8px); }
-.simul-bal.in .sb-band { background: repeating-linear-gradient(135deg, #0F7A40 0 4px, #34C27A 4px 8px); }
-.sb-perfect { position: absolute; top: 5px; bottom: 5px; border-radius: 3px; background: #0A3D22; border: 1.5px solid #fff; box-shadow: 0 0 0 1px var(--ink); }
-.sb-zero { position: absolute; left: 50%; top: 9px; bottom: 9px; width: 2px; margin-left: -1px; background: rgba(20, 26, 51, .3); }
-.sb-target { position: absolute; left: 50%; top: -9px; width: 0; height: 0; margin-left: -6px; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 10px solid var(--ink); }
-.sb-knob { position: absolute; top: 1px; left: 50%; width: 26px; height: 26px; margin-left: -13px; border-radius: var(--r-pill); background: var(--nm-bg); border: 2px solid var(--ink); box-shadow: 0 2px 0 rgba(86, 66, 28, .55); will-change: left; }
-.simul-bal.in .sb-knob { background: var(--accent); }
-.simul-bal.perfect .sb-knob::after { content: '★'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; color: var(--ink); }
-.simul-bal.in:not(.perfect) .sb-knob::after { content: '✓'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; color: var(--ink); }
-.sb-prog { height: 8px; margin-top: 6px; border-radius: var(--r-pill); background: var(--nm-bg-deep); box-shadow: var(--sh-inset-sm); overflow: hidden; }
-.sb-prog i { display: block; height: 100%; width: 100%; background: #0A3D22; transform-origin: 0 50%; transform: scaleX(0); will-change: transform; }
-.sb-chip { position: absolute; left: calc(100% + 6px); top: 50%; margin-top: -14px; padding: 0 8px; min-height: 28px; display: flex; align-items: center; border-radius: var(--r-pill); background: var(--hud-bg); border: var(--hud-border); box-shadow: var(--hud-shadow);
-  font-family: var(--font-display); font-size: 16px; white-space: nowrap; opacity: 0; }
-.sb-chip.show { animation: sbChipIn .9s var(--ease-pop) forwards; }
-@keyframes sbChipIn { 0% { opacity: 0; transform: scale(.6); } 15% { opacity: 1; transform: scale(1.08); } 25% { transform: scale(1); } 85% { opacity: 1; } 100% { opacity: 0; } }
-.sb-chip.perfect { color: #8A5A00; } .sb-chip.good { color: #0F7A40; } .sb-chip.miss { color: var(--danger); }
-@media (orientation: landscape) and (max-height: 500px) {
-  .simul { top: calc(104px + env(safe-area-inset-top, 0px)); flex-direction: row; align-items: center; gap: var(--s-2); }
-  .simul-ring { order: 2; } .simul-bal { order: 1; width: calc(min(44vw, 240px) * .6); }
-  .sb-chip { left: auto; right: calc(100% + 6px); }
-}
-@media (prefers-reduced-motion: reduce) { .simul, .sb-chip.show { transition: none; animation: none; } .sb-chip.show { opacity: 1; } }
+/* BOOST 버튼: 링 표시 없음 — 가속 지점이 가까워지면 은은하게 맥동(transform/opacity만) */
+.ctl-btn.boost::before { content: ''; position: absolute; inset: -8px; border-radius: inherit; border: 4px solid var(--accent); opacity: 0; pointer-events: none; }
+.boost-btn-wrap.near .ctl-btn.boost::before { animation: boostNear .9s ease-in-out infinite; }
+@keyframes boostNear { 0%, 100% { opacity: 0; transform: scale(.94); } 50% { opacity: .75; transform: scale(1.08); } }
+@media (prefers-reduced-motion: reduce) { .boost-btn-wrap.near .ctl-btn.boost::before { animation: none; opacity: .6; } }
+/* 소리·일시정지 버튼은 세로로 쌓아 가운데 상단 표시와 안 겹치게 */
+.hud-controls { flex-direction: column; align-items: flex-end; gap: var(--s-1); right: calc(var(--s-1) + env(safe-area-inset-right, 0px)); }
+@media (orientation: landscape) and (max-height: 500px) { .hud-controls { flex-direction: row; } }
+.tut-banner.top { top: calc(120px + min(40vw, 38vh) + env(safe-area-inset-top, 0px)); white-space: normal; max-width: min(60vw, 300px); text-align: center; text-wrap: balance; }
+.view-btn { top: max(36%, calc(224px + env(safe-area-inset-top, 0px))); }
+@media (orientation: landscape) and (max-height: 500px) { .tut-banner.top { top: calc(76px + env(safe-area-inset-top, 0px)); max-width: min(60vw, 420px); } .view-btn { top: 34%; } }
+.boost-wrap.perfect-now.lowfx .br-stars .star, html[data-q="low"] .boost-btn-wrap.near .ctl-btn.boost::before { animation: none; } /* low 프리셋: 별 반짝임·버튼 맥동 생략 */
+html[data-q="low"] .boost-btn-wrap.near .ctl-btn.boost::before { opacity: .6; }

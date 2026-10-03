@@ -150,7 +150,7 @@ const Tutorial = {
         this.card(title, body, pic, () => {
           c.tScale = this.step === 'finish' ? 0.8 : TUT_SLOW;
           this.banner(this._text(`${this.step}Banner`));
-          const sels = this.step === 'combo' ? ['#balGauge', '#boostBtn'] : ['#boostWrap']; // BOOST 버튼과 그 둘레 링
+          const sels = this.step === 'combo' ? ['#balGauge', '#boostBtn'] : ['#gatePop', '#boostBtn']; // 위쪽 링 표시와 BOOST 버튼
           this.focus(sels, '#boostBtn');
         });
       }

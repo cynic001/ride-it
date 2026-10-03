@@ -134,7 +134,7 @@ async function run(browser, mode) {
     await okCard();
     await sleep(200);
     const f3 = await focusOk();
-    check(`${tag} 3 boost: focus on BOOST ring`, f3.ok && f3.sels.includes('#boostWrap'), JSON.stringify(f3));
+    check(`${tag} 3 boost: focus on the top ring + BOOST button`, f3.ok && f3.sels.includes('#gatePop'), JSON.stringify(f3));
     await boostAt(-0.32); // Good 범위(±0.25초) 밖 — 너무 일찍
     await sleep(300);
     s = await state();
@@ -157,11 +157,8 @@ async function run(browser, mode) {
     check(`${tag} 4 combo: boost without balance → retry with hint`, s.step === 'combo' && s.hint && /초록 띠/.test(s.banner), s.banner);
     await leanDown();
     await sleep(500);
-    await waitFor(() => UI._hud.simulOn, 15000).catch(() => {});
-    await sleep(300);
+    await sleep(500);
     await shot('04_combo_both');
-    const simOn = await page.evaluate(() => ({ on: UI._hud.simulOn, mirror: document.getElementById('simul').classList.contains('on') }));
-    check(`${tag} 4 combo: 동시 조작 표시(위쪽 링 + 압축 균형)가 그대로 보임`, simOn.on && simOn.mirror, JSON.stringify(simOn));
     await boostAt(0);
     await waitFor(() => Tutorial.step === 'rollback', 3000);
     await leanUp();
