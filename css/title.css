@@ -88,3 +88,12 @@
 
 html[data-q="low"] .t-rays, html[data-q="low"] .t-streak, html[data-q="low"] .t-star, html[data-q="low"] .t-cloud.far { display: none; }
 @media (prefers-reduced-motion: reduce) { .title-screen *, .title-screen { animation: none !important; } }
+
+/* 스테이지 선택에서 돌아온 짧은 입장(0.6초 이내) */
+.t-short .glyph .g-anim { animation-duration: 260ms; animation-delay: calc(var(--i) * 30ms); }
+.t-short .dusts circle { animation-duration: 300ms; animation-delay: calc(var(--i) * 30ms + 120ms); }
+.t-short .t-logo-wrap, .t-short .t-scene { animation: none; }
+.t-short .logo-shadow { animation-duration: 200ms; animation-delay: 100ms; }
+.t-short .t-ribbon-wrap { animation-duration: 200ms; animation-delay: 150ms; }
+.t-short .t-actions { animation-duration: 200ms; animation-delay: 100ms; }
+.t-short .logo-float { animation-delay: .4s; }

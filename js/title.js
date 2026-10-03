@@ -139,11 +139,12 @@ const Title = {
     if (!still && cart.animate) this._cartAnim = cart.animate(kf, { duration: 9000, iterations: Infinity, easing: 'linear' });
   },
 
-  render(onStart) {
+  render(onStart, opts = {}) {
     const v = new URLSearchParams(location.search).get('title') || this.DEFAULT_VARIANT;
     this.variant = ['a', 'b', 'c'].includes(v) ? v : this.DEFAULT_VARIANT;
     UI._setScreen(this.html(this.variant));
     const root = document.getElementById('titleScreen');
+    if (opts.short) root.classList.add('t-short'); // 되돌아온 타이틀: 짧은 입장(0.6초 이내)
     this._animate(root);
     const go = () => { Title._off(); onStart(); };
     root.querySelector('#titleStart').addEventListener('click', go);

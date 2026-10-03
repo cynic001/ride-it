@@ -204,8 +204,28 @@ const UI = {
   },
 
 
-  showTitle(onStart) {
-    Title.render(onStart);
+  /** 타이틀 — short = 스테이지 선택에서 돌아온 짧은 입장(0.6초 이내) */
+  showTitle(onStart, opts = {}) {
+    this._titleStart = onStart;
+    try { if (!history.state || history.state.screen !== 'title') history.replaceState({ screen: 'title' }, ''); } catch (e) { /* 무시 */ }
+    Title.render(onStart, opts);
+  },
+
+  /** 화면 이동 기록: 스테이지 선택으로 들어가면 history에 한 칸 쌓아, 뒤로 가기가 페이지를 떠나지 않고 타이틀로 돌아오게 */
+  _pushScreen(screen) {
+    try { if (!history.state || history.state.screen !== screen) history.pushState({ screen }, ''); } catch (e) { /* 무시 */ }
+  },
+
+  /** 처음 화면으로(로고·"← 처음으로"·뒤로 가기·Esc 공통) */
+  goHome() {
+    if (history.state && history.state.screen === 'select') { history.back(); return; } // popstate 처리기가 타이틀을 보여줌
+    this._toTitle();
+  },
+
+  _toTitle() {
+    Popup.closeAll();
+    if (window.Game && (Game.track || Game.cart)) Game.exitToStageSelect(true);
+    else this.showTitle(this._titleStart || (() => this.showStageSelect(STAGES, i => Game.loadStage(i))), { short: true });
   },
 
   /** 스테이지 선택 — 카드를 누르면 바로 시작하지 않고 상세 화면으로. onStart(i)는 상세의 START에서 호출 */
@@ -213,10 +233,10 @@ const UI = {
     this._onStart = onStart;
     this._setScreen(`
       <div class="screen stage-select">
-        <div class="top-nav">
-          <button class="icon-btn" id="howtoBtn" aria-label="${t('aria.howto')}">${ICONS.help}</button>
-          <div class="logo-mini">${t('brand.name')}<small>RIDE IT</small></div>
-          <button class="icon-btn" id="settingsBtn" aria-label="${t('aria.settings')}">${ICONS.gear}</button>
+        <div class="top-nav stage-nav">
+          <button class="btn nav-home" id="homeBtn" type="button">${ICONS.back}<span>${t('select.home')}</span></button>
+          <button class="logo-mini logo-home" id="logoHomeBtn" type="button" aria-label="${t('aria.home')}">${t('brand.name')}<small>RIDE IT</small></button>
+          <span class="nav-right"><button class="icon-btn" id="howtoBtn" aria-label="${t('aria.howto')}">${ICONS.help}</button><button class="icon-btn" id="settingsBtn" aria-label="${t('aria.settings')}">${ICONS.gear}</button></span>
         </div>
         <div class="progress-summary">${t('select.cleared', { n: ProgressManager.clearedCount, total: stages.length })}</div>
         <div class="stage-list">
@@ -248,6 +268,9 @@ const UI = {
     });
     document.getElementById('howtoBtn').addEventListener('click', () => this.showHowTo());
     document.getElementById('settingsBtn').addEventListener('click', () => this.showSettings());
+    document.getElementById('homeBtn').addEventListener('click', () => this.goHome());
+    document.getElementById('logoHomeBtn').addEventListener('click', () => this.goHome());
+    this._pushScreen('select');
     document.getElementById('tutorialStageBtn').addEventListener('click', () => Game.loadTutorial());
 
     // 처음 실행: "튜토리얼부터 해볼까요?" (예 / 건너뛰기) — 예전 "최초 1회 자동 조작법 안내"를 대체(조작법 화면은 ? 버튼으로 그대로)

@@ -20,6 +20,8 @@ const STRINGS = {
   'popup.prev': '이전',
   'popup.next': '다음',
   'aria.howto': '조작법',
+  'aria.home': '처음 화면으로',
+  'select.home': '처음으로',
   'aria.settings': '설정',
   'aria.back': '뒤로',
 

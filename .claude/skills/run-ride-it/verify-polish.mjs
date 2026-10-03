@@ -618,6 +618,57 @@ section('topdisp', async () => {
   function gbar0(g) { return g.h; }
 });
 
+// ── 4-A 스테이지 선택 → 타이틀 복귀: 로고 탭 · ← 처음으로 · 뒤로 가기 · Esc, 짧은 입장(0.6초 이내), 3회 반복에서 페이지 에러·메시 누수 없음
+section('nav', async () => {
+  for (const [name, w, h] of [['세로', 375, 667], ['가로', 667, 375], ['소형', 320, 568]]) {
+    const { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_quality: 'low' } });
+    await page.waitForSelector('#titleStart');
+    const sel = async () => { await page.click('#titleStart'); await page.waitForSelector('.stage-select', { timeout: 5000 }); };
+    const title = async () => { await page.waitForSelector('#titleScreen', { timeout: 5000 }); };
+    const shortOk = () => page.evaluate(() => { const root = document.getElementById('titleScreen'); const fin = document.getAnimations().filter(a => a.effect && a.effect.target && root.contains(a.effect.target) && isFinite(a.effect.getComputedTiming().iterations)).map(a => a.effect.getComputedTiming().endTime);
+      return { short: root.classList.contains('t-short'), maxEnd: Math.max(0, ...fin) }; });
+    const meshes = () => page.evaluate(() => Game.scene.meshes.length);
+    await sel();
+    const geo = await page.evaluate(() => { const R = q => { const b = document.querySelector(q).getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
+      const hit = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+      const home = R('#homeBtn'), logo = R('#logoHomeBtn'), how = R('#howtoBtn'), set = R('#settingsBtn');
+      return { home, logo, aria: document.getElementById('logoHomeBtn').getAttribute('aria-label'), label: document.querySelector('#homeBtn span').textContent, nowrap: getComputedStyle(document.getElementById('homeBtn')).whiteSpace,
+        overlap: [[home, logo], [home, how], [home, set], [logo, how], [logo, set], [how, set]].some(([a, b]) => hit(a, b)), inV: [home, logo, how, set].every(b => b.l >= 0 && b.r <= innerWidth), history: history.state && history.state.screen, hh: document.querySelector('#homeBtn').scrollWidth <= document.querySelector('#homeBtn').clientWidth + 1 }; });
+    check(`복귀 ${name}: 로고 aria-label "${geo.aria}"·터치 44px 이상(로고 ${Math.round(geo.logo.h)}px, ← 처음으로 ${Math.round(geo.home.h)}px)·한 줄(${geo.nowrap})·서로 안 겹침·화면 안`, geo.aria === '처음 화면으로' && geo.logo.h >= 44 && geo.logo.w >= 44 && geo.home.h >= 44 && geo.label === '처음으로' && geo.nowrap === 'nowrap' && !geo.overlap && geo.inV && geo.hh && geo.history === 'select', JSON.stringify(geo));
+    await page.goBack(); await title(); await sel();
+    const loopMeshes = [];
+    for (let i = 0; i < 3; i++) {
+      // 1) 로고 탭 → 타이틀(짧은 입장)
+      await page.click('#logoHomeBtn'); await title();
+      const a = await shortOk(); await page.waitForTimeout(700);
+      check(`복귀 ${name} #${i + 1}: 로고 탭 → 타이틀, 짧은 입장(끝나는 시점 ${Math.round(a.maxEnd)}ms ≤ 600ms)`, a.short && a.maxEnd <= 600, JSON.stringify(a));
+      await sel();
+      // 2) ← 처음으로
+      await page.click('#homeBtn'); await title(); await sel();
+      // 3) 뒤로 가기(브라우저/폰) — 페이지를 떠나지 않음
+      await page.goBack(); await title();
+      const still = await page.evaluate(() => ({ url: location.pathname, screen: !!document.getElementById('titleScreen'), hist: history.state && history.state.screen }));
+      check(`복귀 ${name} #${i + 1}: 뒤로 가기 → 페이지를 떠나지 않고 타이틀(${still.url})`, still.url.endsWith('index.html') || still.url === '/', JSON.stringify(still));
+      await sel();
+      // 4) Esc
+      await page.keyboard.press('Escape'); await title(); await sel();
+      // 5) 게임에 들어갔다가 뒤로 가기 → 타이틀, 메시 정리
+      await page.click('.stage-btn[data-index="0"]'); await page.click('#stageStartBtn'); await page.waitForSelector('#startBar', { timeout: 30000 });
+      await page.goBack(); await title();
+      const g = await page.evaluate(() => ({ track: !!Game.track, cartMesh: !!Game.cartMesh, hud: !!document.getElementById('startBar') }));
+      check(`복귀 ${name} #${i + 1}: 게임 중 뒤로 가기 → 타이틀로 나오고 트랙·카트 메시 정리`, !g.track && !g.cartMesh && !g.hud, JSON.stringify(g));
+      loopMeshes.push(await meshes());
+      await sel();
+    }
+    check(`복귀 ${name}: 3회 반복 후에도 메시 수가 늘지 않음(${loopMeshes.join(',')})`, loopMeshes[1] === loopMeshes[0] && loopMeshes[2] === loopMeshes[0], loopMeshes.join(','));
+    // 설정·사운드·기록 유지
+    const keep = await page.evaluate(() => ({ q: localStorage.getItem('rc_quality'), audio: AudioManager.enabled, ctx: AudioManager.ctx ? AudioManager.ctx.state : 'none' }));
+    check(`복귀 ${name}: 설정·사운드 상태 유지(품질 ${keep.q}, 사운드 ${keep.audio})`, keep.q === 'low' && keep.audio === true, JSON.stringify(keep));
+    check(`nav ${name} page error 0`, errors.length === 0, errors.join('|'));
+    await close();
+  }
+});
+
 for (const [name, fn] of sections) {
   if (ONLY && !ONLY.includes(name)) continue;
   try { await fn(); } catch (e) { check(`${name} 실행`, false, String(e.message).split('\n')[0]); }

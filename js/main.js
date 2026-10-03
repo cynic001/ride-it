@@ -121,7 +121,7 @@ const Game = {
   },
 
   /** 일시정지 메뉴 → 스테이지 선택으로 복귀 (재시도 로직과 동일한 dispose 패턴) */
-  exitToStageSelect() {
+  exitToStageSelect(toTitle = false) {
     if (window.Tutorial) Tutorial.end();
     this.tutorialMode = false;
     this.paused = false;
@@ -138,7 +138,8 @@ const Game = {
     UI.hidePauseOverlay();
     AudioManager.setBgmMode('menu');
     SpeedLines.draw(0, 0);
-    UI.showStageSelect(STAGES, i => Game.loadStage(i));
+    if (toTitle) UI.showTitle(() => UI.showStageSelect(STAGES, i => Game.loadStage(i)), { short: true });
+    else UI.showStageSelect(STAGES, i => Game.loadStage(i));
   },
 
   /** 카트 glTF 로드 — 트랙 진행률(t)에 따라 매 고정 스텝마다 위치/방향 갱신 */
@@ -652,6 +653,17 @@ window.addEventListener('DOMContentLoaded', () => {
   Game.init();
   if (new URLSearchParams(location.search).has('touch-debug')) { const k = document.createElement('script'); k.src = 'js/touch-debug.js'; document.body.appendChild(k); } // 개발 전용 터치 진단(?touch-debug)
   UI.showTitle(() => UI.showStageSelect(STAGES, stageIndex => Game.loadStage(stageIndex)));
+  // 뒤로 가기: 스테이지 선택(또는 그 뒤 게임)에서 뒤로 → 페이지를 떠나지 않고 타이틀. 로딩 중엔 무시(기록만 되돌림)
+  window.addEventListener('popstate', e => {
+    const sc = e.state && e.state.screen;
+    if (document.getElementById('loadingOverlay')) { UI._pushScreen('select'); return; }
+    if (sc === 'select') { if (!document.querySelector('.stage-select, .stage-detail') && !(Game.track || Game.cart)) UI.showStageSelect(STAGES, i => Game.loadStage(i)); return; }
+    UI._toTitle();
+  });
+  // Esc: 스테이지 선택 화면에서(팝업이 없을 때) 처음 화면으로
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.querySelector('.stage-select') && !document.querySelector('.popup')) { e.preventDefault(); UI.goHome(); }
+  });
 });
 
 // iOS Safari 등 자동재생 제한 대응 — 사용자 제스처에서 AudioContext 생성/resume.
