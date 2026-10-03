@@ -351,11 +351,11 @@ async function main() {
         await page.mouse.click(px, py);
         const res = await page.evaluate(() => { const r = Game.cart._gateResults; return r.length ? r[r.length - 1].result : 'none'; });
         await sleep(120);
-        const shown = await page.evaluate(() => document.getElementById('gatePopResult').textContent);
+        const shown = await page.evaluate(() => (UI._hud.simulOn ? document.getElementById('simRes') : document.getElementById('gatePopResult')).textContent);
         if (s === STAGES[0]) await shot(`${tag}_2d_pop_result`);
         check(`${tag} boost ring matches timing judge`, gg.on && Math.abs(gg.ring - gg.expRing) < 0.05 && Math.abs(gg.goodW - 37.5 * gg.good) < 0.02 && Math.abs(gg.perfW - 37.5 * gg.perfect) < 0.02,
           `err=${gg.err.toFixed(3)}s ring=${gg.ring}/${gg.expRing.toFixed(2)} good=${gg.goodW} perfect=${gg.perfW}`);
-        check(`${tag} BOOST when the ring reaches the target → perfect, shown in the center`, res === 'perfect' && shown === 'PERFECT!', `${gg.type} → ${res} / "${shown}"`);
+        check(`${tag} BOOST when the ring reaches the target → perfect, shown in the center (or in the ring slot during a simultaneous section)`, res === 'perfect' && shown === 'PERFECT!', `${gg.type} → ${res} / "${shown}"`);
       }
       await page.evaluate(() => { if (!Game.cart.isFinished) { Game.lastTime = performance.now(); Game.engine.runRenderLoop(() => Game._loop()); } });
 

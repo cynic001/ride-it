@@ -525,6 +525,58 @@ section('title', async () => {
   await rm.close();
 });
 
+// ── 동시 구간(부스트 가속 지점이 균형 구간 안에 겹침): 위쪽 한 자리 표시 — 배치·크기·겹침·판정 위치 분리·균형 진행 유지·끝나면 원복
+section('simul', async () => {
+  for (const [name, w, h] of [['세로', 375, 667], ['가로', 667, 375], ['소형', 320, 568]]) {
+    const { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_derail: 'off', rc_quality: 'medium' } });
+    await loadStage(page, 0);
+    await page.evaluate(() => { Game.engine.stopRenderLoop(); window.dispatchEvent(new CustomEvent('cart-launched', { detail: { strength: 1, flickMultiplier: 1 } })); Game.cart.launch(1, 1); });
+    const step = (n, until) => page.evaluate(([n, until]) => {
+      const c = Game.cart; let i = 0;
+      while (i++ < n) { const b = c.balanceState; c.leanInput = b ? b.dir * b.target : 0; Game._fixedUpdate(1 / 60); if (until) { const g = c.gateTiming(), bs = c.balanceState; if (bs && g && g.type === 'boost' && g.timeTo <= until) break; } }
+      UI.updateHUD(c, Game.track); Game.scene.render();
+      const bs = c.balanceState; return { sim: UI._hud.simulOn, prog: bs ? bs.progress : null, timeTo: c.gateTiming() ? c.gateTiming().timeTo : null };
+    }, [n, until]);
+    const off0 = await step(5);
+    check(`동시 ${name}: 평소엔 표시 없음`, off0.sim === false);
+    const s0 = await step(20000, 0.75);
+    await page.waitForTimeout(700);
+    check(`동시 ${name}: 균형 구간 안 가속 지점 0.75초 전에 표시가 켜짐`, s0.sim === true, JSON.stringify(s0));
+    const geo = await page.evaluate(() => {
+      const R = q => { const e = document.querySelector(q); const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
+      const box = { ring: R('#simRing'), bal: R('#simBal'), ctrl: R('.hud-controls'), view: R('#cameraToggleBtn'), row: R('.hud-row'), realBar: R('#balGauge'), boost: R('#boostBtn'), real: R('#boostWrap') };
+      const hit = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+      const W = innerWidth, H = innerHeight;
+      const names = ['ctrl', 'view', 'row', 'realBar', 'boost'];
+      const over = names.filter(n => hit(box.ring, box[n]) || hit(box.bal, box[n]));
+      const inV = [box.ring, box.bal].every(b => b.l >= 0 && b.r <= W && b.t >= 0 && b.b <= H);
+      const mainRingHidden = getComputedStyle(document.querySelector('#boostWrap .boost-ring')).opacity === '0';
+      const barW = box.realBar.w, ringFull = parseFloat(getComputedStyle(document.querySelector('#boostWrap')).width);
+      const stack = box.ring.b <= box.bal.t + 1 ? 'ring-above' : box.ring.l >= box.bal.r - 1 ? 'bal-left' : 'other';
+      return { over, inV, mainRingHidden, ringRatio: box.ring.w / ringFull, balRatio: box.bal.w / barW, stack, ringW: box.ring.w, balW: box.bal.w };
+    });
+    check(`동시 ${name}: 화면 안·다른 HUD/조작과 안 겹침, BOOST 둘레 링은 위쪽으로 이동`, geo.inV && geo.over.length === 0 && geo.mainRingHidden, JSON.stringify(geo));
+    check(`동시 ${name}: 링 = 기존의 80%(${geo.ringRatio.toFixed(2)}), 균형 = 기존 바의 60%(${geo.balRatio.toFixed(2)})`, Math.abs(geo.ringRatio - 0.8) < 0.03 && Math.abs(geo.balRatio - 0.6) < 0.08, JSON.stringify(geo));
+    check(`동시 ${name}: 배치 ${name === '세로' || name === '소형' ? '링 위·균형 아래' : '균형 왼쪽·링 오른쪽'}`, name === '가로' ? geo.stack === 'bal-left' : geo.stack === 'ring-above', geo.stack);
+    // 판정: 부스트 결과는 링 자리, 균형 결과는 칩 — 겹치지 않음. 부스트 입력이 균형 진행도를 초기화하지 않음
+    const pBefore = (await step(1)).prog;
+    await page.evaluate(() => { const c = Game.cart; for (let i = 0; i < 600; i++) { const g = c.gateTiming(); if (g && g.err >= -0.01) break; const b = c.balanceState; c.leanInput = b ? b.dir * b.target : 0; Game._fixedUpdate(1 / 60); } UI.updateHUD(c, Game.track); });
+    const res = await page.evaluate(() => { const c = Game.cart; const r = c.resolveGate(); window.dispatchEvent(new CustomEvent('gate-result', { detail: { type: 'boost', result: r } })); window.dispatchEvent(new CustomEvent('balance-judge', { detail: 'perfect' })); Game.scene.render(); return r; });
+    await page.waitForTimeout(250);
+    const pAfter = (await step(1)).prog;
+    check(`동시 ${name}: 부스트 입력 뒤에도 균형 진행도 유지(${pBefore?.toFixed(2)} → ${pAfter?.toFixed(2)})`, pBefore !== null && pAfter !== null && pAfter >= pBefore - 0.001, `${pBefore} ${pAfter}`);
+    const rr = await page.evaluate(() => { const R = q => { const b = document.querySelector(q).getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; }; const a = R('#simRes'), c = R('#sbChip');
+      return { res: document.getElementById('simRes').textContent, chip: document.getElementById('sbChip').textContent, gatePopOn: document.getElementById('gatePop').classList.contains('on'), sep: a.r <= c.l || c.r <= a.l || a.b <= c.t || c.b <= a.t }; });
+    check(`동시 ${name}: 부스트 결과(${rr.res})는 링 자리, 균형 결과(${rr.chip})는 칩 — 서로 안 가리고 가운데 팝업은 안 뜸`, !!rr.res && !!rr.chip && rr.sep && !rr.gatePopOn, JSON.stringify(rr));
+    // 끝나면 원복: 유지 시간 지나고 커브 끝까지
+    await page.waitForTimeout(1100); await page.evaluate(() => { const c = Game.cart; let i = 0; while (c.balanceState && i++ < 2000) { c.leanInput = 0; Game._fixedUpdate(1 / 60); } for (let k = 0; k < 90; k++) Game._fixedUpdate(1 / 60); UI.updateHUD(c, Game.track); }); await page.waitForTimeout(500);
+    const end = await page.evaluate(() => ({ sim: UI._hud.simulOn, op: getComputedStyle(document.getElementById('simul')).opacity, ring: document.getElementById('boostWrap').classList.contains('simul-moved') }));
+    check(`동시 ${name}: 구간이 끝나면 표시가 사라지고 BOOST 둘레 링이 돌아옴`, end.sim === false && end.ring === false && parseFloat(end.op) < 0.05, JSON.stringify(end));
+    check(`simul ${name} page error 0`, errors.length === 0, errors.join('|'));
+    await close();
+  }
+});
+
 for (const [name, fn] of sections) {
   if (ONLY && !ONLY.includes(name)) continue;
   try { await fn(); } catch (e) { check(`${name} 실행`, false, String(e.message).split('\n')[0]); }

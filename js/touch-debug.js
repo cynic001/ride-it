@@ -36,7 +36,7 @@
     const act = [...active].map(([id, p]) => `#${p.n}(id ${id})=${p.role}`).join('  ') || '-';
     const gs = Object.entries(gesture).map(([k, v]) => `${k.replace('gesture', 'g.')}:${v}`).join(' ');
     const roles = window.Game && Game.input && Game.input.pointers ? Game.input.pointers().map(p => `${p.id}:${p.role}`).join(' ') || '-' : 'n/a';
-    panel.textContent = `touch-debug  (원 = 손가락)\n활성: ${act}\n앱 배정: ${roles}\n${rows.join('\n')}\n${gs}\n--\n${log.join('\n')}`;
+    panel.textContent = `touch-debug  (원 = 손가락)\n활성: ${act}\n배정: ${roles}\n${rows.join('\n')}\n${gs}\n--\n${log.join('\n')}`;
   };
   const schedule = () => { if (!raf) raf = requestAnimationFrame(draw); };
 

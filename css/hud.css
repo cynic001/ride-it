@@ -323,3 +323,39 @@ body.popup-open .tut-ring, body.popup-open .tut-finger { display: none !importan
 /* 제스처 차단: 조작 화면 전체에서 브라우저 기본 동작(스크롤·핀치·더블탭 확대·길게 누르기)이 포인터를 가로채지 않게 — JS 더블탭 방지 대신 CSS */
 html, body, #uiRoot, #renderCanvas, .hud, .drive-controls, .drive-controls * { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 html, body { overscroll-behavior: none; }
+
+/* ── 동시 구간 표시(부스트 가속 지점이 균형 구간 안에 겹칠 때만): 화면 위쪽 한 자리. 세로 = 링 위 · 압축 균형 아래, 가로 = 균형 왼쪽 · 링 오른쪽.
+   링은 기존 80%, 균형은 기존 60%. 입력을 받지 않음(pointer-events none). opacity/transform만 전환 ── */
+.simul { position: absolute; left: 50%; top: calc(172px + env(safe-area-inset-top, 0px)); transform: translateX(-50%) scale(.86); transform-origin: 50% 0; display: flex; flex-direction: column; align-items: center; gap: var(--s-1);
+  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity var(--t-ui) var(--ease), transform var(--t-ui) var(--ease), visibility 0s linear var(--t-ui); }
+.simul.on { opacity: 1; visibility: visible; transform: translateX(-50%) scale(1); transition-delay: 0s; }
+.simul-ring { --boost: min(80px, 19.2vw); /* 기존 링(--boost 100px → 144px)의 80% */ flex: none; }
+.simul-ring .boost-ring { opacity: 0; } .simul-ring.on .boost-ring { opacity: 1; }
+.simul-ring.result .boost-ring { opacity: .25; }
+.simul-ring .tp-result { font-size: 26px; -webkit-text-stroke-width: 6px; }
+.boost-wrap.simul-moved:not(.simul-ring) .boost-ring { opacity: 0; } /* 동시 구간엔 BOOST 둘레 링을 위쪽 표시로 옮김 */
+.simul-bal { position: relative; flex: none; width: calc(min(55vw, 280px) * .6); /* 기존 균형 바의 60% */ padding: 6px 8px 8px; border-radius: var(--r-md); background: var(--hud-bg); border: var(--hud-border); box-shadow: var(--hud-shadow); }
+.sb-rail { position: relative; height: 29px; margin: 0 14px; border-radius: var(--r-pill); }
+.sb-rail::before { content: ''; position: absolute; left: -14px; right: -14px; top: 0; bottom: 0; border-radius: var(--r-pill); background: var(--nm-bg-deep); box-shadow: var(--sh-inset-sm); }
+.sb-band { position: absolute; top: 7px; bottom: 7px; border-radius: 3px; border: 1.5px solid var(--ink); background: repeating-linear-gradient(135deg, var(--good-band) 0 4px, #2BAA68 4px 8px); }
+.simul-bal.in .sb-band { background: repeating-linear-gradient(135deg, #0F7A40 0 4px, #34C27A 4px 8px); }
+.sb-perfect { position: absolute; top: 5px; bottom: 5px; border-radius: 3px; background: #0A3D22; border: 1.5px solid #fff; box-shadow: 0 0 0 1px var(--ink); }
+.sb-zero { position: absolute; left: 50%; top: 9px; bottom: 9px; width: 2px; margin-left: -1px; background: rgba(20, 26, 51, .3); }
+.sb-target { position: absolute; left: 50%; top: -9px; width: 0; height: 0; margin-left: -6px; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 10px solid var(--ink); }
+.sb-knob { position: absolute; top: 1px; left: 50%; width: 26px; height: 26px; margin-left: -13px; border-radius: var(--r-pill); background: var(--nm-bg); border: 2px solid var(--ink); box-shadow: 0 2px 0 rgba(86, 66, 28, .55); will-change: left; }
+.simul-bal.in .sb-knob { background: var(--accent); }
+.simul-bal.perfect .sb-knob::after { content: '★'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; color: var(--ink); }
+.simul-bal.in:not(.perfect) .sb-knob::after { content: '✓'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; color: var(--ink); }
+.sb-prog { height: 8px; margin-top: 6px; border-radius: var(--r-pill); background: var(--nm-bg-deep); box-shadow: var(--sh-inset-sm); overflow: hidden; }
+.sb-prog i { display: block; height: 100%; width: 100%; background: #0A3D22; transform-origin: 0 50%; transform: scaleX(0); will-change: transform; }
+.sb-chip { position: absolute; left: calc(100% + 6px); top: 50%; margin-top: -14px; padding: 0 8px; min-height: 28px; display: flex; align-items: center; border-radius: var(--r-pill); background: var(--hud-bg); border: var(--hud-border); box-shadow: var(--hud-shadow);
+  font-family: var(--font-display); font-size: 16px; white-space: nowrap; opacity: 0; }
+.sb-chip.show { animation: sbChipIn .9s var(--ease-pop) forwards; }
+@keyframes sbChipIn { 0% { opacity: 0; transform: scale(.6); } 15% { opacity: 1; transform: scale(1.08); } 25% { transform: scale(1); } 85% { opacity: 1; } 100% { opacity: 0; } }
+.sb-chip.perfect { color: #8A5A00; } .sb-chip.good { color: #0F7A40; } .sb-chip.miss { color: var(--danger); }
+@media (orientation: landscape) and (max-height: 500px) {
+  .simul { top: calc(104px + env(safe-area-inset-top, 0px)); flex-direction: row; align-items: center; gap: var(--s-2); }
+  .simul-ring { order: 2; } .simul-bal { order: 1; width: calc(min(44vw, 240px) * .6); }
+  .sb-chip { left: auto; right: calc(100% + 6px); }
+}
+@media (prefers-reduced-motion: reduce) { .simul, .sb-chip.show { transition: none; animation: none; } .sb-chip.show { opacity: 1; } }

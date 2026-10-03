@@ -275,13 +275,20 @@ const AudioManager = {
 
   // ── 3) 밸런스 판정 성공/실패(perfect/good/miss) — cart.js가 tier 변화 시에만 dispatch ──
   playBalanceResult(tier) {
-    if (tier === 'perfect') this._blip({ freq: 880, duration: 0.1, type: 'sine', peak: 0.15 });
-    else if (tier === 'good') this._blip({ freq: 600, duration: 0.08, type: 'sine', peak: 0.12 });
-    else this._blip({ freq: 140, duration: 0.12, type: 'square', peak: 0.12 });
+    // 부스트와 겹치는 순간(동시 구간 표시 중이거나 부스트 효과음이 방금 난 직후)엔 부스트 소리 우선 — 균형 소리는 120ms 늦추고 볼륨 70%
+    const overlap = this.simulActive || performance.now() - (this._gateSoundAt || 0) < 120;
+    const k = overlap ? 0.7 : 1;
+    const play = () => {
+      if (tier === 'perfect') this._blip({ freq: 880, duration: 0.1, type: 'sine', peak: 0.15 * k });
+      else if (tier === 'good') this._blip({ freq: 600, duration: 0.08, type: 'sine', peak: 0.12 * k });
+      else this._blip({ freq: 140, duration: 0.12, type: 'square', peak: 0.12 * k });
+    };
+    if (overlap) setTimeout(play, 120); else play();
   },
 
   // ── 4) 게이트(부스트/브레이크) 판정 + 6) 피니쉬 판정 사운드(같은 경로, type으로 구분) ──
   playGateResult(type, result) {
+    this._gateSoundAt = performance.now();
     const peak = result === 'perfect' ? 0.2 : result === 'good' ? 0.15 : 0.1;
     if (type === 'finish') {
       this._blip({ freq: 700, duration: 0.12, type: 'triangle', peak });

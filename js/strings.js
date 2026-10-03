@@ -241,7 +241,7 @@ const STRINGS = {
   'tut.balanceHint': '손잡이를 초록 띠 안으로!',
   'tut.boostCard': 'BOOST 둘레의 링이 줄어들어요. <b>링이 점선에 닿는 순간</b> {boost}! 부스트는 속도를 확 올려 주는 가속이에요.',
   'tut.boostBanner': '링이 닿을 때 {boost}',
-  'tut.comboCard': '이번엔 함께! 바를 유지한 채 링이 닿을 때 {boost}.',
+  'tut.comboCard': '이번엔 함께! 바는 그대로 두고, 위쪽 링이 닿을 때 {boost}.',
   'tut.comboBanner': '바 유지 + 부스트!',
   'tut.rollbackCard': '언덕에서 <b>뒤로 미끄러져요!</b> {boost}를 <b>마구 눌러</b> 올라가요.',
   'tut.rollbackBanner': '{boost} 마구 누르기!',

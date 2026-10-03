@@ -60,6 +60,8 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE, SLOPPY, D_S
     const gatePlans = {};
     const mashRate = model === 'perfect' ? 9 : Math.max(3.5, 6 + gauss(r) * 1.2); // 초당 연타 횟수
     let mashAcc = 0, crests = 0, wasHold = false; const dsegs = [];
+    // 동시 구간(부스트 가속 지점 ±1초가 균형 구간 안에 겹침) — 1랩 기준 횟수·누적 초. 판정 해결 여부와 무관하게 기하(가속 지점까지의 시간)로 계산
+    let simulSec = 0, simulN = 0, wasS = false; const simulList = [];
     const curveSecs = []; let curveIn = null; // 커브 세그먼트별 체류 시간(초) — 밸런스 1.5초 유지 판정 가능 여부
     while (!cart.isFinished && !cart.failed && time < 900) {
       const seg = tr.getSegmentAt(cart.t);
@@ -118,6 +120,12 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE, SLOPPY, D_S
       if (cart.derails > dBefore) dsegs.push(tr.segmentRanges.findIndex(x => x.tStart === cart.derailState.tStart));
       if (cart._crestHold > 0 && !wasHold) crests += 1; wasHold = cart._crestHold > 0; // 체인 리프트 정상 멈칫 횟수
       time += 1 / 60;
+      if (cart.currentLap === 1 && !cart.rollback) {
+        const tps = Math.max(0.1, cart.speed * Cart.speedScale * cart.tScale) / tr.lengthM;
+        const inS = !!cart.balanceState && cart._gateCandidates().some(c => c.type === 'boost' && Math.abs(c.dT / tps) <= 1);
+        if (inS) { simulSec += 1 / 60; if (!wasS) { simulN++; simulList.push(+time.toFixed(1)); } }
+        wasS = inS;
+      }
       if (cart.currentLap === 1) { for (const e of events) if (prevT < e && cart.t >= e) hits.push(time); prevT = cart.t; }
       if (cart.speed <= 2.05) stag += 1 / 60;
       if (tr.getTangentAt(cart.t).y > 0.12) climb += 1 / 60; // 오르막 체류 시간
@@ -130,7 +138,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE, SLOPPY, D_S
     for (let k = 1; k < hits.length; k++) minGap = Math.min(minGap, hits[k] - hits[k - 1]);
     const mash = cart.rollbackLog.filter(x => x.mode === 'mash');
     const curveN = sd.segments.filter(g => g.requiredLean > 0).length * LAPS;
-    return { curveSecs, crests, curveRate: (cart.curvesCleared || 0) / curveN, perfectRate: cart.balancePerfects / curveN, mashSec: mash.length ? mash[0].climbSec : null, mashAssisted: mash.some(x => x.assisted), mashBonus: cart.scoreBreakdown.mashBonus, climb, minGap, gc, gTotal, jr: cart.judgeSummary().ratio, rank: cart.judgeSummary().rank, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, dsegs, derails: cart.derails, failed: cart.failed, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
+    return { simulN, simulSec: +simulSec.toFixed(2), simulList, curveSecs, crests, curveRate: (cart.curvesCleared || 0) / curveN, perfectRate: cart.balancePerfects / curveN, mashSec: mash.length ? mash[0].climbSec : null, mashAssisted: mash.some(x => x.assisted), mashBonus: cart.scoreBreakdown.mashBonus, climb, minGap, gc, gTotal, jr: cart.judgeSummary().ratio, rank: cart.judgeSummary().rank, low: cart.lowSpeedTime / cart.rideTime, assist: cart.assistTime / cart.rideTime, dsegs, derails: cart.derails, failed: cart.failed, score: cart.score, bd: cart.scoreBreakdown, time, stag, vmax: cart.maxSpeed * 3.6, cap: cart.maxSpeedMs * 3.6, maxCombo: cart.maxCombo };
   }
 
   return STAGES.map((sd, i) => {
@@ -150,6 +158,7 @@ const out = await page.evaluate(({ RUNS, LAPS, NOCAP, SCALE, DEVICE, SLOPPY, D_S
     const round = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Math.round(v)]));
     return {
       stage: i + 1, climbs, derailSim,
+      simul: { perLap1: perfect.simulN, secLap1: perfect.simulSec, at: perfect.simulList },
       perfect: { curveSecs: perfect.curveSecs.map(x => x.sec), crests: perfect.crests, curveRate: +perfect.curveRate.toFixed(2), perfectRate: +perfect.perfectRate.toFixed(2), mashSec: perfect.mashSec === null ? null : +perfect.mashSec.toFixed(2), climbSec: +perfect.climb.toFixed(1), minEventGapSec: +perfect.minGap.toFixed(2), gatePGM: [perfect.gc.perfect, perfect.gc.good, perfect.gc.miss], judgeRatio: +perfect.jr.toFixed(2), lowRatio: +perfect.low.toFixed(3), assistRatio: +perfect.assist.toFixed(3), score: Math.round(perfect.score), bd: round(perfect.bd), timeSec: +perfect.time.toFixed(1), stagSec: +perfect.stag.toFixed(1), vmaxKmh: Math.round(perfect.vmax), capKmh: Math.round(perfect.cap), maxCombo: perfect.maxCombo },
       average: {
         score: Math.round(mean(x => x.score)),

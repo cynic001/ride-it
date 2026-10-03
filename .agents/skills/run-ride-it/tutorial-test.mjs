@@ -157,7 +157,11 @@ async function run(browser, mode) {
     check(`${tag} 4 combo: boost without balance → retry with hint`, s.step === 'combo' && s.hint && /초록 띠/.test(s.banner), s.banner);
     await leanDown();
     await sleep(500);
+    await waitFor(() => UI._hud.simulOn, 15000).catch(() => {});
+    await sleep(300);
     await shot('04_combo_both');
+    const simOn = await page.evaluate(() => ({ on: UI._hud.simulOn, mirror: document.getElementById('simul').classList.contains('on') }));
+    check(`${tag} 4 combo: 동시 조작 표시(위쪽 링 + 압축 균형)가 그대로 보임`, simOn.on && simOn.mirror, JSON.stringify(simOn));
     await boostAt(0);
     await waitFor(() => Tutorial.step === 'rollback', 3000);
     await leanUp();

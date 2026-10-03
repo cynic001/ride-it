@@ -116,6 +116,9 @@ const ICONS = {
 // 0인 순간 링이 목표 반지름(BR_T, 버튼 가장자리 바로 바깥)에 닿음. Good/Perfect 띠 두께도 같은 식(±good/±perfect초)이라 판정(cart.gateTiming)과 어긋날 수 없음.
 // 좌표는 viewBox 144 기준(버튼 반지름 BR_BTN = 50, 링 바깥 끝 BR_OUT = 72).
 const BR_BTN = 50, BR_T = 57, BR_OUT = 72, POP_RANGE = 0.8; // 링이 나타나는 시점 = 중심 도달 0.8초 전
+const BR_STARS = '<g class="br-stars"><path class="star" transform="translate(114 30)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/><path class="star" transform="translate(30 30)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/><path class="star" transform="translate(30 114)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/><path class="star" transform="translate(114 114)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/></g>';
+const SIMUL_RANGE = 1.0;  // 부스트(링)와 균형 구간이 겹치는 "동시 구간": 가속 지점 ±1초(균형 구간 안일 때만)
+const SIMUL_HOLD = 0.9;   // 판정 결과를 보여주는 시간(초) — 이 동안은 동시 표시 유지
 const BAL_RING_C = 2 * Math.PI * 20; // 균형 바 노브 둘레 링(r=20) 길이 — 진행도 = stroke-dashoffset
 const DERAIL_HITS = 3; // cart.js DERAIL.maxHits와 같은 값(HUD 하트 개수)
 const JUDGE_LABEL = { perfect: 'PERFECT!', good: 'GOOD', miss: 'MISS' };
@@ -603,6 +606,7 @@ const UI = {
           <div class="key-hint">${t('start.keys')}</div>
         </div>
         ${this._driveControlsHTML()}
+        ${this._simulHTML()}
         <div class="hud-controls">
           <button class="hud-btn" id="soundToggleBtn" aria-label="${t('hud.sound')}">${AudioManager.enabled ? ICONS.soundOn : ICONS.soundOff}</button>
           <button class="hud-btn" id="pauseBtn" disabled aria-label="${t('hud.pause')}">${ICONS.pause}</button>
@@ -618,6 +622,8 @@ const UI = {
       bal: $('balGauge'), balDir: $('balDir'), balBand: $('balBand'), balPerfect: $('balPerfect'), balKnob: $('balKnob'), balTarget: $('balTarget'), balRing: $('balRing'), balResult: $('balResult'), balLast: null,
       pop: $('gatePop'), popLabel: $('gatePopLabel'), popResult: $('gatePopResult'), ringWrap: $('boostWrap'), ring: $('brRing'), ringOut: $('brOut'), ringGood: $('brGood'), ringPerfect: $('brPerfect'), ringFlash: $('brFlash'), popKey: null, popResultUntil: 0, popPrevErr: null, popTick: 0,
       judge: $('judgeToast'), hearts: $('hearts'), lastDerails: 0,
+      simul: $('simul'), simBal: $('simBal'), simRing: $('simRing'), simRingC: $('simRingC'), simOut: $('simOut'), simGood: $('simGood'), simPerfect: $('simPerfect'), simFlash: $('simFlash'), simRes: $('simRes'),
+      sbBand: $('sbBand'), sbPerfect: $('sbPerfect'), sbTarget: $('sbTarget'), sbKnob: $('sbKnob'), sbProg: $('sbProg'), sbChip: $('sbChip'), simulOn: false, simulUntil: 0,
       rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
     };
 
@@ -676,8 +682,14 @@ const UI = {
     window.addEventListener('gate-result', this._gateHandler);
     if (this._balJudgeHandler) window.removeEventListener('balance-judge', this._balJudgeHandler);
     this._balJudgeHandler = e => { // 밸런스 판정 확정/실패 — 게이지 위에 짧게
-      const r = this._hud && this._hud.balResult;
+      const hh = this._hud;
+      const r = hh && hh.balResult;
       if (!r) return;
+      if (hh.simulOn) { // 동시 구간: 균형 결과는 압축 표시 옆 작은 칩으로(링 결과와 위치 분리)
+        hh.sbChip.textContent = JUDGE_LABEL[e.detail]; hh.sbChip.className = 'sb-chip'; void hh.sbChip.offsetWidth; hh.sbChip.className = `sb-chip show ${e.detail}`;
+        hh.simulUntil = Math.max(hh.simulUntil, performance.now() + SIMUL_HOLD * 1000);
+        return;
+      }
       r.textContent = JUDGE_LABEL[e.detail];
       r.className = 'bal-result';
       void r.offsetWidth;
@@ -688,6 +700,27 @@ const UI = {
 
   /** 주행 조작 DOM — 왼쪽 아래 균형 바(손으로 끌기 / 기울기·키보드는 노브가 따라 움직임), 오른쪽 아래 BOOST. 발사 전에는 숨겨 두고(스타트 바가 하단 중앙 사용)
    * cart-launched에서 표시. 두 영역은 화면 양 끝(엄지 위치)에 붙이고 가운데를 비워 손가락이 겹치지 않게 */
+  /** 동시 구간 표시(부스트 가속 지점이 균형 구간 안에 겹칠 때만): 화면 위쪽 한 자리 — 세로는 링 위·균형 표시 아래, 가로는 균형 왼쪽·링 오른쪽.
+   * 링은 기존의 80%·균형 표시는 60% 크기, 균형은 목표 띠·카트(노브)·진행 바만(글자 안내 없음). 조작 영역은 그대로(엄지 위치 유지) */
+  _simulHTML() {
+    return `<div class="simul" id="simul" aria-hidden="true">
+      <div class="boost-wrap simul-ring" id="simRing"><svg class="boost-ring" viewBox="0 0 144 144" aria-hidden="true">
+        <circle class="br-good" id="simGood" cx="72" cy="72" r="${BR_T}"/>
+        <circle class="br-perfect" id="simPerfect" cx="72" cy="72" r="${BR_T}"/>
+        <circle class="br-target" cx="72" cy="72" r="${BR_T}"/>
+        <circle class="br-out" id="simOut" cx="72" cy="72" r="${BR_OUT}"/>
+        <circle class="br-ring" id="simRingC" cx="72" cy="72" r="${BR_OUT}"/>
+        <circle class="br-flash" id="simFlash" cx="72" cy="72" r="${BR_T}"/>
+        ${BR_STARS}
+      </svg><b class="tp-result" id="simRes"></b></div>
+      <div class="simul-bal" id="simBal">
+        <div class="sb-rail"><div class="sb-band" id="sbBand"></div><div class="sb-perfect" id="sbPerfect"></div><i class="sb-zero"></i><i class="sb-target" id="sbTarget"></i><i class="sb-knob" id="sbKnob"></i></div>
+        <div class="sb-prog"><i id="sbProg"></i></div>
+        <b class="sb-chip" id="sbChip"></b>
+      </div>
+    </div>`;
+  },
+
   _driveControlsHTML() {
     const tilt = ControlSettings.mode === 'tilt';
     return `<div class="drive-controls twohand${tilt ? ' tilt' : ''}" id="driveControls">
@@ -711,7 +744,7 @@ const UI = {
             <circle class="br-out" id="brOut" cx="72" cy="72" r="${BR_OUT}"/>
             <circle class="br-ring" id="brRing" cx="72" cy="72" r="${BR_OUT}"/>
             <circle class="br-flash" id="brFlash" cx="72" cy="72" r="${BR_T}"/>
-            <g class="br-stars"><path class="star" transform="translate(114 30)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/><path class="star" transform="translate(30 30)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/><path class="star" transform="translate(30 114)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/><path class="star" transform="translate(114 114)" d="M0 -7 L2 -2 L7 0 L2 2 L0 7 L-2 2 L-7 0 L-2 -2Z"/></g>
+            ${BR_STARS}
           </svg>
           <button class="ctl-btn boost" id="boostBtn" data-input-role="boost" type="button">BOOST</button>
         </div>
@@ -739,6 +772,11 @@ const UI = {
     const h = this._hud;
     if (!h || !h.pop) return;
     h.popKey = null;
+    if (h.simulOn) { // 동시 구간: 부스트 결과는 링 자리에 크게(가운데 팝업은 쓰지 않음)
+      h.simRes.textContent = JUDGE_LABEL[result]; h.simRes.className = `tp-result ${result}`; void h.simRes.offsetWidth; h.simRes.classList.add('show');
+      h.simRing.classList.add('result'); h.simulUntil = performance.now() + SIMUL_HOLD * 1000; h.popResultUntil = 0;
+      return;
+    }
     h.popResult.textContent = JUDGE_LABEL[result];
     h.popResult.className = `tp-result ${result}`;
     h.pop.classList.add('on', 'result');
@@ -834,6 +872,7 @@ const UI = {
         if (h.popTick < 3 && g.err >= -0.03) { h.popTick = 3; AudioManager.playTick(true); }
         if (h.popPrevErr !== null && h.popPrevErr < 0 && g.err >= 0) { // 정타 순간 반짝(링 안쪽에서 퍼지는 흰 원, 0.18초)
           h.ringFlash.classList.remove('go'); void h.ringFlash.getBoundingClientRect(); h.ringFlash.classList.add('go');
+          if (h.simulOn) { h.simFlash.classList.remove('go'); void h.simFlash.getBoundingClientRect(); h.simFlash.classList.add('go'); }
         }
         h.popPrevErr = g.err;
         if (h.popKey && h.popKey !== g.key && !cart._resolvedGates.has(h.popKey)) this._showPopResult('miss'); // 앞 게이트를 놓치고 바로 다음 게이트
@@ -845,6 +884,40 @@ const UI = {
         h.popKey = null;
         wrap.classList.remove('on', 'ready', 'perfect-now', 'finish');
         if (now >= h.popResultUntil) h.pop.classList.remove('on', 'result');
+      }
+    }
+    // 동시 구간(균형 구간 안에서 가속 지점 ±SIMUL_RANGE초): 링·균형 압축 표시를 화면 위쪽 한 자리에 모아 보여줌. 판정은 그대로(표시만 미러),
+    // 균형 진행도는 부스트 입력과 무관하게 계속 쌓임(cart.js는 이 표시를 모름)
+    if (track) {
+      const nowS = performance.now();
+      const gS = cart.launched && !cart.rollback ? cart.gateTiming() : null;
+      const bsS = cart.launched && !cart.rollback ? cart.balanceState : null;
+      const on = !!(bsS && gS && Math.abs(gS.timeTo) <= SIMUL_RANGE) || nowS < h.simulUntil;
+      if (on !== h.simulOn) {
+        h.simulOn = on;
+        h.simul.classList.toggle('on', on);
+        h.ringWrap.classList.toggle('simul-moved', on);
+        AudioManager.simulActive = on; // 소리: 부스트 효과음 우선(균형 효과음은 120ms 늦추고 70%)
+        if (!on) { h.simRing.classList.remove('result', 'on', 'ready', 'perfect-now'); h.simRes.className = 'tp-result'; h.sbChip.className = 'sb-chip'; }
+      }
+      if (on) {
+        const sr = h.simRing, w = h.ringWrap;
+        for (const c of ['on', 'ready', 'perfect-now', 'lowfx']) sr.classList.toggle(c, w.classList.contains(c));
+        for (const [a, b] of [[h.simRingC, h.ring], [h.simOut, h.ringOut], [h.simGood, h.ringGood], [h.simPerfect, h.ringPerfect]]) {
+          const attr = b === h.ringGood || b === h.ringPerfect ? 'stroke-width' : 'r';
+          const v = b.getAttribute(attr); if (v !== null) a.setAttribute(attr, v);
+        }
+        if (bsS) {
+          const pc = v => (Math.max(-1, Math.min(1, v)) + 1) * 50;
+          const a = pc(bsS.dir * bsS.minLean), b = pc(bsS.dir);
+          h.sbBand.style.left = `${Math.min(a, b).toFixed(1)}%`; h.sbBand.style.right = `${(100 - Math.max(a, b)).toFixed(1)}%`;
+          const p0 = pc(bsS.dir * Math.max(bsS.minLean, bsS.target - bsS.perfectRange)), p1 = pc(bsS.dir * Math.min(1, bsS.target + bsS.perfectRange));
+          h.sbPerfect.style.left = `${Math.min(p0, p1).toFixed(1)}%`; h.sbPerfect.style.right = `${(100 - Math.max(p0, p1)).toFixed(1)}%`;
+          h.sbTarget.style.left = `${pc(bsS.dir * bsS.target).toFixed(1)}%`;
+          h.sbProg.style.transform = `scaleX(${Math.max(0, Math.min(1, bsS.progress)).toFixed(3)})`;
+          h.simBal.classList.toggle('in', bsS.inBand); h.simBal.classList.toggle('perfect', bsS.inBand && bsS.perfectNow); h.simBal.classList.toggle('done', !!bsS.done);
+        }
+        h.sbKnob.style.left = `${((Math.max(-1, Math.min(1, cart.leanInput)) + 1) * 50).toFixed(1)}%`;
       }
     }
     // 뒤로 떨어지기 신호: 멈칫/뒤로 = 경고, 연타 = "연타!" + 힘 게이지 + 남은 초, 자동 발사 = 부스터
