@@ -52,7 +52,7 @@ for (const [k, v] of entries) {
 check_other();
 function check_other() {
   for (const f of files) {
-    if (f === 'strings.js' || f === 'ui-kit.js') continue;
+    if (f === 'strings.js' || f === 'ui-kit.js' || f === 'title-logo-data.js') continue;
     const t = stripJs(fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'));
     t.split('\n').forEach((line, i) => {
       if (!hangul.test(line) || /console\./.test(line)) return;

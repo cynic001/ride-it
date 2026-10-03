@@ -103,7 +103,7 @@ async function main() {
     if (await page.locator('#titleScreen').count()) {
       await sleep(600);
       await shot('00_title');
-      await page.locator('#titleScreen').click();
+      await page.locator('#titleStart').click();
     }
     // 처음 실행: 튜토리얼 권유(예전 자동 조작법 안내 대체) → 건너뛰기. 조작법 화면은 ? 버튼으로
     await page.waitForSelector('#tutorialAsk', { timeout: 10000 });
@@ -398,7 +398,7 @@ async function main() {
     const prog = await page.evaluate(() => JSON.parse(localStorage.getItem('rc_progress_v2') || '{}'));
     check('progress saved', Object.keys(prog).length === STAGES.length, JSON.stringify(prog));
     await page.reload({ waitUntil: 'load' });
-    if (await page.locator('#titleScreen').count()) await page.locator('#titleScreen').click();
+    if (await page.locator('#titleScreen').count()) await page.locator('#titleStart').click();
     await page.waitForSelector('.stage-btn');
     const badges = await page.locator('.stage-btn .badge.rank-badge').count();
     check('progress persists after reload', badges === STAGES.length, `rank badges=${badges}`);
@@ -409,7 +409,7 @@ async function main() {
       // 오프라인 재실행: 한 번 방문(+플레이한 스테이지 런타임 캐싱) 후 네트워크 차단 상태로 새로고침해 1스테이지 진입
       await ctx.setOffline(true);
       await page.reload({ waitUntil: 'load' });
-      if (await page.locator('#titleScreen').count()) await page.locator('#titleScreen').click();
+      if (await page.locator('#titleScreen').count()) await page.locator('#titleStart').click();
       await page.waitForSelector('.stage-btn', { timeout: 15000 });
       await page.locator('.stage-btn[data-index="0"]').click();
       await page.locator('#stageStartBtn').click();
@@ -452,7 +452,7 @@ async function multiTouchTest(browser, base, pageErrors) {
   const st = () => tp.evaluate(() => ({ lean: Game.cart.leanInput, boosts: window.__boosts, pressed: [...document.querySelectorAll('.ctl-btn.pressed')].map(e => e.id).join(','), holding: !!document.querySelector('.bal-bar.holding'), zoom: visualViewport.scale }));
   try {
     await tp.goto(`${base}/index.html`, { waitUntil: 'load' });
-    if (await tp.locator('#titleScreen').count()) await tp.locator('#titleScreen').tap();
+    if (await tp.locator('#titleScreen').count()) await tp.locator('#titleStart').tap();
     await tp.waitForSelector('.stage-btn');
     await tp.locator('.stage-btn[data-index="0"]').tap();
     await tp.locator('#stageStartBtn').tap();

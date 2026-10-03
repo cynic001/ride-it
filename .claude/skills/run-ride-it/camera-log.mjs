@@ -11,7 +11,7 @@ const result={};
 for (const st of STAGES_TO) {
   const ctx=await b.newContext({viewport:{width:375,height:667}}); const p=await ctx.newPage(); p.on('pageerror',e=>errs.push(e.message));
   await ctx.addInitScript(()=>{localStorage.clear();localStorage.setItem('rc_howto_seen','1');localStorage.setItem('rc_tutorial_done','1');localStorage.setItem('rc_quality','low');localStorage.setItem('rc_laps','1');localStorage.setItem('rc_view','third')});
-  await p.goto(`http://localhost:${PORT}/index.html`); await p.click('#titleScreen'); await p.click(`.stage-btn[data-index="${st}"]`); await p.click('#stageStartBtn');
+  await p.goto(`http://localhost:${PORT}/index.html`); await p.click('#titleStart'); await p.click(`.stage-btn[data-index="${st}"]`); await p.click('#stageStartBtn');
   await p.waitForSelector('#startBar',{timeout:30000}); await sleep(500);
   await p.evaluate(()=>{ // 게이트 자동 정타 + 프레임 로그
     window.__log=[]; const tap=()=>{const c=Game.cart;const g=c.gateTiming&&c.gateTiming(); if(g&&!g.done&&Math.abs(g.err)<0.02&&!window['__g'+g.key]){window['__g'+g.key]=1; const res=c.resolveGate(); window.dispatchEvent(new CustomEvent('gate-result',{detail:{type:c.lastGateType,result:res}}));}

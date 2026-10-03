@@ -9,7 +9,7 @@
  * 빌드 단계가 없어 배포마다 버전을 올리지 않아도 되도록 "내용 비교"로 새 버전을 감지함. CACHE 이름은 캐시 구조가
  * 바뀔 때만 올리면 됨(올리면 activate에서 이전 캐시 전부 삭제).
  */
-const CACHE = 'ride-it-v4';
+const CACHE = 'ride-it-v5';
 const CORE = [
   './',
   'index.html',
@@ -17,7 +17,7 @@ const CORE = [
   'assets/fonts/NotoSansKR-subset.woff2', 'assets/fonts/Jua-subset.woff2',
   'manifest.webmanifest',
   'js/quality.js', 'js/style.js', 'js/audio.js', 'js/stages.js', 'js/track.js', 'js/cart.js',
-  'js/camera.js', 'js/input.js', 'js/strings.js', 'js/popup.js', 'js/ui.js', 'js/tutorial.js', 'js/main.js',
+  'js/camera.js', 'js/input.js', 'js/strings.js', 'js/popup.js', 'js/ui.js', 'js/title-logo-data.js', 'js/title.js', 'js/tutorial.js', 'js/main.js',
   'assets/icons/icon-192.png', 'assets/icons/icon-512.png',
   'assets/vendor/polyhaven/sky_256.env',
   'assets/vendor/kenney-coaster-kit/Textures/colormap.png',

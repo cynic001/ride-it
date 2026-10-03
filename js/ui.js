@@ -105,35 +105,13 @@ const ICONS = {
   info: svg('<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8.01"/>'),
   play: svg('<polygon points="7 4 20 12 7 20"/>', true),
   retry: svg('<polyline points="3 4 3 10 9 10"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L3 10"/>'),
+  flag: svg('<path d="M5 21V4"/><path d="M5 4h11l-2.5 4L16 12H5"/>'),
   gear: svg('<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
   back: svg('<polyline points="15 5 8 12 15 19"/>'),
   list: svg('<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>'),
 };
 
 // 메뉴 배경 — 하늘 그라데이션/햇살/구름 + 코스터 트랙 실루엣(SVG). 타이틀·스테이지 선택 공용
-const PILLAR_TOPS = [88, 50, 22, 28, 76, 108, 84, 56, 70, 90]; // 실루엣 곡선의 x=20,60,…,380 지점 높이
-const MENU_BG = `
-  <div class="menu-bg" aria-hidden="true">
-    <div class="rays"></div>
-    <div class="cloud" style="top:12%;width:70px;height:26px;animation-duration:46s;animation-delay:-8s"></div>
-    <div class="cloud" style="top:24%;width:54px;height:20px;animation-duration:58s;animation-delay:-30s"></div>
-    <div class="cloud" style="top:6%;width:44px;height:16px;animation-duration:70s;animation-delay:-50s"></div>
-    <svg class="coaster" viewBox="0 0 400 140" preserveAspectRatio="none">
-      <path d="M0 140 V96 C40 96 60 20 110 20 C160 20 170 110 220 110 C262 110 270 54 310 54 C350 54 360 92 400 92 V140 Z" fill="#141a33" opacity=".18"/>
-      <g stroke="#141a33" stroke-width="3" opacity=".5">
-        ${PILLAR_TOPS.map((y, i) => `<line x1="${20 + i * 40}" y1="140" x2="${20 + i * 40}" y2="${y}"/>`).join('')}
-      </g>
-      <path d="M0 92 C40 92 60 16 110 16 C160 16 170 106 220 106 C262 106 270 50 310 50 C350 50 360 88 400 88" fill="none" stroke="#141a33" stroke-width="7" stroke-linecap="round"/>
-      <path d="M0 92 C40 92 60 16 110 16 C160 16 170 106 220 106 C262 106 270 50 310 50 C350 50 360 88 400 88" fill="none" stroke="#ffb80d" stroke-width="2.5" stroke-dasharray="6 6"/>
-    </svg>
-  </div>`;
-
-const LOGO = (small = false) => `
-  <div class="logo${small ? ' small' : ''}">
-    <div class="logo-ko">${t('brand.stem')}<span class="bang">!</span><span class="bang">!</span><span class="bang">!</span></div>
-    <div class="logo-en">RIDE IT</div>
-  </div>`;
-
 // 부스트 타이밍 링(UI 개선 2차 4번): BOOST 버튼 바깥의 링. 링 반지름 = BR_T + (BR_OUT − BR_T) × (−err / POP_RANGE) — err(지금 누르면 판정될 오차, 초)가
 // 0인 순간 링이 목표 반지름(BR_T, 버튼 가장자리 바로 바깥)에 닿음. Good/Perfect 띠 두께도 같은 식(±good/±perfect초)이라 판정(cart.gateTiming)과 어긋날 수 없음.
 // 좌표는 viewBox 144 기준(버튼 반지름 BR_BTN = 50, 링 바깥 끝 BR_OUT = 72).
@@ -226,15 +204,7 @@ const UI = {
 
 
   showTitle(onStart) {
-    this._setScreen(`
-      <div class="screen title-screen" id="titleScreen">
-        ${MENU_BG}
-        ${LOGO()}
-        <div class="tap-hint">${t('title.tapHint')}</div>
-        <div class="studio">chaechae studio</div>
-      </div>
-    `);
-    document.getElementById('titleScreen').addEventListener('click', onStart, { once: true });
+    Title.render(onStart);
   },
 
   /** 스테이지 선택 — 카드를 누르면 바로 시작하지 않고 상세 화면으로. onStart(i)는 상세의 START에서 호출 */

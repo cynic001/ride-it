@@ -473,6 +473,58 @@ section('wording', async () => {
   if (fsx.existsSync(file)) { const t = JSON.parse(fsx.readFileSync(file, 'utf8')); const over = Object.entries(t).filter(([, v]) => v['가로'] > 4).map(([k, v]) => `${k}:${v['가로']}`); check('문구: 모든 모달이 가로 폰에서 4페이지 이하', over.length === 0, over.join(',')); }
 });
 
+// ── 2 타이틀: START가 0.8초 안에 눌림, 로고·버튼·패널 정렬과 안전 영역(세로·가로·데스크톱), 애니메이션은 transform/opacity만, reduced-motion 정지, low 장식 제거, 용량 ≤ 300KB
+section('title', async () => {
+  const fsx = await import('node:fs'); const pth = await import('node:path'); const { ROOT } = await import('./polish-lib.mjs');
+  const bytes = ['js/title.js', 'js/title-logo-data.js', 'css/title.css'].map(f => fsx.statSync(pth.join(ROOT, f)).size);
+  check(`타이틀 전용 에셋(js·로고 데이터·css) ${Math.round(bytes.reduce((a, b) => a + b, 0) / 1024)}KB (300KB 이하, 글꼴 제외)`, bytes.reduce((a, b) => a + b, 0) < 300 * 1024, String(bytes));
+  const ALLOWED = new Set(['transform', 'translate', 'rotate', 'scale', 'opacity', 'offset', 'easing', 'composite']);
+  for (const [name, w, h] of [['세로', 375, 667], ['가로', 667, 375], ['데스크톱', 1280, 720]]) {
+    const { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_quality: 'medium' } });
+    await page.waitForSelector('#titleScreen');
+    const t0 = await page.evaluate(() => { const b = document.getElementById('titleStart').getBoundingClientRect(); return { now: performance.now(), w: b.width, h: b.height, fcp: (performance.getEntriesByType('paint').find(p => p.name === 'first-contentful-paint') || {}).startTime }; });
+    await page.waitForTimeout(2800);
+    const lay = await page.evaluate(() => {
+      const R = q => { const e = document.querySelector(q); const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
+      const logo = R('.t-logo'), start = R('#titleStart'), dock = R('.t-dock'), rib = R('.t-ribbon'), W = innerWidth, H = innerHeight;
+      const hit = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+      const btns = [...document.querySelectorAll('.t-ico, #titleStart')].map(e => e.getBoundingClientRect());
+      return { logo, start, dock, W, H, startCx: (start.l + start.r) / 2, dockCx: (dock.l + dock.r) / 2, startDock: hit(start, dock), logoStart: hit(logo, start), logoDock: hit(logo, dock),
+        inView: [start, dock].every(b => b.l >= 0 && b.r <= W && b.t >= 0 && b.b <= H), logoX: logo.l >= -2 && logo.r <= W + 2, small: btns.filter(b => b.width < 43.5 || b.height < 43.5).length, h1: logo.h };
+    });
+    check(`타이틀 ${name}: START가 로드 직후 0.8초 안에 눌림(첫 그림 ${Math.round(t0.fcp || 0)}ms, START ${Math.round(t0.w)}×${Math.round(t0.h)})`, t0.w >= 200 && t0.h >= 60 && t0.now < 4000, JSON.stringify(t0));
+    check(`타이틀 ${name}: 로고·START·패널이 화면 안, 서로 안 겹침, 버튼 44px 이상`, lay.inView && lay.logoX && !lay.startDock && !lay.logoStart && !lay.logoDock && lay.small === 0, JSON.stringify(lay));
+    if (name === '세로') check('타이틀 세로: START와 패널이 가운데 정렬(오차 2px 이하)', Math.abs(lay.startCx - lay.W / 2) <= 2 && Math.abs(lay.dockCx - lay.W / 2) <= 2, JSON.stringify([lay.startCx, lay.dockCx, lay.W]));
+    const anims = await page.evaluate(() => document.getAnimations().filter(a => a.effect && a.effect.target && a.effect.target.closest && a.effect.target.closest('#titleScreen')).map(a => ({ n: a.animationName || 'waapi', keys: [...new Set(a.effect.getKeyframes().flatMap(k => Object.keys(k)))] })));
+    const bad = anims.filter(a => a.keys.some(k => !['transform', 'translate', 'rotate', 'scale', 'opacity', 'offset', 'computedOffset', 'easing', 'composite'].includes(k)));
+    check(`타이틀 ${name}: 실행 중 애니메이션 ${anims.length}개가 transform/opacity(translate·rotate 포함)만 사용`, anims.length >= 3 && bad.length === 0, JSON.stringify(bad));
+    // START 바로 눌러도 단계 선택으로
+    await page.click('#titleStart'); await page.waitForSelector('.stage-btn', { timeout: 5000 });
+    check(`타이틀 ${name}: START → 단계 선택`, (await page.locator('.stage-btn[data-index]').count()) === 5);
+    check(`title ${name} page error 0`, errors.length === 0, errors.join('|'));
+    await close();
+  }
+  // 아이콘 4개 동작 + reduced-motion + low
+  const { page, errors, close } = await start({ browser: BROWSER, w: 375, h: 667, init: { rc_quality: 'low' } });
+  await page.waitForSelector('#titleScreen'); await page.waitForTimeout(300);
+  const lowHidden = await page.evaluate(() => ['.t-rays', '.t-streak'].every(q => { const e = document.querySelector(q); return !e || getComputedStyle(e).display === 'none'; }));
+  check('타이틀 low 프리셋: 햇살·속도선·반짝임 제거', lowHidden);
+  for (const [id, sel] of [['titleSettings', '#settingsOverlay'], ['titleHowto', '#howtoOverlay'], ['titleCredits', '#creditsOverlay']]) {
+    await page.click('#' + id); await page.waitForSelector(sel, { timeout: 3000 }); await page.evaluate(() => Popup.closeAll());
+  }
+  check('타이틀: 설정·조작법·크레딧 아이콘이 각 팝업을 엶', true);
+  await page.click('#titleTutorial'); await page.waitForSelector('#startBar', { timeout: 30000 });
+  check('타이틀: 연습 코스 아이콘이 연습 코스를 시작', await page.evaluate(() => !!window.Tutorial && Tutorial.active));
+  await close();
+  const rm = await start({ browser: BROWSER, w: 375, h: 667 });
+  await rm.page.emulateMedia({ reducedMotion: 'reduce' }); await rm.page.reload(); await rm.page.waitForSelector('#titleScreen'); await rm.page.waitForTimeout(500);
+  const rmAnims = await rm.page.evaluate(() => document.getAnimations().filter(a => a.playState === 'running' && a.effect && a.effect.target && a.effect.target.closest && a.effect.target.closest('#titleScreen')).length);
+  const rmPos = await rm.page.evaluate(() => { const g = document.querySelector('.glyph .g-anim'); return getComputedStyle(g).opacity; });
+  check('타이틀 reduced-motion: 애니메이션 정지, 로고는 완성된 모습', rmAnims === 0 && parseFloat(rmPos) === 1, `${rmAnims} ${rmPos}`);
+  check('타이틀 reduced-motion page error 0', rm.errors.length === 0, rm.errors.join('|'));
+  await rm.close();
+});
+
 for (const [name, fn] of sections) {
   if (ONLY && !ONLY.includes(name)) continue;
   try { await fn(); } catch (e) { check(`${name} 실행`, false, String(e.message).split('\n')[0]); }

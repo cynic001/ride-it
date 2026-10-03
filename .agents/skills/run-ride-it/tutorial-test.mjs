@@ -79,7 +79,7 @@ async function run(browser, mode) {
 
   try {
     await page.goto(`http://localhost:${PORT}/index.html`, { waitUntil: 'load' });
-    await tap('#titleScreen');
+    await tap('#titleStart');
     await page.waitForSelector('#tutorialAsk', { timeout: 10000 });
     if (mode === 'keyboard') await shot('00_ask');
     for (let i = 0; i < 6 && !(await page.locator('#tutAskYes').isVisible().catch(() => false)); i++) await tap('.popup-next'); // 권유 팝업도 가로에서는 페이지로 나뉨

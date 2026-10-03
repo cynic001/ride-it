@@ -38,7 +38,11 @@ const STRINGS = {
   'stage.tutorial.motif': '천천히 달리며 조작을 하나씩 연습해요.',
 
   // ── 타이틀·단계 선택·단계 상세 ──
-  'title.tapHint': '화면을 눌러서 시작',
+  'title.start': 'START',
+  'title.dock.settings': '설정',
+  'title.dock.howto': '조작법',
+  'title.dock.tutorial': '연습 코스',
+  'title.dock.credits': '크레딧',
   'select.cleared': '완주 {n} / {total}',
   'select.practice': '연습',
   'select.practiceName': '연습 코스 · {name}',

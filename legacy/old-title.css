@@ -1,0 +1,50 @@
+/* legacy/old-title.css — 새 타이틀 디자인 이전의 타이틀·메뉴 배경·로고 CSS(기록용, 로드 안 함) */
+/**
+ * title.css — 타이틀·메뉴 배경·로고 (2번 작업에서 새 디자인으로 교체)
+ */
+  /* ── 메뉴 배경(타이틀/스테이지 선택): 하늘 그라데이션 + 회전 햇살 + 코스터 실루엣 ── */
+  .menu-bg {
+    position: absolute; inset: 0; overflow: hidden; z-index: -1;
+    background: linear-gradient(180deg, var(--sky-top) 0%, #57a6f0 55%, var(--sky-bottom) 100%);
+  }
+  .menu-bg .rays {
+    position: absolute; left: 50%; top: 30%; width: 220vmax; height: 220vmax; margin: -110vmax 0 0 -110vmax;
+    background: repeating-conic-gradient(rgba(255,255,255,.10) 0 10deg, transparent 10deg 20deg);
+    animation: spin 60s linear infinite;
+  }
+  .menu-bg .cloud {
+    position: absolute; background: #fff; border-radius: 999px; opacity: .85;
+    box-shadow: 30px -14px 0 6px #fff, 64px 0 0 -2px #fff;
+    animation: drift 40s linear infinite;
+  }
+  @keyframes drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
+  .menu-bg svg.coaster { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 34%; }
+
+  /* ── 로고 ── */
+  .logo { text-align: center; line-height: 1; transform: rotate(-4deg); }
+  .logo-ko {
+    display: inline-block; font-size: 68px; color: var(--yellow); letter-spacing: -1px;
+    -webkit-text-stroke: 8px var(--navy); paint-order: stroke fill;
+    text-shadow: 0 7px 0 var(--navy), 0 14px 22px rgba(0,0,0,.3);
+  }
+  .logo-ko .bang { color: var(--red); display: inline-block; animation: wobble 1.4s ease-in-out infinite; }
+  .logo-ko .bang:nth-child(2) { animation-delay: .12s; } .logo-ko .bang:nth-child(3) { animation-delay: .24s; }
+  @keyframes wobble { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-6px) rotate(6deg); } }
+  .logo-en {
+    margin-top: 12px; font-size: 26px; letter-spacing: 10px; padding-left: 10px; color: #fff;
+    -webkit-text-stroke: 5px var(--navy); paint-order: stroke fill; text-shadow: 0 4px 0 var(--navy);
+  }
+  .logo.small .logo-ko { font-size: 40px; -webkit-text-stroke-width: 6px; text-shadow: 0 5px 0 var(--navy); }
+  .logo.small .logo-en { font-size: 15px; letter-spacing: 6px; margin-top: 6px; -webkit-text-stroke-width: 4px; }
+
+  /* ── 타이틀 ── */
+  .title-screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; color: #fff; cursor: pointer; }
+  .title-screen .logo { animation: logoDrop .7s var(--ease-pop) both; }
+  @keyframes logoDrop { from { opacity: 0; transform: translateY(-60px) rotate(-4deg) scale(.8); } to { opacity: 1; transform: rotate(-4deg); } }
+  .tap-hint {
+    margin-top: 40px; padding: 10px 22px; border-radius: 999px; background: var(--navy-soft); font-size: 18px;
+    animation: pulse 1.3s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.06); opacity: .75; } }
+  .studio { position: absolute; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); font-size: 13px; color: rgba(255,255,255,.9); letter-spacing: 1px; }
+
