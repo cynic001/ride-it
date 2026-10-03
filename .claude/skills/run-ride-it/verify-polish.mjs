@@ -669,6 +669,24 @@ section('nav', async () => {
   }
 });
 
+// ── 4-B 로고 가독성: 글자별 경계 상자(외곽선 포함) 간격 — 정지·입장 연출 마지막 프레임·대기 한 주기(20프레임). 다↔! 간격 ≥ 외곽선 두께 2배 + 글자 높이 8%. 폭 120px에서도 이웃 글자 사이 1px 이상 비어 있음
+section('logo', async () => {
+  const { measureLogo, judge } = await import('./logo-check.mjs');
+  for (const [name, w, h] of [['세로', 375, 667], ['가로', 667, 375], ['데스크톱', 1280, 720]]) {
+    const { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_quality: 'low' }, url: '/index.html?title=b' });
+    await page.waitForSelector('.t-logo'); await page.waitForTimeout(400);
+    const r = await measureLogo(page);
+    const vbW = await page.evaluate(() => document.querySelector('.t-logo').viewBox.baseVal.width);
+    const states = [['정지', r.still], ['입장 마지막 프레임', r.entry], ...r.idle.map((m, i) => [`대기 ${i + 1}/20`, m])];
+    const bad = states.flatMap(([n, m]) => judge(m).map(x => `${n}: ${x}`));
+    const minGap = Math.min(...r.still.gaps.map(g => g.gx));
+    check(`로고 ${name}: 글자(떨·어·진·다·!!!) 경계 상자가 정지·입장 끝·대기 20프레임에서 안 겹치고 다↔! 간격 충분(다↔! ${r.still.gaps[3].gx.toFixed(0)} ≥ ${(2 * r.still.T + 0.08 * r.still.boxes[3].h).toFixed(0)})`, bad.length === 0, bad.slice(0, 3).join(' | '));
+    check(`로고 ${name}: 폭 120px로 줄여도 이웃 글자 사이가 1px 이상(${(minGap * 120 / vbW).toFixed(2)}px)`, minGap * 120 / vbW >= 1, `${minGap} ${vbW}`);
+    check(`logo ${name} page error 0`, errors.length === 0, errors.join('|'));
+    await close();
+  }
+});
+
 for (const [name, fn] of sections) {
   if (ONLY && !ONLY.includes(name)) continue;
   try { await fn(); } catch (e) { check(`${name} 실행`, false, String(e.message).split('\n')[0]); }

@@ -14,13 +14,26 @@ const Title = {
       { g: 0, s: 1, rot: -3, dy: 14 }, { g: 1, s: 1, rot: 2, dy: -12 }, { g: 2, s: 1, rot: -2, dy: 10 }, { g: 3, s: 1, rot: 3, dy: -8 },
       { g: 4, s: 1, rot: -6, dy: 0, bang: true }, { g: 4, s: 1.2, rot: 3, dy: 0, bang: true }, { g: 4, s: 1.45, rot: -3, dy: 0, bang: true },
     ];
-    const BASE = 840, PAD = 130; let x = PAD, minY = Infinity, maxY = -Infinity;
+    // 글자 사이 간격은 "외곽선까지 포함한 경계 상자(AABB)" 기준으로 배치 — 이웃 글자와 절대 겹치지 않게.
+    // 다(3)↔!(4)는 외곽선 두께(60)의 2배 + 글자 높이의 8% 이상 + 여유(!가 ㅏ를 가리던 문제), 나머지는 52(폭 120px에서도 1px 이상 비도록)
+    const OUT = 60, EXT = [26, 34]; // stroke 120의 바깥 반쪽, 두께 실루엣 이동
+    const gapBefore = [0, 52, 52, 52, 2 * OUT + 0.08 * G[3].h + 6, 52, 52];
+    const BASE = 840, PAD = 130; let cursor = PAD, minY = Infinity, maxY = -Infinity;
+    const aabb = it => { // 로컬 상자(외곽선 + 두께 이동 포함)를 글자 중심 기준 회전·크기 변환한 AABB(x는 it.x=0 기준)
+      const g = G[it.g], cx = g.w / 2, cy = g.h, r = it.rot * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r);
+      const pts = [[EXT[0] - OUT, EXT[1] - OUT], [g.w + EXT[0] + OUT, EXT[1] - OUT], [EXT[0] - OUT, g.h + EXT[1] + OUT], [g.w + EXT[0] + OUT, g.h + EXT[1] + OUT]]
+        .map(([px, py]) => [((px - cx) * c - (py - cy) * sn + cx) * it.s, ((px - cx) * sn + (py - cy) * c + cy) * it.s]);
+      return { l: Math.min(...pts.map(q => q[0])), r: Math.max(...pts.map(q => q[0])) };
+    };
     items.forEach((it, i) => {
       const g = G[it.g]; it.w = g.w * it.s; it.h = g.h * it.s;
-      it.x = x; it.y = BASE - it.h + it.dy;
-      x += it.w + (it.bang ? 62 : -6);
+      const bb = aabb(it);
+      it.x = cursor + gapBefore[i] * (i === 0 ? 0 : 1) - bb.l;
+      cursor = it.x + bb.r;
+      it.y = BASE - it.h + it.dy;
       minY = Math.min(minY, it.y); maxY = Math.max(maxY, it.y + it.h);
     });
+    const x = cursor;
     const shift = PAD - minY; items.forEach(it => { it.y += shift; });
     return { items, W: x + PAD - 40, H: maxY - minY + PAD * 2 + 40, base: BASE + shift + 60 };
   },
