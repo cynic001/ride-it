@@ -385,7 +385,7 @@ const UI = {
   /** 조작법 팝업 — 항목마다 한두 문장(가로 폰에서도 4페이지 이하) */
   showHowTo(onClose) {
     const holds = STAGES.map(s => s.balance && s.balance.holdSec).filter(Boolean);
-    const hold = Math.min(...holds) === Math.max(...holds) ? `${holds[0]}` : `${Math.min(...holds)}~${Math.max(...holds)}`; // 스테이지마다 다름(코드 값)
+    const hold = Math.min(...holds) === Math.max(...holds) ? `${holds[0]}` : t('howto.holdRange', { a: Math.min(...holds), b: Math.max(...holds) }); // 스테이지마다 다름(코드 값) — '~'는 WebKit에서 중간에 줄이 바뀌어 말로 풀어 씀
     const dot = c => `<i style="background:${c}"></i>`;
     const ctl = Popup.open({
       id: 'howtoOverlay', title: t('howto.title'),
@@ -481,7 +481,7 @@ const UI = {
     const ctl = Popup.open({
       id: 'graphicsOverlay', title: t('graphics.title'),
       blocks: [
-        Popup.row(t('graphics.quality'), seg('quality', ['low', 'medium', 'high'].map(k => [k, t(`graphics.quality.${k}`)]), QualityManager.current)),
+        { ...Popup.row(t('graphics.quality'), seg('quality', ['low', 'medium', 'high'].map(k => [k, t(`graphics.quality.${k}`)]), QualityManager.current)), cls: '' },
         { ...Popup.row(t('graphics.style'), seg('style', styles.map(k => [k, t(`graphics.style.${k}`)]), StyleManager.current)), cls: '' },
         Popup.p(`<span id="gfxDesc">${desc()}</span>`),
       ],

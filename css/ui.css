@@ -82,7 +82,7 @@ html[data-q="low"] .btn, html[data-q="low"] .icon-btn, html[data-q="low"] .stage
 a:focus-visible,
 .seg-btn:focus-visible,
 .switch:focus-visible,
-.popup:focus-visible, .force-focus {
+.force-focus {
   box-shadow: 0 0 0 2px var(--accent), 0 0 0 4px var(--ink) !important; outline: none; }
 
 /* ── 버튼 ── */
@@ -323,3 +323,22 @@ a:focus-visible,
 .logo-home:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .nav-right { grid-area: right; display: flex; gap: var(--s-1); justify-self: end; }
 @media (orientation: landscape) and (max-height: 500px), (min-width: 700px) { .stage-nav { grid-template-columns: 1fr auto 1fr; grid-template-areas: "home logo right"; } }
+
+/* ── 글자 줄바꿈 규칙(AGENTS.md UI 규칙): 한글은 단어(어절) 단위로만 줄을 바꾸고, 버튼·칩·탭·세그먼트·배지 라벨은 절대 두 줄로 나뉘지 않음.
+   한 줄에 안 들어가면 글자를 쪼개지 말고 버튼을 다음 줄로 내리거나 세로로 쌓는다 ── */
+html, body { word-break: keep-all; overflow-wrap: normal; line-break: strict; }
+h1, h2, h3, .popup-title, .lead, .result-stage, .popup-block.center, .popup-block.lead { text-wrap: balance; }
+.btn, .seg-btn, .chip, .hud-chip, .badge, .derail-tag, .gfx-opt, .nav-home, .popup-meta { white-space: nowrap; flex-shrink: 0; min-width: max-content; }
+.btn, .seg-btn, .derail-tag, .nav-home { padding-left: 16px; padding-right: 16px; }
+.chip, .badge { padding-left: 12px; padding-right: 12px; }
+.seg { flex-wrap: wrap; }
+.seg-btn { flex: 1 1 auto; }
+.popup-foot { flex-wrap: wrap; row-gap: var(--s-1); }
+.popup-foot .actions-wrap { flex-wrap: wrap; row-gap: var(--s-1); }
+.popup-foot .actions-wrap .btn { flex: 1 1 auto; max-width: none; }
+.popup-foot .btn.primary { max-width: none; }
+/* 팝업 패널은 포커스 링을 그리지 않음(조작 요소가 아니라 상자 — 번짐처럼 보이던 노랑·남색 테두리 제거). 안의 버튼은 그대로 링을 가짐 */
+.popup:focus, .popup:focus-visible { outline: none; }
+/* 모달은 한 번에 하나: 새 모달이 열리면 아래 모달은 숨기고, 닫으면 다시 보임(js/popup.js) */
+.modal-overlay.modal-hidden { visibility: hidden; pointer-events: none; animation: none; }
+.nb { white-space: nowrap; }

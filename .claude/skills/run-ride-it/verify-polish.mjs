@@ -127,7 +127,7 @@ section('tutlayout', async () => {
       return out;
     });
     for (const c of cards) check(`tutorial ${name} 카드 ${c.key}: 화면 안, 글 16px 이상`, c.top >= 0 && c.bottom <= c.H && !c.scroll && c.fs >= 16, JSON.stringify(c));
-    const note = await page.evaluate(() => Tutorial._text('balanceCard').includes('놓치면 탈선할 수 있어요. (설정에서 끌 수 있어요)'));
+    const note = await page.evaluate(() => Tutorial._text('balanceCard').includes('놓치면 탈선할 수 있어요. 설정에서 끌 수 있어요.'));
     check(`tutorial ${name} 밸런스 카드에 이탈 안내 한 줄`, note);
     check(`tutorial ${name} page error 0`, errors.length === 0, errors.join('|'));
     await close();
@@ -685,6 +685,62 @@ section('logo', async () => {
     check(`logo ${name} page error 0`, errors.length === 0, errors.join('|'));
     await close();
   }
+});
+
+// ── 5 글자 줄바꿈 규칙 + 모달은 한 번에 하나: 모든 화면 상태를 세로·가로·데스크톱에서 점검
+section('linebreak', async () => {
+  const { SCAN, table } = await import('./linebreak-lib.mjs');
+  const rows = [];
+  for (const [name, w, h] of [['세로 375×667', 375, 667], ['가로 667×375', 667, 375], ['데스크톱 1280×720', 1280, 720], ['소형 320×568', 320, 568]]) {
+    const { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_quality: 'low', rc_progress_v2: JSON.stringify({ 1: { 'L1-on': { cleared: true, best: 3200, rank: 'A', plays: 2 }, 'L3-off': { cleared: true, best: 9100, rank: 'S', plays: 1 } } }) } });
+    const scan = async state => { const r = await page.evaluate(SCAN); r.forEach(x => rows.push({ state, size: name, ...x })); };
+    const popupPages = async state => { const n = await page.evaluate(() => (Popup._stack.length ? Popup._stack[Popup._stack.length - 1].pages : 0)); for (let i = 0; i < Math.max(1, n); i++) { await page.evaluate(i => { const c = Popup._stack[Popup._stack.length - 1]; if (c) c.goto(i); }, i); await page.waitForTimeout(60); await scan(`${state} ${i + 1}/${Math.max(1, n)}`); } };
+    const modal = async (state, fn) => { await page.evaluate(fn); await page.waitForTimeout(450); await popupPages(state); await page.evaluate(() => Popup.closeAll()); await page.waitForTimeout(100); };
+    await page.waitForSelector('#titleStart'); await page.waitForTimeout(1800); await scan('타이틀');
+    await page.evaluate(() => UI.showStageSelect(STAGES, i => Game.loadStage(i))); await page.waitForTimeout(400); await scan('스테이지 선택');
+    await page.evaluate(() => UI.showStageDetail(1)); await page.waitForTimeout(400); await scan('스테이지 상세');
+    await modal('설정', () => UI.showSettings()); await modal('그래픽', () => UI.showGraphics()); await modal('조작법', () => UI.showHowTo());
+    await modal('크레딧', () => UI.showCredits()); await modal('튜토리얼 묻기', () => UI.showTutorialAsk()); await modal('튜토리얼 완료', () => UI.showTutorialDone());
+    await modal('불러오기 실패', () => UI.showLoadError(() => {})); await modal('단계 실패', () => UI.showFail(0));
+    // 모달은 한 번에 하나: 설정 위에 그래픽을 열면 설정은 숨고, 그래픽을 닫으면 설정이 돌아옴
+    await page.evaluate(() => { UI.showSettings(); }); await page.waitForTimeout(350);
+    await page.evaluate(() => { UI.showGraphics(); }); await page.waitForTimeout(350);
+    const two = await page.evaluate(() => { const vis = [...document.querySelectorAll('.modal-overlay')].filter(e => getComputedStyle(e).visibility !== 'hidden'); return { total: document.querySelectorAll('.modal-overlay').length, visible: vis.length }; });
+    await page.evaluate(() => Popup._stack[Popup._stack.length - 1].close()); await page.waitForTimeout(200);
+    const back = await page.evaluate(() => { const vis = [...document.querySelectorAll('.modal-overlay')].filter(e => getComputedStyle(e).visibility !== 'hidden'); return { total: document.querySelectorAll('.modal-overlay').length, visible: vis.length, id: vis[0] && vis[0].id }; });
+    await page.evaluate(() => Popup.closeAll());
+    check(`모달 ${name}: 한 번에 하나만 보임(열림 ${two.total}개 중 보임 ${two.visible}개, 닫으면 아래 모달 복귀 ${back.id})`, two.total === 2 && two.visible === 1 && back.total === 1 && back.visible === 1 && /settings/i.test(back.id || ''), JSON.stringify({ two, back }));
+    // 일시정지 + 위에 설정 → 팝업이 겹쳐 비치지 않음, 포커스 링(번짐) 없음
+    await page.evaluate(() => UI.showStageSelect(STAGES, i => Game.loadStage(i))); await loadStage(page, 0);
+    await page.evaluate(() => { Game.engine.stopRenderLoop(); window.dispatchEvent(new CustomEvent('cart-launched', { detail: { strength: 1, flickMultiplier: 1 } })); Game.cart.launch(1, 1); });
+    await page.waitForTimeout(400); await scan('HUD(주행)');
+    await modal('일시정지', () => UI.showPauseOverlay());
+    await page.evaluate(() => { UI.showPauseOverlay(); UI.showSettings(); }); await page.waitForTimeout(400);
+    const pz = await page.evaluate(() => { const o = [...document.querySelectorAll('.modal-overlay')]; return { total: o.length, visible: o.filter(e => getComputedStyle(e).visibility !== 'hidden').length, panelShadow: getComputedStyle(document.querySelector('.modal-overlay:not(.modal-hidden) .popup')).boxShadow.split('),').length }; });
+    check(`모달 ${name}: 일시정지 위에 설정을 열어도 하나만 보임, 팝업 그림자 2겹(${pz.panelShadow})`, pz.visible === 1 && pz.total === 2 && pz.panelShadow <= 2, JSON.stringify(pz));
+    await page.evaluate(() => { Popup.closeAll(); UI._pause = null; });
+    // 결과 화면(기록 포함) — 점수·랭크가 있는 상태로
+    await page.evaluate(() => { const c = Game.cart; c.isFinished = true; c.score = 12345; UI.showResult(c, 0); }); await page.waitForTimeout(500); await scan('결과');
+    await page.evaluate(() => { Popup.closeAll(); UI.showStageSelect(STAGES, i => Game.loadStage(i)); });
+    // 튜토리얼: 모든 설명 카드와 안내줄
+    await page.evaluate(() => Game.loadTutorial()); await page.waitForSelector('#startBar', { timeout: 30000 }); await page.waitForTimeout(500);
+    for (const k of ['balance', 'boost', 'combo', 'rollback', 'finish']) {
+      await page.evaluate(k => { Tutorial.card(t('tut.card.' + k), Tutorial._text(k + 'Card') || '', k === 'balance' ? UI.gaugeDiagram() : k === 'boost' ? UI.popupDiagram() : null, () => {}); }, k);
+      await page.waitForTimeout(400); await popupPages(`튜토리얼 카드 ${k}`); await page.evaluate(() => Popup.closeAll());
+    }
+    for (const k of ['start', 'balance', 'boost', 'combo', 'rollback', 'finish']) { await page.evaluate(k => { try { Tutorial.banner(Tutorial._text(k + 'Banner') || ''); } catch (e) { /* 일부 단계는 안내줄 없음 */ } }, k); await page.waitForTimeout(150); await scan(`튜토리얼 안내줄 ${k}`); }
+    check(`linebreak ${name} page error 0`, errors.length === 0, errors.join('|'));
+    await close();
+  }
+  // UI 키트 페이지
+  for (const [name, w, h] of [['세로 375×667', 375, 667], ['데스크톱 1280×720', 1280, 720]]) {
+    const { page, close } = await start({ browser: BROWSER, w, h, init: { rc_quality: 'low' }, url: '/index.html?ui-kit' });
+    await page.waitForSelector('#uiKit'); await page.waitForTimeout(400);
+    (await page.evaluate(SCAN)).forEach(x => rows.push({ state: 'UI 키트', size: name, ...x }));
+    await close();
+  }
+  console.log(table(rows));
+  check(`줄바꿈: 단어 중간 줄바꿈·라벨 두 줄/넘침 없음(${rows.length}건)`, rows.length === 0, rows.slice(0, 4).map(r => `${r.state}/${r.size}/${r.el}/${r.text}`).join(' | '));
 });
 
 for (const [name, fn] of sections) {

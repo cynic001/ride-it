@@ -9,6 +9,12 @@
  */
 const Popup = {
   _stack: [],
+
+  /** WebKit(iPhone Safari)은 "0.9초에서"·"Babylon.js예요." 같이 마침표가 낀 덩어리를 마침표에서 끊음 — 그런 덩어리는 한 덩어리로 묶어(white-space: nowrap) 단어 중간 줄바꿈을 막음.
+   * HTML 태그·속성은 건드리지 않음 */
+  _nb(html) {
+    return html.split(/(<[^>]+>)/).map(seg => (seg[0] === '<' ? seg : seg.replace(/\S*[0-9A-Za-z]\.[0-9A-Za-z]\S*/g, '<span class="nb">$&</span>'))).join('');
+  },
   GAP: 8, // 블록 사이 간격(css .popup-body gap과 같은 값, 8px 단위)
 
   /* ── 블록 만들기 도우미 (문구는 호출하는 쪽이 strings.js에서 가져옴) ── */
@@ -27,6 +33,8 @@ const Popup = {
     window.dispatchEvent(new Event('popup-open')); // 입력 관리자가 눌려 있던 입력을 모두 해제
     actions = actions.map((a, i) => ({ ...a, id: a.id || `${id || 'popup'}Act${i}` })); // 모든 버튼에 id(이벤트 연결용)
     const prevFocus = document.activeElement;
+    const below = Popup._stack[Popup._stack.length - 1]; // 한 번에 하나만 보이게: 새 모달이 열리면 지금 맨 위 모달은 숨김
+    if (below) { below.el.classList.add('modal-hidden'); below.el.setAttribute('aria-hidden', 'true'); below.el.inert = true; }
     const overlay = document.createElement('div');
     overlay.className = 'screen modal-overlay';
     if (id) overlay.id = id;
@@ -42,7 +50,7 @@ const Popup = {
         <div class="popup-foot"></div>
       </div>`;
     const panel = overlay.querySelector('.popup'), body = overlay.querySelector('.popup-body'), foot = overlay.querySelector('.popup-foot'), dots = overlay.querySelector('.popup-dots');
-    const els = blocks.map(b => { const d = document.createElement('div'); d.className = `popup-block ${b.cls || ''}${center ? ' center' : ''}`; d.innerHTML = b.html; body.appendChild(d); return d; });
+    const els = blocks.map(b => { const d = document.createElement('div'); d.className = `popup-block ${b.cls || ''}${center ? ' center' : ''}`; d.innerHTML = Popup._nb(b.html); body.appendChild(d); return d; });
     (UI.root || document.body).appendChild(overlay);
 
     const ctl = { el: overlay, pages: 1, page: 0, close, goto, layout };
@@ -97,6 +105,7 @@ const Popup = {
       overlay.remove();
       Popup._stack = Popup._stack.filter(c => c !== ctl);
       if (!Popup._stack.length) document.body.classList.remove('popup-open');
+      else { const top = Popup._stack[Popup._stack.length - 1]; top.el.classList.remove('modal-hidden'); top.el.removeAttribute('aria-hidden'); top.el.inert = false; const pn = top.el.querySelector('.popup'); if (pn) try { pn.focus({ preventScroll: true }); } catch (e) { /* 무시 */ } } // 닫으면 아래 모달 복귀
       if (prevFocus && prevFocus.focus && document.contains(prevFocus)) { try { prevFocus.focus({ preventScroll: true }); } catch (e) { /* 무시 */ } }
       if (onClose) onClose();
     }

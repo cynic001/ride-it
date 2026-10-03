@@ -9,7 +9,7 @@
  * 빌드 단계가 없어 배포마다 버전을 올리지 않아도 되도록 "내용 비교"로 새 버전을 감지함. CACHE 이름은 캐시 구조가
  * 바뀔 때만 올리면 됨(올리면 activate에서 이전 캐시 전부 삭제).
  */
-const CACHE = 'ride-it-v5';
+const CACHE = 'ride-it-v6';
 const CORE = [
   './',
   'index.html',
