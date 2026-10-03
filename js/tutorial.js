@@ -130,7 +130,7 @@ const Tutorial = {
         this.card(t('tut.card.balance'), this._text('balanceCard'), UI.gaugeDiagram(), () => {
           c.tScale = TUT_SLOW;
           this.banner(this._text('balanceBanner'));
-          this.focus(['#balGauge'], '#balKnob'); // 손가락 아이콘은 노브 위
+          this.focus(['#balGauge', '#tdBal'], '#balKnob'); // 하단 슬라이더 + 상단 큰 표시, 손가락 아이콘은 노브 위
         });
       }
       // 구간 85%까지 못 채우면 그 자리에서 기다림(구간을 벗어나지 않으니 Miss 없음) + 힌트

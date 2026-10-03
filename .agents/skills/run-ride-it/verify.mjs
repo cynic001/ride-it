@@ -283,13 +283,13 @@ async function main() {
         const b2 = await page.evaluate(() => Game.cart.balanceState && Game.cart.balanceState.progress);
         if (s === STAGES[0]) await shot(`${tag}_2f_balance_out`);
         await page.keyboard.down(bal.key); await sleep(bal.hold * 1000 + 700);
-        const b3 = await page.evaluate(() => ({ j: window.__bj.slice(), done: Game.cart.balanceState && Game.cart.balanceState.done, txt: document.getElementById('balResult').textContent }));
+        const b3 = await page.evaluate(() => ({ j: window.__bj.slice(), done: Game.cart.balanceState && Game.cart.balanceState.done, txt: document.getElementById('tdBalRes').textContent }));
         await page.keyboard.up(bal.key);
         await page.evaluate(() => { Cart.speedScale = GAME_SPEED_SCALE; });
         check(`${tag} balance: hold builds progress, leaving resets, ${bal.hold}s hold confirms`, b1.on && b1.inn && b1.p > 0.2 && b1.p < 0.9 && b2 === 0 && b3.j.length === 1 && ['good', 'perfect'].includes(b3.j[0]) && b3.done === b3.j[0] && b3.txt.length > 0,
           `0.9s→${(b1.p ?? -1).toFixed(2)} release→${b2} hold→${JSON.stringify(b3)}`);
-        const g = await page.evaluate(() => ['#balBand', '#balPerfect', '#balKnob', '#balRing', '#balTarget', '#balDir'].map(q => !!document.querySelector(q)));
-        check(`${tag} balance bar: band + perfect + knob + progress ring + target + direction`, g.every(Boolean), JSON.stringify(g));
+        const g = await page.evaluate(() => ['#balBand', '#balPerfect', '#balKnob', '#balTarget', '#tdBand', '#tdPerfect', '#tdCart', '#tdMark', '#tdProg', '#tdMsgText'].map(q => !!document.querySelector(q)));
+        check(`${tag} balance: slider (band + perfect + knob + target ▼) and top display (bands + cart + marker + progress bar + message)`, g.every(Boolean), JSON.stringify(g));
       }
       // BOOST 버튼 = 부스트(게이트 판정 이벤트) — 누를 때마다 1회
       await page.evaluate(() => { window.__gates = 0; if (!window.__gateHooked) { window.__gateHooked = true; window.addEventListener('gate-result', () => window.__gates++); } });

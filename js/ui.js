@@ -417,22 +417,21 @@ const UI = {
       <rect x="150" y="56" width="112" height="24" rx="4" fill="url(#gdStripe)" stroke="#141a33" stroke-width="2"/>
       <rect x="196" y="52" width="40" height="32" rx="4" fill="#0A3D22" stroke="#fff" stroke-width="2"/><rect x="196" y="52" width="40" height="32" rx="4" fill="none" stroke="#141a33" stroke-width="1"/>
       <polygon points="216,12 228,12 222,26" fill="#141a33"/><rect x="220.5" y="8" width="3" height="26" fill="#141a33"/>
-      <circle cx="110" cy="68" r="22" fill="#F1EBDD" stroke="#141a33" stroke-width="2"/><circle cx="110" cy="68" r="26" fill="none" stroke="#FFB80D" stroke-width="4"/>
+      <g transform="translate(110 68) rotate(-8)"><rect x="-24" y="-14" width="48" height="24" rx="7" fill="#FFB80D" stroke="#141a33" stroke-width="3"/><rect x="-16" y="-20" width="14" height="9" rx="3" fill="#fff" stroke="#141a33" stroke-width="2.5"/><circle cx="-12" cy="14" r="6" fill="#fff" stroke="#141a33" stroke-width="3"/><circle cx="12" cy="14" r="6" fill="#fff" stroke="#141a33" stroke-width="3"/></g>
       <polygon points="103,102 117,102 110,92" fill="#141a33"/>
-      <text x="110" y="75" font-size="20" text-anchor="middle" fill="#141a33" font-weight="700">●</text>
       <text x="222" y="104" font-size="14" text-anchor="middle" fill="#141a33" font-weight="700">${t('diagram.target')}</text>
       <text x="110" y="118" font-size="14" text-anchor="middle" fill="#141a33" font-weight="700">${t('diagram.knob')}</text>
     </svg>`;
   },
 
-  /** 부스트 타이밍 링 그림(연습 코스 카드·조작법 공용) — BOOST 버튼 바깥의 링이 점선에 닿는 순간 */
+  /** 부스트 타이밍 링 그림(연습 코스 카드·조작법 공용) — 화면 위쪽 링이 줄어들어 점선에 닿는 순간 */
   popupDiagram() {
     return `<svg class="diagram" viewBox="0 0 300 140" role="img" aria-label="${t('tut.card.boost')}">
       <g transform="translate(70 70)">
         <circle r="52" fill="none" stroke="#FFD84D" stroke-width="10" opacity=".85"/><circle r="52" fill="none" stroke="#168A4C" stroke-width="4"/>
         <circle r="52" fill="none" stroke="#141a33" stroke-width="1.5" stroke-dasharray="3 3"/>
         <circle r="62" fill="none" stroke="#141a33" stroke-width="8"/><circle r="62" fill="none" stroke="#fff" stroke-width="4"/>
-        <circle r="44" fill="#FFB80D" stroke="#141a33" stroke-width="2"/><text y="6" font-size="16" text-anchor="middle" font-weight="700" fill="#141a33">BOOST</text>
+        <circle r="44" fill="rgba(255,255,255,.55)" stroke="#141a33" stroke-width="2"/><path transform="scale(1.4)" d="M0 -12 L3.5 -4 L12 -3.5 L5.5 2 L7.5 10.5 L0 6 L-7.5 10.5 L-5.5 2 L-12 -3.5 L-3.5 -4 Z" fill="#FFD84D" stroke="#141a33" stroke-width="2"/>
       </g>
       <text x="150" y="44" font-size="15" fill="#141a33" font-weight="700">${t('diagram.ring1')}</text>
       <text x="150" y="74" font-size="15" fill="#141a33" font-weight="700">${t('diagram.ring2')}</text>
@@ -597,6 +596,7 @@ const UI = {
             <span class="hud-chip tp-label" id="gatePopLabel"></span>
             <div class="tp-result" id="gatePopResult"></div>
           </div>
+          ${this._balTopHTML()}
         </div>
         <div class="start-bar" id="startBar">
           <div class="start-bar-label" id="startBarLabel">${t('start.label')}</div>
@@ -620,7 +620,8 @@ const UI = {
     this._hud = {
       speed: $('speedLabel'), speedo: $('speedo'), comboMult: $('comboMult'), combo: $('comboLabel'), comboChip: $('comboChip'), turn: $('turnLabel'), lap: $('lapLabel'),
       progress: $('progressFill'), cameraBtn: $('cameraToggleBtn'), pauseBtn: $('pauseBtn'), viewFlash: $('viewFlash'), viewMode: 'third',
-      bal: $('balGauge'), balDir: $('balDir'), balBand: $('balBand'), balPerfect: $('balPerfect'), balKnob: $('balKnob'), balTarget: $('balTarget'), balRing: $('balRing'), balResult: $('balResult'), balLast: null,
+      bal: $('balGauge'), balBand: $('balBand'), balPerfect: $('balPerfect'), balKnob: $('balKnob'), balTarget: $('balTarget'),
+      top: $('topDisp'), tdBal: $('tdBal'), tdBand: $('tdBand'), tdPerfect: $('tdPerfect'), tdMark: $('tdMark'), tdCart: $('tdCart'), tdProg: $('tdProg'), tdArrow: $('tdArrow'), tdMsgText: $('tdMsgText'), tdEndL: $('tdEndL'), tdEndR: $('tdEndR'), tdBalRes: $('tdBalRes'), balResUntil: 0, balStart: 0, balWasActive: false, balWasIn: false, balPrevProg: 0, balMode: '', balMsg: '',
       pop: $('gatePop'), popLabel: $('gatePopLabel'), popResult: $('gatePopResult'), ringWrap: $('boostWrap'), btnWrap: $('boostBtnWrap'), ring: $('brRing'), ringOut: $('brOut'), ringGood: $('brGood'), ringPerfect: $('brPerfect'), ringFlash: $('brFlash'), popKey: null, popResultUntil: 0, popPrevErr: null, popTick: 0,
       judge: $('judgeToast'), hearts: $('hearts'), lastDerails: 0,
       rb: $('rbOverlay'), rbTitle: $('rbTitle'), rbGauge: $('rbGauge'), rbFill: $('rbGaugeFill'), rbSub: $('rbSub'), lastCombo: 0,
@@ -680,13 +681,15 @@ const UI = {
     window.addEventListener('cart-launched', this._launchedHandler);
     window.addEventListener('gate-result', this._gateHandler);
     if (this._balJudgeHandler) window.removeEventListener('balance-judge', this._balJudgeHandler);
-    this._balJudgeHandler = e => { // 밸런스 판정 확정/실패 — 게이지 위에 짧게
-      const r = this._hud && this._hud.balResult;
-      if (!r) return;
+    this._balJudgeHandler = e => { // 균형 판정 확정/실패 — 큰 표시 자리에 크게(동시 구간엔 압축 표시 옆 작은 칩)
+      const h = this._hud;
+      if (!h || !h.tdBalRes) return;
+      const r = h.tdBalRes;
       r.textContent = JUDGE_LABEL[e.detail];
-      r.className = 'bal-result';
+      r.className = 'tp-result td-res';
       void r.offsetWidth;
-      r.className = `bal-result show ${e.detail}`;
+      r.className = `tp-result td-res show ${e.detail}`;
+      h.balResUntil = performance.now() + 900;
     };
     window.addEventListener('balance-judge', this._balJudgeHandler);
   },
@@ -709,16 +712,36 @@ const UI = {
         </div>`;
   },
 
+  /** 균형 큰 표시 — 화면 상단 가운데(부스트 링과 같은 자리). 목표 띠(초록 + 남색 외곽선)·완벽 띠(줄무늬 + 별)·▼ 마커·카트(값에 비례해 기울어짐)·끝 화살표(커브 방향)·진행 바.
+   * 하단 슬라이더와 같은 색·같은 눈금(목표 위치 비율). 동시 구간에선 60%로 줄고 글자 안내는 숨김 */
+  _balTopHTML() {
+    const dbl = '<svg viewBox="0 0 40 24" aria-hidden="true"><path d="M2 2 L18 12 L2 22Z M21 2 L37 12 L21 22Z"/></svg>';
+    const tri = '<svg viewBox="0 0 16 24" aria-hidden="true"><path d="M2 2 L14 12 L2 22Z"/></svg>';
+    return `<div class="td-bal" id="tdBal" aria-hidden="true">
+      <div class="td-msg" id="tdMsg"><span class="td-arrow" id="tdArrow">${dbl}</span><b id="tdMsgText"></b></div>
+      <div class="td-bar" id="tdBar">
+        <span class="td-end l" id="tdEndL">${tri}</span><span class="td-end r" id="tdEndR">${tri}</span>
+        <div class="td-rail" id="tdRail">
+          <div class="td-band" id="tdBand"></div>
+          <div class="td-perfect" id="tdPerfect"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 L14.8 9 L22 9.6 L16.5 14.4 L18.2 21.6 L12 17.8 L5.8 21.6 L7.5 14.4 L2 9.6 L9.2 9 Z"/></svg></div>
+          <i class="td-mark" id="tdMark"></i>
+          <div class="td-cart" id="tdCart"><svg viewBox="0 0 48 34" aria-hidden="true"><rect x="3" y="4" width="42" height="18" rx="6" fill="#FFB80D" stroke="#141a33" stroke-width="3"/><rect x="11" y="1" width="12" height="8" rx="3" fill="#fff" stroke="#141a33" stroke-width="2.5"/><circle cx="14" cy="27" r="5.5" fill="#fff" stroke="#141a33" stroke-width="3"/><circle cx="34" cy="27" r="5.5" fill="#fff" stroke="#141a33" stroke-width="3"/></svg></div>
+        </div>
+      </div>
+      <div class="td-prog"><i id="tdProg"></i></div>
+      <b class="tp-result td-res" id="tdBalRes"></b>
+    </div>`;
+  },
+
   _driveControlsHTML() {
     const tilt = ControlSettings.mode === 'tilt';
     return `<div class="drive-controls twohand${tilt ? ' tilt' : ''}" id="driveControls">
       <div class="ctl-left" id="ctlLeft">
         <div class="bal-bar${tilt ? ' locked' : ''}" id="balGauge" data-input-role="slider" role="slider" aria-label="${t('hud.balanceBar')}" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0">
-          <div class="bal-top"><span class="bal-dir" id="balDir"></span><span class="bal-result" id="balResult"></span></div>
           <div class="bal-track" id="balTrack"><div class="bal-rail" id="balRail">
-            <div class="bal-band" id="balBand"></div><div class="bal-perfect" id="balPerfect"></div><i class="bal-zero"></i>
+            <div class="bal-band" id="balBand"></div><div class="bal-perfect" id="balPerfect"></div>
             <i class="bal-target" id="balTarget"></i>
-            <div class="bal-knob" id="balKnob"><svg class="bal-ring" viewBox="0 0 50 50" aria-hidden="true"><circle class="base" cx="25" cy="25" r="20"/><circle class="prog" id="balRing" cx="25" cy="25" r="20"/></svg><b class="bal-state" aria-hidden="true"></b></div>
+            <div class="bal-knob" id="balKnob"></div>
           </div></div>
         </div>
       </div>
@@ -794,31 +817,52 @@ const UI = {
       const overall = ((cart.currentLap - 1) + Math.min(1, cart.t)) / cart.totalLaps;
       h.progress.style.width = `${(overall * 100).toFixed(1)}%`;
 
-      // 균형 바: 노브 = 지금 내 입력값(−1~1, 손/키보드/기울기 모두 같은 바에 표시). 커브 구간이면 목표 ▼ · 성공 띠(초록 + 사선 무늬 + 테두리) ·
-      // 그 안의 Perfect 띠(더 진한 색 + 흰 테두리) · 방향 글자가 나타나고, 노브 둘레 링 = holdSec초 연속 유지 진행도(벗어나면 즉시 0)
+      // 균형: 하단 슬라이더(노브 = 지금 내 입력값, 목표 ▼ 눈금·띠) + 상단 큰 표시(같은 띠·눈금, 카트가 같은 값으로 움직임).
+      // 범위 안에서 노브 테두리가 초록으로 빛나고, 상단은 진행 바가 유지 시간 동안 채워진다(벗어나면 즉시 0 + 카트 흔들림)
       const pct = v => (Math.max(-1, Math.min(1, v)) + 1) * 50;
       const inp = window.Game && Game.input;
       h.bal.classList.toggle('locked', !!inp && (inp.mode === 'tilt' || inp._keyLean() !== 0));
+      const nowB = performance.now();
       h.balKnob.style.left = `${pct(cart.leanInput).toFixed(1)}%`;
       h.bal.setAttribute('aria-valuenow', cart.leanInput.toFixed(2));
       const bs = cart.launched && !cart.rollback ? cart.balanceState : null;
       if (bs) {
         const a = pct(bs.dir * bs.minLean), b = pct(bs.dir);
-        h.balBand.style.left = `${Math.min(a, b).toFixed(1)}%`;
-        h.balBand.style.right = `${(100 - Math.max(a, b)).toFixed(1)}%`;
         const p0 = pct(bs.dir * Math.max(bs.minLean, bs.target - bs.perfectRange)), p1 = pct(bs.dir * Math.min(1, bs.target + bs.perfectRange));
-        h.balPerfect.style.left = `${Math.min(p0, p1).toFixed(1)}%`;
-        h.balPerfect.style.right = `${(100 - Math.max(p0, p1)).toFixed(1)}%`;
-        h.balTarget.style.left = `${pct(bs.dir * bs.target).toFixed(1)}%`;
-        h.balRing.style.strokeDashoffset = (BAL_RING_C * (1 - Math.max(0, Math.min(1, bs.progress)))).toFixed(1);
-        if (h.balLast !== bs.dir) { h.balDir.textContent = t(bs.dir < 0 ? 'hud.curveLeft' : 'hud.curveRight'); h.balDir.classList.toggle('right', bs.dir > 0); h.balLast = bs.dir; }
-        h.bal.classList.toggle('in', bs.inBand);
-        h.bal.classList.toggle('perfect', bs.inBand && bs.perfectNow);
-        h.bal.classList.toggle('done', !!bs.done);
-        h.bal.classList.add('active');
+        const L = `${Math.min(a, b).toFixed(1)}%`, R = `${(100 - Math.max(a, b)).toFixed(1)}%`;
+        const PL = `${Math.min(p0, p1).toFixed(1)}%`, PR = `${(100 - Math.max(p0, p1)).toFixed(1)}%`, TG = `${pct(bs.dir * bs.target).toFixed(1)}%`;
+        for (const [band, perf, mark] of [[h.balBand, h.balPerfect, h.balTarget], [h.tdBand, h.tdPerfect, h.tdMark]]) {
+          band.style.left = L; band.style.right = R; perf.style.left = PL; perf.style.right = PR; mark.style.left = TG;
+        }
+        if (!h.balWasActive) { h.balStart = nowB; h.balPrevProg = 0; h.balWasIn = false; }
+        h.balWasActive = true;
+        h.tdCart.style.left = `${pct(cart.leanInput).toFixed(1)}%`;
+        h.tdCart.style.transform = `translate(-50%, -50%) rotate(${(cart.leanInput * 16).toFixed(1)}deg)`;
+        const prog = Math.max(0, Math.min(1, bs.progress));
+        h.tdProg.style.transform = `scaleX(${prog.toFixed(3)})`;
+        h.tdProg.style.backgroundColor = `hsl(${(45 + 100 * prog).toFixed(0)} 85% 48%)`; // 노랑 → 초록
+        for (const el of [h.bal, h.tdBal]) {
+          el.classList.toggle('in', bs.inBand); el.classList.toggle('perfect', bs.inBand && bs.perfectNow); el.classList.toggle('done', !!bs.done); el.classList.add('active');
+        }
+        h.tdBal.classList.toggle('right', bs.dir > 0);
+        // 벗어나는 순간: 진행 바 즉시 0(cart가 비움) + 카트 살짝 흔들림
+        if (h.balWasIn && !bs.inBand && !bs.done && h.balPrevProg > 0.05) { h.tdCart.classList.remove('shake'); void h.tdCart.getBoundingClientRect(); h.tdCart.classList.add('shake'); }
+        h.balWasIn = bs.inBand; h.balPrevProg = prog;
+        // 한 줄 안내: 구간 시작 1초 "여기에 맞춰요", 범위 밖 "오른쪽으로/왼쪽으로" + 맥동 큰 화살표, 범위 안 "좋아요! 유지!"
+        const here = nowB - h.balStart < 1000 && !bs.inBand;
+        const want = bs.dir * bs.target, toward = want > cart.leanInput ? 1 : -1;
+        const msg = bs.done ? '' : bs.inBand ? 'hold' : here ? 'here' : toward > 0 ? 'right' : 'left';
+        if (msg !== h.balMsg) {
+          h.balMsg = msg;
+          h.tdMsgText.textContent = msg === 'hold' ? t('hud.balHold') : msg === 'here' ? t('hud.balHere') : msg === 'right' ? t('hud.balRight') : msg === 'left' ? t('hud.balLeft') : '';
+          h.tdBal.dataset.msg = msg;
+          h.tdArrow.classList.toggle('flip', msg === 'left');
+        }
+        AudioManager.holdTone(bs.inBand && !bs.done ? prog : -1); // 유지하는 동안 점점 높아지는 소리
       } else {
-        h.bal.classList.remove('active', 'in', 'perfect', 'done');
-        h.balLast = null;
+        h.bal.classList.remove('active', 'in', 'perfect', 'done'); h.tdBal.classList.remove('active', 'in', 'perfect', 'done');
+        h.balWasActive = false; h.balMsg = ''; h.tdProg.style.transform = 'scaleX(0)';
+        AudioManager.holdTone(-1);
       }
 
       // 부스트 타이밍 링: 다가오는 게이트(중심까지 POP_RANGE초 이내)에서 BOOST 버튼 바깥에 나타나 줄어들고, 링이 목표 반지름에 닿는 순간 = 정타.
@@ -857,6 +901,15 @@ const UI = {
         wrap.classList.remove('on', 'ready', 'perfect-now', 'finish'); h.pop.classList.remove('ring'); h.btnWrap.classList.remove('near');
         if (now >= h.popResultUntil) h.pop.classList.remove('on', 'result');
       }
+    }
+    // 상단 큰 표시는 한 자리: 평소엔 하나(부스트 링 또는 균형), 균형 구간 안에 가속 지점이 겹치는 동시 구간에서만 둘을 함께(링 80%·균형 60%)
+    if (track && h.top) {
+      const nowT = performance.now();
+      const ringShown = h.pop.classList.contains('ring') || h.pop.classList.contains('on') && nowT < h.popResultUntil;
+      const balShown = h.tdBal.classList.contains('active') || nowT < h.balResUntil;
+      const mode = ringShown && balShown ? 'both' : ringShown ? 'boost' : balShown ? 'bal' : 'none';
+      if (mode !== h.balMode) { h.balMode = mode; h.top.className = `topdisp m-${mode}`; AudioManager.simulActive = mode === 'both'; }
+      h.tdBal.classList.toggle('on', balShown);
     }
     // 뒤로 떨어지기 신호: 멈칫/뒤로 = 경고, 연타 = "연타!" + 힘 게이지 + 남은 초, 자동 발사 = 부스터
     const rb = cart.rollback;

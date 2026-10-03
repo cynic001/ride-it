@@ -286,6 +286,23 @@ const AudioManager = {
     if (overlap) setTimeout(play, 120); else play();
   },
 
+  /** 균형 유지 중 점점 높아지는 소리(진행도 0~1). -1이면 멈춤. 사운드 토글·잠금 해제 상태를 따름 */
+  holdTone(progress) {
+    if (progress < 0 || !this.enabled || !this.ctx || this.ctx.state !== 'running') {
+      if (this._holdOsc) { const o = this._holdOsc; this._holdOsc = null; try { o.g.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.03); o.osc.stop(this.ctx.currentTime + 0.12); } catch (e) { /* 이미 멈춤 */ } }
+      return;
+    }
+    const f = 330 + 420 * Math.min(1, progress), t0 = this.ctx.currentTime;
+    clearTimeout(this._holdT); this._holdT = setTimeout(() => this.holdTone(-1), 250); // 표시 갱신이 멈추면(스테이지 종료 등) 소리도 멈춤
+    if (!this._holdOsc) {
+      const osc = this.ctx.createOscillator(), g = this.ctx.createGain();
+      osc.type = 'triangle'; osc.frequency.value = f; g.gain.value = 0.0001;
+      osc.connect(g).connect(this.masterGain); osc.start();
+      g.gain.setTargetAtTime(0.05, t0, 0.04);
+      this._holdOsc = { osc, g };
+    } else this._holdOsc.osc.frequency.setTargetAtTime(f, t0, 0.05);
+  },
+
   // ── 4) 게이트(부스트/브레이크) 판정 + 6) 피니쉬 판정 사운드(같은 경로, type으로 구분) ──
   playGateResult(type, result) {
     this._gateSoundAt = performance.now();

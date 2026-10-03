@@ -293,9 +293,9 @@ section('input', async () => {
   }, [sel, type, id, x, y]);
   // 출발: 스타트 바에서 아래로 당겼다가 위로 빠르게
   const bar = await page.evaluate(() => { const b = document.getElementById('startBar').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + 40 }; });
-  await ev('#startBar', 'pointerdown', 1, bar.x, bar.y);
-  for (let i = 1; i <= 8; i++) { await ev('#startBar', 'pointermove', 1, bar.x, bar.y + i * 14); await page.waitForTimeout(16); }
-  for (let i = 1; i <= 4; i++) { await ev('#startBar', 'pointermove', 1, bar.x, bar.y + 112 - i * 30); await page.waitForTimeout(12); }
+  // 한 번의 evaluate 안에서 연속 발생 — 부하가 큰 머신에서 왕복 지연이 속도 계산(flick)을 망치지 않게
+  await page.evaluate(([x, y]) => { const el = document.getElementById('startBar'); const fire = (type, yy) => el.dispatchEvent(new PointerEvent(type, { pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true, clientX: x, clientY: yy }));
+    fire('pointerdown', y); for (let i = 1; i <= 8; i++) fire('pointermove', y + i * 14); for (let i = 1; i <= 4; i++) fire('pointermove', y + 112 - i * 30); }, [bar.x, bar.y]);
   await page.waitForTimeout(200);
   const launched = await page.evaluate(() => ({ l: Game.cart.launched, sp: Game.cart.speed }));
   check('입력: 스타트 바 당겼다 밀어 올리기 → 발사', launched.l && launched.sp > 3, JSON.stringify(launched));
@@ -430,7 +430,7 @@ section('hud', async () => {
       for (let i = 0; i < 30; i++) { c.leanInput = (seg.curveDirection === 'left' ? -1 : 1) * 0.5; Game._fixedUpdate(1 / 60); }
       window.dispatchEvent(new CustomEvent('derail', { detail: { count: 1, left: 2 } })); c.derails = 1; c.combo = 12;
       UI.updateHUD(c, Game.track); document.getElementById('gatePop').classList.add('on'); UI._showPopResult('perfect');
-      const bar = document.getElementById('balResult'); bar.textContent = 'GOOD'; bar.className = 'bal-result show good';
+      window.dispatchEvent(new CustomEvent('balance-judge', { detail: 'good' })); UI.updateHUD(c, Game.track);
     });
     await page.waitForTimeout(200); // 활성화 전환(opacity) 끝난 뒤
     const view0 = await page.evaluate(() => ({ dis: document.getElementById('cameraToggleBtn').disabled, op: getComputedStyle(document.getElementById('cameraToggleBtn')).opacity, icon: document.getElementById('cameraToggleBtn').innerHTML.length, mode: Game.camera.mode }));
@@ -449,7 +449,7 @@ section('hud', async () => {
     await page.evaluate(() => { const f = document.getElementById('viewFlash'); f.classList.remove('show'); f.style.opacity = '1'; f.style.animation = 'none'; f.textContent = '1인칭'; }); // 겹침 검사: 이름 표시도 보이게
     const lay = await page.evaluate(() => {
       const R = sel => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return b.width ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
-      const els = { 바퀴칩: '#lapChip', 속도칩: '#speedo', 콤보칩: '#comboChip', 하트: '#hearts', 소리: '#soundToggleBtn', 일시정지: '#pauseBtn', 시점: '#cameraToggleBtn', 시점이름: '#viewFlash', 균형바: '#balGauge', 균형결과: '#balResult', 부스트: '#boostBtn', 타이밍표시: '#gatePop' };
+      const els = { 바퀴칩: '#lapChip', 속도칩: '#speedo', 콤보칩: '#comboChip', 하트: '#hearts', 소리: '#soundToggleBtn', 일시정지: '#pauseBtn', 시점: '#cameraToggleBtn', 시점이름: '#viewFlash', 균형바: '#balGauge', 균형표시: '#tdBal', 부스트: '#boostBtn', 타이밍표시: '#gatePop' };
       const rects = Object.fromEntries(Object.entries(els).map(([k, q]) => [k, R(q)]));
       const hit = (a, b) => a && b && a.l < b.r - 0.5 && b.l < a.r - 0.5 && a.t < b.b - 0.5 && b.t < a.b - 0.5;
       const names = Object.keys(rects).filter(k => rects[k]); const bad = [];
@@ -527,6 +527,96 @@ section('title', async () => {
   await rm.close();
 });
 
+
+// ── 상단 큰 표시(topDisp): 모드(부스트 | 균형 | 동시), 크기·배치·겹침, 균형 표시 요소·안내·진행 바·흔들림, 하단 슬라이더 규격, 동시 구간 판정 분리·진행도 유지·복귀
+section('topdisp', async () => {
+  for (const [name, w, h] of [['세로', 375, 667], ['가로', 667, 375], ['소형', 320, 568]]) {
+    let { page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_derail: 'off', rc_quality: 'medium' } });
+    const launch = async () => { await loadStage(page, 0); await page.evaluate(() => { Game.engine.stopRenderLoop(); window.dispatchEvent(new CustomEvent('cart-launched', { detail: { strength: 1, flickMultiplier: 1 } })); Game.cart.launch(1, 1); }); };
+    await launch();
+    const upd = () => page.evaluate(() => { UI.updateHUD(Game.cart, Game.track); Game.scene.render(); });
+    const step = (n, lean, until) => page.evaluate(([n, lean, until]) => {
+      const c = Game.cart; let i = 0;
+      while (i++ < n) { const b = c.balanceState; c.leanInput = lean === 'target' ? (b ? b.dir * b.target : 0) : lean === 'wrong' ? (b ? -b.dir * 0.8 : 0) : lean; Game._fixedUpdate(1 / 60); if (until !== undefined && until !== null) { const g = c.gateTiming(), bs = c.balanceState; if (bs && g && g.type === 'boost' && g.timeTo <= until) break; } }
+      UI.updateHUD(c, Game.track); Game.scene.render();
+      const bs = c.balanceState; return { mode: UI._hud.balMode, prog: bs ? bs.progress : null, inBand: bs ? bs.inBand : null };
+    }, [n, lean, until]);
+    const R = q => page.evaluate(q => { const e = document.querySelector(q); const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; }, q);
+    const W = w, H = h, ring = Math.min(0.4 * W, 0.38 * H), bw = Math.min(0.7 * W, 360);
+
+    // 평소(직선, 가속 지점 멀리)엔 표시 없음
+    let st = await step(5, 0); await page.waitForTimeout(300);
+    check(`상단표시 ${name}: 평소엔 아무것도 안 뜸`, st.mode === 'none', st.mode);
+
+    // 동시 구간: 가속 지점 접근 → 둘 다(링 80%·균형 60%), 배치·겹침 없음·결과 분리·진행도 유지·끝나면 복귀
+    await page.evaluate(() => { Cart.speedScale = GAME_SPEED_SCALE; });
+    const s0 = await step(20000, 'target', 0.75);
+    await page.waitForFunction(([r, b]) => Math.abs(document.getElementById('gatePop').getBoundingClientRect().width / r - 0.8) < 0.005 && Math.abs(document.getElementById('tdBal').getBoundingClientRect().width / b - 0.6) < 0.005, [ring, bw], { timeout: 8000, polling: 100 }).catch(() => {}); await page.waitForTimeout(300);
+    const g = await page.evaluate(() => {
+      const R = q => { const e = document.querySelector(q); const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
+      const box = { ring: R('#gatePop'), bal: R('#tdBal'), ctrl: R('.hud-controls'), view: R('#cameraToggleBtn'), row: R('.hud-row'), realBar: R('#balGauge'), boost: R('#boostBtn') };
+      const hit = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+      const over = ['ctrl', 'view', 'row', 'realBar', 'boost'].filter(n => hit(box.ring, box[n]) || hit(box.bal, box[n]));
+      const inV = [box.ring, box.bal].every(b => b.l >= 0 && b.r <= innerWidth && b.t >= 0 && b.b <= innerHeight);
+      const stack = box.ring.b <= box.bal.t + 2 ? 'ring-above' : (box.bal.r <= box.ring.l + 2 ? 'bal-left' : 'other');
+      return { over, inV, stack, ringW: box.ring.w, balW: box.bal.w, hit: hit(box.ring, box.bal) };
+    });
+    check(`동시 ${name}: 링 = 큰 링의 80%(${(g.ringW / ring).toFixed(2)}), 균형 = 큰 표시의 60%(${(g.balW / bw).toFixed(2)})`, Math.abs(g.ringW / ring - 0.8) < 0.03 && Math.abs(g.balW / bw - 0.6) < 0.03 && s0.mode === 'both', JSON.stringify([g, s0]));
+    check(`동시 ${name}: 배치 ${name === '가로' ? '균형 왼쪽·링 오른쪽' : '링 위·균형 아래'}, 화면 안·서로와 HUD·조작 영역과 안 겹침`, (name === '가로' ? g.stack === 'bal-left' : g.stack === 'ring-above') && g.inV && !g.over.length && !g.hit, JSON.stringify(g));
+    const pBefore = (await step(1, 'target')).prog;
+    await page.evaluate(() => { const c = Game.cart; for (let i = 0; i < 600; i++) { const gg = c.gateTiming(); if (gg && gg.err >= -0.01) break; const b = c.balanceState; c.leanInput = b ? b.dir * b.target : 0; Game._fixedUpdate(1 / 60); } UI.updateHUD(c, Game.track); });
+    await page.evaluate(() => { const c = Game.cart; const r = c.resolveGate(); window.dispatchEvent(new CustomEvent('gate-result', { detail: { type: 'boost', result: r } })); window.dispatchEvent(new CustomEvent('balance-judge', { detail: 'perfect' })); Game.scene.render(); });
+    await page.waitForTimeout(260);
+    const pAfter = (await step(1, 'target')).prog;
+    const rr = await page.evaluate(() => { const R = q => { const b = document.querySelector(q).getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; }; const a = R('#gatePopResult'), c = R('#tdBalRes'), view = R('#cameraToggleBtn'), ctrl = R('.hud-controls');
+      const hit = (x, y) => x.l < y.r && y.l < x.r && x.t < y.b && y.t < x.b;
+      return { res: document.getElementById('gatePopResult').textContent, chip: document.getElementById('tdBalRes').textContent, sep: !hit(a, c), chipClear: !hit(c, view) && !hit(c, ctrl), inV: c.l >= 0 && c.r <= innerWidth }; });
+    check(`동시 ${name}: 부스트 결과(${rr.res})는 링 자리·균형 결과(${rr.chip})는 압축 표시 옆 칩 — 서로·시점 버튼·HUD와 안 겹침, 화면 안`, !!rr.res && !!rr.chip && rr.sep && rr.chipClear && rr.inV, JSON.stringify(rr));
+    check(`동시 ${name}: 부스트 입력 뒤에도 균형 진행도 유지(${pBefore?.toFixed(2)} → ${pAfter?.toFixed(2)})`, pBefore !== null && pAfter !== null && pAfter >= pBefore - 0.001, `${pBefore} ${pAfter}`);
+    await page.waitForTimeout(1100);
+    const left2 = await page.evaluate(() => { const c = Game.cart; let i = 0; while (UI._hud.balMode === 'both' && i++ < 6000) { const b = c.balanceState; c.leanInput = b ? b.dir * b.target : 0; Game._fixedUpdate(1 / 60); UI.updateHUD(c, Game.track); } return { mode: UI._hud.balMode, i }; });
+    check(`동시 ${name}: 동시 구간이 끝나면 한 번에 하나(${left2.mode})로 복귀`, left2.mode !== 'both', JSON.stringify(left2));
+    // 새 페이지에서 이어서 균형 구간만 검사(상태 간섭 방지)
+    await close(); ({ page, errors, close } = await start({ browser: BROWSER, w, h, init: { rc_derail: 'off', rc_quality: 'medium' } })); await launch();
+    // 이어서 균형 구간만(가속 지점 없는 커브)
+    // 균형 구간 진입(가속 지점 아직 멀리) → 균형만(한 번에 하나), 폭 min(70vw,360)
+    await page.evaluate(() => { const c = Game.cart, tr = Game.track; const far = seg => tr.gateCenters().every(g => Math.abs(g.t - (seg.tStart + (seg.tEnd - seg.tStart) * 0.5)) > 0.08); const seg = tr.segmentRanges.find(x => x.requiredLean > 0 && far(x)); c._finalizeCurve(); c.currentLap = 1; c._resolvedGates && c._resolvedGates.clear(); c.t = seg.tStart + (seg.tEnd - seg.tStart) * 0.1; c._lastHeight = Game.track.getHeightAt(c.t); Cart.speedScale = 0.02; });
+    st = await step(2, 0); await page.waitForTimeout(600);
+    const ringVis0 = await page.evaluate(() => getComputedStyle(document.getElementById('gatePop')).opacity);
+    const gbal = await R('#tdBar'), gblock = await R('#tdBal');
+    check(`상단표시 ${name}: 균형 구간엔 균형 큰 표시만(링 숨김), 폭 min(70vw,360)=${Math.round(bw)}px(${Math.round(gblock.w)}px)·가운데·막대 높이 56~72px(${Math.round(gbar0(gbal))}px)`,
+      st.mode === 'bal' && parseFloat(ringVis0) < 0.05 && Math.abs(gblock.w - bw) <= 1.5 && Math.abs((gblock.l + gblock.r) / 2 - W / 2) <= 1.5 && gbal.h >= 56 && gbal.h <= 72, JSON.stringify({ st, ringVis0, gblock, gbal }));
+    // 요소: 기준선 없음, 카트 아이콘, ▼ 마커, 완벽 줄무늬 + 별, 끝 화살표, 진행 바, 슬라이더 규격
+    const els = await page.evaluate(() => {
+      const bad = ['.bal-zero', '.sb-zero', '.td-zero'].filter(q => document.querySelector(q)).length;
+      const knob = document.getElementById('balKnob').getBoundingClientRect(), tr = document.getElementById('balTrack').getBoundingClientRect(), bar = document.getElementById('balGauge').getBoundingClientRect();
+      const mt = document.getElementById('tdMark').style.left, st = document.getElementById('balTarget').style.left;
+      return { bad, parts: ['#tdBand', '#tdPerfect', '#tdMark', '#tdCart', '#tdEndL', '#tdEndR', '#tdProg'].every(q => !!document.querySelector(q)), star: !!document.querySelector('#tdPerfect svg'), cartSvg: !!document.querySelector('#tdCart svg'),
+        knob: knob.width, track: tr.height, hit: bar.height, padTop: tr.top - bar.top, padBot: bar.bottom - tr.bottom, markEq: mt === st, mt, st, text: [...document.querySelectorAll('#balGauge *')].map(e => e.textContent.trim()).join('') };
+    });
+    check(`상단표시 ${name}: 카트 아이콘·▼ 마커·완벽 줄무늬+별·끝 화살표·진행 바 있음, 기준선 없음`, els.bad === 0 && els.parts && els.star && els.cartSvg, JSON.stringify(els));
+    check(`슬라이더 ${name}: 트랙 높이 ${Math.round(els.track)}px(≥56)·위아래 ${Math.round(els.padTop)}/${Math.round(els.padBot)}px(≥24) 반응·노브 ${Math.round(els.knob)}px(52~56)·목표 ▼ 위치가 상단 마커와 같음·조작 무관 글자 없음`,
+      els.track >= 56 && els.padTop >= 24 && els.padBot >= 24 && els.knob >= 52 && els.knob <= 56 && els.markEq && els.text === '', JSON.stringify(els));
+    // 안내: 구간 시작 1초 "여기에 맞춰요" → 범위 밖이면 방향 안내 + 큰 화살표, 범위 안 "좋아요! 유지!", 진행 바 채움, 벗어나면 즉시 0 + 카트 흔들림
+    const msg = () => page.evaluate(() => ({ msg: document.getElementById('tdBal').dataset.msg, text: document.getElementById('tdMsgText').textContent, arrow: getComputedStyle(document.getElementById('tdArrow')).display, prog: document.getElementById('tdProg').style.transform }));
+    await page.evaluate(() => { UI._hud.balStart = performance.now(); }); await step(1, 0.0);
+    const m1 = await msg();
+    await page.evaluate(() => { UI._hud.balStart = 0; });
+    await step(1, 'wrong'); const m2 = await msg(); const dirNow = await page.evaluate(() => Game.cart.balanceState.dir); const m3 = m2;
+    check(`상단표시 ${name}: 구간 시작 안내 "${m1.text}" → 범위 밖 방향 안내("${m2.text}") + 큰 화살표`, m1.msg === 'here' && m1.text.length > 0 && m2.msg === (dirNow > 0 ? 'right' : 'left') && m2.arrow !== 'none', JSON.stringify([m1, m2, m3]));
+    st = await step(40, 'target'); await page.waitForTimeout(250);
+    const m4 = await msg(); const knobGlow = await page.evaluate(() => getComputedStyle(document.getElementById('balKnob')).borderTopColor);
+    check(`상단표시 ${name}: 범위 안 "${m4.text}"·진행 바 채워짐(${st.prog?.toFixed(2)})·슬라이더 노브 테두리 초록`, m4.msg === 'hold' && st.inBand && st.prog > 0.15 && /\(15, 122, 64\)|rgb\(15, 122, 64\)/.test(knobGlow), JSON.stringify([m4, st, knobGlow]));
+    const b0 = await step(1, 'target'); await page.evaluate(() => { UI._hud.balPrevProg = 0.5; UI._hud.balWasIn = true; });
+    await step(1, 'wrong'); await upd();
+    const left = await page.evaluate(() => ({ prog: Game.cart.balanceState ? Game.cart.balanceState.progress : null, shake: document.getElementById('tdCart').classList.contains('shake'), bar: document.getElementById('tdProg').style.transform }));
+    check(`상단표시 ${name}: 범위를 벗어나면 진행 바 즉시 비워지고 카트가 흔들림`, left.prog === 0 && left.shake && /scaleX\(0(\.0+)?\)/.test(left.bar), JSON.stringify(left));
+
+    check(`topdisp ${name} page error 0`, errors.length === 0, errors.join('|'));
+    await close();
+  }
+  function gbar0(g) { return g.h; }
+});
 
 for (const [name, fn] of sections) {
   if (ONLY && !ONLY.includes(name)) continue;
