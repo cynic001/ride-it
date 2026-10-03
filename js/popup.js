@@ -81,9 +81,9 @@ const Popup = {
       dots.innerHTML = ctl.pages > 1 ? Array.from({ length: ctl.pages }, (_, i) => `<i class="${i === p ? 'on' : ''}"></i>`).join('') : '';
       dots.setAttribute('aria-label', ctl.pages > 1 ? `${p + 1} / ${ctl.pages}` : '');
       const last = p === ctl.pages - 1;
-      const prev = p > 0 ? '<button class="btn small popup-prev" type="button">이전</button>' : '<span class="spacer"></span>';
+      const prev = p > 0 ? `<button class="btn small popup-prev" type="button">${t('popup.prev')}</button>` : '<span class="spacer"></span>';
       if (ctl.pages === 1) foot.innerHTML = `<span class="actions-wrap">${actions.map(a => btn(a)).join('')}</span>`;
-      else if (!last) foot.innerHTML = `${prev}<span class="count popup-count">${p + 1}/${ctl.pages}</span><button class="btn small primary popup-next" type="button">다음</button>`;
+      else if (!last) foot.innerHTML = `${prev}<span class="count popup-count">${p + 1}/${ctl.pages}</span><button class="btn small primary popup-next" type="button">${t('popup.next')}</button>`;
       else foot.innerHTML = `${prev}<span class="actions-wrap">${actions.map(a => btn(a)).join('')}</span>`;
       const pv = foot.querySelector('.popup-prev'), nx = foot.querySelector('.popup-next');
       if (pv) pv.addEventListener('click', () => goto(ctl.page - 1));

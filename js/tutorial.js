@@ -63,32 +63,32 @@ const Tutorial = {
     return window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches ? 'keyboard' : 'touch';
   },
 
-  /** 단계별 안내 문구(입력 환경별) */
+  /** 단계별 안내 문구(입력 환경별) — 문구는 strings.js의 tut.* */
   _text(key) {
     const k = this.kind();
-    const lean = { keyboard: '<b>← →</b> 키로', tilt: '<b>폰을 기울여서</b>', touch: '왼쪽 아래 <b>바</b>를 끌어서' }[k];
+    const lean = t(`tut.lean.${k}`);
     const hold = this.track.stageData.balance.holdSec; // 스테이지마다 다른 유지 시간(코드 값)
-    const boost = k === 'keyboard' ? '<b>↑</b> 또는 <b>Space</b>' : '오른쪽 아래 <b>BOOST</b>';
+    const boost = t(k === 'keyboard' ? 'tut.boost.keyboard' : 'tut.boost.touch');
     return {
-      start: k === 'keyboard' ? '<b>↓</b> 누르고 있다가 <b>↑</b>로 출발!' : '<b>아래로 당겼다가 위로</b> 확 밀어요',
-      balanceCard: `커브에서는 ${lean} <b>노브</b>를 <b>초록 띠</b> 안에 두세요. <b>${hold}초</b> 동안 있으면 성공! 진한 띠는 PERFECT예요.<small class="tut-note">실패하면 레일에서 탈선할 수 있어요 (설정에서 끌 수 있어요)</small>`,
-      balanceBanner: `노브를 초록 띠에 ${hold}초!`,
-      balanceHint: `노브를 초록 띠 안으로!`,
-      boostCard: `<b>바깥 원이 안쪽 원과 겹치는 순간</b> ${boost}!`,
-      boostBanner: `링이 닿을 때 ${boost}`,
-      comboCard: `이번엔 동시에! 밸런스를 유지하면서 원이 겹칠 때 ${boost}.`,
-      comboBanner: '바 유지 + 부스트!',
-      rollbackCard: `언덕에서 <b>뒤로 미끄러져요!</b> ${boost}를 <b>빠르게 연타</b>하면 올라가요.`,
-      rollbackBanner: `${boost} 마구 누르기!`,
-      finishCard: '<b>피니쉬 아치</b>를 지나면 완주! 원이 겹칠 때 누르면 보너스 점수!',
-      finishBanner: '결승선을 지나면 끝!',
+      start: t(k === 'keyboard' ? 'tut.start.keyboard' : 'tut.start.touch'),
+      balanceCard: `${t('tut.balanceCard', { lean, hold })}<small class="tut-note">${t('tut.balanceNote')}</small>`,
+      balanceBanner: t('tut.balanceBanner', { hold }),
+      balanceHint: t('tut.balanceHint'),
+      boostCard: t('tut.boostCard', { boost }),
+      boostBanner: t('tut.boostBanner', { boost }),
+      comboCard: t('tut.comboCard', { boost }),
+      comboBanner: t('tut.comboBanner'),
+      rollbackCard: t('tut.rollbackCard', { boost }),
+      rollbackBanner: t('tut.rollbackBanner', { boost }),
+      finishCard: t('tut.finishCard'),
+      finishBanner: t('tut.finishBanner'),
     }[key];
   },
 
   _setStep(step) {
     this.step = step;
     const n = TUT_STEPS.indexOf(step) + 1;
-    const title = { start: '출발', balance: '밸런스', boost: '부스트', combo: '동시 조작', rollback: '뒤로 떨어지기', finish: '피니쉬' }[step];
+    const title = t(`tut.step.${step}`);
     this._stepLabel = `${n}/${TUT_STEPS.length} ${title}`;
     this._carded = false;
     this._waiting = false;
@@ -105,7 +105,7 @@ const Tutorial = {
 
   _next() {
     const i = TUT_STEPS.indexOf(this.step);
-    UI.flashSignal('좋아요!', 'perfect small');
+    UI.flashSignal(t('sig.good'), 'perfect small');
     AudioManager.playLapChime(false);
     if (i + 1 < TUT_STEPS.length) this._setStep(TUT_STEPS[i + 1]);
   },
@@ -127,7 +127,7 @@ const Tutorial = {
       const seg = S[1];
       if (!this._carded && this._secTo(seg.tStart) <= TUT_CARD_LEAD) {
         this._carded = true;
-        this.card('균형 바 읽는 법', this._text('balanceCard'), UI.gaugeDiagram(), () => {
+        this.card(t('tut.card.balance'), this._text('balanceCard'), UI.gaugeDiagram(), () => {
           c.tScale = TUT_SLOW;
           this.banner(this._text('balanceBanner'));
           this.focus(['#balGauge'], '#balKnob'); // 손가락 아이콘은 노브 위
@@ -145,32 +145,31 @@ const Tutorial = {
       const lead = this.step === 'combo' ? TUT_CARD_LEAD : 2.2;
       if (!this._carded && this._secTo(cardAt) <= lead) {
         this._carded = true;
-        const [title, body, pic] = this.step === 'boost' ? ['부스트 타이밍', this._text('boostCard'), UI.popupDiagram()]
-          : this.step === 'combo' ? ['동시 조작', this._text('comboCard'), null] : ['피니쉬', this._text('finishCard'), null];
+        const [title, body, pic] = this.step === 'boost' ? [t('tut.card.boost'), this._text('boostCard'), UI.popupDiagram()]
+          : this.step === 'combo' ? [t('tut.card.combo'), this._text('comboCard'), null] : [t('tut.card.finish'), this._text('finishCard'), null];
         this.card(title, body, pic, () => {
           c.tScale = this.step === 'finish' ? 0.8 : TUT_SLOW;
           this.banner(this._text(`${this.step}Banner`));
-          const boostSel = this.kind() === 'keyboard' ? null : '#boostBtn';
-          const sels = this.step === 'combo' ? ['#balGauge', '#gatePop', boostSel] : ['#gatePop', boostSel];
-          this.focus(sels.filter(Boolean), boostSel || '#gatePop');
+          const sels = this.step === 'combo' ? ['#balGauge', '#boostWrap'] : ['#boostWrap']; // BOOST 버튼과 그 둘레 링
+          this.focus(sels, '#boostBtn');
         });
       }
       // 누르지 않고 지나침 → 되감기(피니쉬는 통과만 하면 되니 제외)
       if (this.step !== 'finish' && this._carded) {
         const key = `${c.currentLap}:${S[this.step === 'boost' ? 2 : 3].tStart}`;
-        if (!c._resolvedGates.has(key) && this._secTo(g.t) < -GATE_ATTEMPT_RANGE - 0.05) this._retry(key, '원이 겹칠 때 눌러요 — 다시!');
+        if (!c._resolvedGates.has(key) && this._secTo(g.t) < -GATE_ATTEMPT_RANGE - 0.05) this._retry(key, t('tut.retryMissed'));
       }
     } else if (this.step === 'rollback') {
       const rz = this.track.rollbackZone;
       const trig = rz.tValley + (rz.tPeak - rz.tValley) * ROLLBACK.triggerFrac;
       if (!this._carded && this._secTo(trig) <= TUT_CARD_LEAD) {
         this._carded = true;
-        this.card('뒤로 떨어지기', this._text('rollbackCard'), null, () => { c.tScale = 1; this.banner('언덕을 올라가요…'); });
+        this.card(t('tut.card.rollback'), this._text('rollbackCard'), null, () => { c.tScale = 1; this.banner(t('tut.climbing')); });
       }
       const rb = c.rollback;
       if (rb && rb.phase === 'mash') {
         if (!this._mashShown) { this._mashShown = true; this.banner(this._text('rollbackBanner')); this.focus([this.kind() === 'keyboard' ? '#rbGauge' : '#boostBtn'], this.kind() === 'keyboard' ? '#rbGauge' : '#boostBtn'); }
-        if (rb.mashTime > 3 && rb.gauge < 0.4) this._hint('더 빠르게 연타!');
+        if (rb.mashTime > 3 && rb.gauge < 0.4) this._hint(t('tut.fasterMash'));
       }
     }
   },
@@ -190,7 +189,7 @@ const Tutorial = {
     } else if (this.step === 'combo' && type === 'boost') {
       const bs = this.cart.balanceState;
       if (result === 'miss') this._retry(this._lastKey(), this._timingHint());
-      else if (!bs || !bs.inBand) this._retry(this._lastKey(), '밸런스(초록 띠)를 유지한 채로 BOOST!');
+      else if (!bs || !bs.inBand) this._retry(this._lastKey(), t('tut.retryBar'));
       else this._next();
     }
   },
@@ -203,7 +202,7 @@ const Tutorial = {
 
   _timingHint() {
     const r = this.cart._gateResults[this.cart._gateResults.length - 1];
-    return r && r.err < 0 ? '조금 빨랐어요 — 원이 겹칠 때 다시!' : '조금 늦었어요 — 원이 겹칠 때 다시!';
+    return t(r && r.err < 0 ? 'tut.retryEarly' : 'tut.retryLate');
   },
 
   /** 게이트 앞으로 되감기 — 그 게이트 판정 기록을 지우고 다시 시도(튜토리얼은 점수 저장 없음) */
@@ -250,7 +249,7 @@ const Tutorial = {
       id: 'tutCard', title, meta: this._stepLabel, cancelable: false,
       blocks: [...(pic ? [Popup.fig(pic)] : []), Popup.p(body)],
       actions: [{
-        id: 'tutOkBtn', label: t('tutorial.ok'), primary: true,
+        id: 'tutOkBtn', label: t('tut.ok'), primary: true,
         onClick: (e, c) => {
           c.close();
           this.hold = false;

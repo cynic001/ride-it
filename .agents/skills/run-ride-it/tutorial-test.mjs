@@ -134,7 +134,7 @@ async function run(browser, mode) {
     await okCard();
     await sleep(200);
     const f3 = await focusOk();
-    check(`${tag} 3 boost: focus on popup${touch ? ' + BOOST' : ''}`, f3.ok && f3.sels.includes('#gatePop') && (!touch || f3.sels.includes('#boostBtn')), JSON.stringify(f3));
+    check(`${tag} 3 boost: focus on BOOST ring`, f3.ok && f3.sels.includes('#boostWrap'), JSON.stringify(f3));
     await boostAt(-0.32); // Good 범위(±0.25초) 밖 — 너무 일찍
     await sleep(300);
     s = await state();
@@ -154,7 +154,7 @@ async function run(browser, mode) {
     await boostAt(0);
     await sleep(300);
     s = await state();
-    check(`${tag} 4 combo: boost without balance → retry with hint`, s.step === 'combo' && s.hint && /밸런스/.test(s.banner), s.banner);
+    check(`${tag} 4 combo: boost without balance → retry with hint`, s.step === 'combo' && s.hint && /초록 띠/.test(s.banner), s.banner);
     await leanDown();
     await sleep(500);
     await shot('04_combo_both');

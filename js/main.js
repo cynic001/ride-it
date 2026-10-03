@@ -84,7 +84,7 @@ const Game = {
         this._setupSplash();
         StyleManager.apply(this); // 새로 로드된 glb 재질에 단계형 음영 적용
         // showStartPrompt가 스타트 바 DOM을 먼저 만들어야 InputController가 그 엘리먼트에 바인딩 가능
-        UI.showStartPrompt(stageData.name, stageData.motif, { tutorial, derail: this.cart.derailEnabled });
+        UI.showStartPrompt(stageName(stageData), stageMotif(stageData), { tutorial, derail: this.cart.derailEnabled });
         this.input = new InputController(this.canvas, this.cart, this.camera, UI.startBarEl, ControlSettings.mode);
         if (tutorial) { this.track.setRollbackMarkersVisible(true); Tutorial.begin(this); }
 
@@ -435,7 +435,7 @@ const Game = {
     const c = this.cart;
     if (c.currentLap !== this._lastLapSeen) { // 뒤로 떨어지기 경고는 매 플레이 두 번째 랩부터
       this._lastLapSeen = c.currentLap;
-      if (c.totalLaps > 1 && c.currentLap === c.totalLaps) this._lapBanner('FINAL LAP', true); // 실제 마지막 랩에 들어선 뒤에만
+      if (c.totalLaps > 1 && c.currentLap === c.totalLaps) this._lapBanner(t('lap.final'), true); // 실제 마지막 랩에 들어선 뒤에만
       this.track.setRollbackMarkersVisible(c.currentLap >= 2 || this.tutorialMode); // 튜토리얼은 처음부터 보여 줌
     }
     // 체인 리프트: 초당 약 12회 딸깍(멈칫하는 동안은 느리게) — 리프트를 벗어나면 멈춤
@@ -454,7 +454,7 @@ const Game = {
       const finish = c.currentLap >= c.totalLaps;
       const next = c.currentLap + 1;
       // 마지막 랩 진입(next === totalLaps)은 배너 없음 — 랩이 넘어간 뒤 FINAL LAP이 뜸. 그 외는 LAP n/N, 완주는 FINISH!
-      const label = finish ? 'FINISH!' : next < c.totalLaps ? `LAP ${next}/${c.totalLaps}` : null;
+      const label = finish ? t('lap.finish') : next < c.totalLaps ? t('lap.n', { n: next, total: c.totalLaps }) : null;
       if (label) this._lapBanner(label, finish);
       this._bannerSwing = 1;
       AudioManager.playLapChime(finish);
@@ -613,13 +613,13 @@ window.addEventListener('rollback', e => {
 window.addEventListener('mash-tap', () => AudioManager.playChainClick());
 // 발사 순간 연출: 카메라 밀림+FOV 킥, 스피드 라인 버스트 (발사음은 input.js가 AudioManager.playLaunch)
 window.addEventListener('derail', () => {
-  UI.flashSignal('이탈!', 'miss');
+  UI.flashSignal(t('sig.derail'), 'miss');
   AudioManager.playDerail();
 });
 window.addEventListener('derail-respawn', () => { // 되감긴 위치에서 아치·물 착수·카메라 펄스가 잘못 발동하지 않게 기준 위치 재설정
   Game._prevT = undefined;
   if (Game.camera) Game.camera.resnap(Game.cart);
-  UI.flashSignal('다시 출발!', 'good small');
+  UI.flashSignal(t('sig.respawn'), 'good small');
 });
 window.addEventListener('cart-launched', e => {
   const k = e.detail ? e.detail.strength : 1;

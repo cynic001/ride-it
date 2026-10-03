@@ -130,7 +130,7 @@ const MENU_BG = `
 
 const LOGO = (small = false) => `
   <div class="logo${small ? ' small' : ''}">
-    <div class="logo-ko">떨어진다<span class="bang">!</span><span class="bang">!</span><span class="bang">!</span></div>
+    <div class="logo-ko">${t('brand.stem')}<span class="bang">!</span><span class="bang">!</span><span class="bang">!</span></div>
     <div class="logo-en">RIDE IT</div>
   </div>`;
 
@@ -230,7 +230,7 @@ const UI = {
       <div class="screen title-screen" id="titleScreen">
         ${MENU_BG}
         ${LOGO()}
-        <div class="tap-hint">화면을 터치해서 시작</div>
+        <div class="tap-hint">${t('title.tapHint')}</div>
         <div class="studio">chaechae studio</div>
       </div>
     `);
@@ -243,26 +243,26 @@ const UI = {
     this._setScreen(`
       <div class="screen stage-select">
         <div class="top-nav">
-          <button class="icon-btn" id="howtoBtn" aria-label="조작법">${ICONS.help}</button>
-          <div class="logo-mini">떨어진다!!!<small>RIDE IT</small></div>
-          <button class="icon-btn" id="settingsBtn" aria-label="설정">${ICONS.gear}</button>
+          <button class="icon-btn" id="howtoBtn" aria-label="${t('aria.howto')}">${ICONS.help}</button>
+          <div class="logo-mini">${t('brand.name')}<small>RIDE IT</small></div>
+          <button class="icon-btn" id="settingsBtn" aria-label="${t('aria.settings')}">${ICONS.gear}</button>
         </div>
-        <div class="progress-summary">클리어 ${ProgressManager.clearedCount} / ${stages.length}</div>
+        <div class="progress-summary">${t('select.cleared', { n: ProgressManager.clearedCount, total: stages.length })}</div>
         <div class="stage-list">
           <button class="stage-btn tutorial-btn" id="tutorialStageBtn">
-            <span class="stage-num">연습</span>
+            <span class="stage-num">${t('select.practice')}</span>
             <span class="stage-info">
-              <span class="stage-name">튜토리얼 · ${TUTORIAL_STAGE.name}</span>
-              <span class="stage-motif">${TUTORIAL_STAGE.motif}</span>
+              <span class="stage-name">${t('select.practiceName', { name: stageName(TUTORIAL_STAGE) })}</span>
+              <span class="stage-motif">${stageMotif(TUTORIAL_STAGE)}</span>
             </span>
-            <span class="stage-side">${localStorage.getItem('rc_tutorial_done') ? '<span class="badge clear">완료</span>' : '<span class="badge">추천</span>'}</span>
+            <span class="stage-side">${localStorage.getItem('rc_tutorial_done') ? `<span class="badge clear">${t('select.done')}</span>` : `<span class="badge">${t('select.recommend')}</span>`}</span>
           </button>
           ${stages.map((s, i) => `
             <button class="stage-btn" data-index="${i}">
               <span class="stage-num">${i + 1}</span>
               <span class="stage-info">
-                <span class="stage-name">${s.name}</span>
-                <span class="stage-motif">${s.motif}</span>
+                <span class="stage-name">${stageName(s)}</span>
+                <span class="stage-motif">${stageMotif(s)}</span>
                 <span class="stage-meta"><span class="stars">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span>${s.baseSpeedKmh}km/h</span>
               </span>
               <span class="stage-side">${this._stageBadges(i)}</span>
@@ -289,21 +289,21 @@ const UI = {
     this._setScreen(`
       <div class="screen stage-detail">
         <div class="top-nav">
-          <button class="icon-btn" id="detailBackBtn" aria-label="뒤로">${ICONS.back}</button>
-          <span class="top-title">STAGE ${i + 1}</span>
-          <button class="icon-btn" id="settingsBtn" aria-label="설정">${ICONS.gear}</button>
+          <button class="icon-btn" id="detailBackBtn" aria-label="${t('aria.back')}">${ICONS.back}</button>
+          <span class="top-title">${t('detail.title', { n: i + 1 })}</span>
+          <button class="icon-btn" id="settingsBtn" aria-label="${t('aria.settings')}">${ICONS.gear}</button>
         </div>
         <div class="card detail-card">
           <span class="stage-num big">${i + 1}</span>
-          <h2>${s.name}</h2>
-          <p class="detail-motif">${s.motif}</p>
-          ${s.rollback ? `<p class="detail-warn">⚠ 뒤로 떨어지는 구간이 있어요${s.rollback.mode === 'mash' ? ' — 부스트 연타로 다시 올라가요!' : ' — 부스터가 다시 쏘아 올려줘요'}</p>` : ''}
-          <div class="detail-meta"><span class="stars">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><span>최고 ${Math.round(s.baseSpeedKmh * 1.5)}km/h</span><button class="derail-tag${DerailSettings.on ? ' on' : ''}" id="derailTag" aria-label="레일 이탈 켜기/끄기">이탈 ${DerailSettings.on ? 'ON' : 'OFF'}</button></div>
+          <h2>${stageName(s)}</h2>
+          <p class="detail-motif">${stageMotif(s)}</p>
+          ${s.rollback ? `<p class="detail-warn">⚠ ${t(s.rollback.mode === 'mash' ? 'detail.rollbackMash' : 'detail.rollbackAuto')}</p>` : ''}
+          <div class="detail-meta"><span class="stars">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><span>${t('detail.topSpeed', { kmh: Math.round(s.baseSpeedKmh * 1.5) })}</span><button class="derail-tag${DerailSettings.on ? ' on' : ''}" id="derailTag" aria-label="${t('settings.derail')}">${t(DerailSettings.on ? 'detail.derailOn' : 'detail.derailOff')}</button></div>
           <div class="stats" id="detailStats"></div>
           <div class="field">
-            <span class="field-label">랩 수</span>
+            <span class="field-label">${t('detail.laps')}</span>
             <div class="seg" id="lapSeg">
-              ${[1, 2, 3].map(n => `<button class="seg-btn${LapsManager.current === n ? ' on' : ''}" data-laps="${n}">${n}랩</button>`).join('')}
+              ${[1, 2, 3].map(n => `<button class="seg-btn${LapsManager.current === n ? ' on' : ''}" data-laps="${n}">${t('detail.lapOption', { n })}</button>`).join('')}
             </div>
           </div>
           <div class="actions"><button id="stageStartBtn" class="btn primary wide big">${ICONS.play}START</button></div>
@@ -313,13 +313,13 @@ const UI = {
     // 최고 기록 칸 — 랩 수·이탈 설정을 바꾸면 그 조건의 기록으로 즉시 갱신
     const renderStats = () => {
       const q = ProgressManager.get(s.id);
-      const cond = `${LapsManager.current}랩${DerailSettings.on ? '' : ' · 이탈 OFF'}`;
+      const cond = t(DerailSettings.on ? 'detail.cond' : 'detail.condOff', { laps: LapsManager.current });
       document.getElementById('detailStats').innerHTML = `
-        <div class="stat"><small>최고 랭크</small><b>${q ? q.rank : '-'}</b></div>
-        <div class="stat"><small>최고 점수</small><b>${q ? q.best.toLocaleString() : '-'}</b></div>
-        <div class="stat full"><small>${cond} · 플레이 ${q ? q.plays : 0}회</small></div>`;
+        <div class="stat"><small>${t('detail.bestRank')}</small><b>${q ? q.rank : '-'}</b></div>
+        <div class="stat"><small>${t('detail.bestScore')}</small><b>${q ? q.best.toLocaleString() : '-'}</b></div>
+        <div class="stat full"><small>${t('detail.record', { cond, plays: q ? q.plays : 0 })}</small></div>`;
       const tag = document.getElementById('derailTag');
-      tag.textContent = `이탈 ${DerailSettings.on ? 'ON' : 'OFF'}`;
+      tag.textContent = t(DerailSettings.on ? 'detail.derailOn' : 'detail.derailOff');
       tag.classList.toggle('on', DerailSettings.on);
     };
     renderStats();
@@ -384,15 +384,11 @@ const UI = {
   /** 스테이지 카드 오른쪽 배지 — 클리어 시 최고 랭크 + 최고 점수, 미클리어는 NEW */
   _stageBadges(i) {
     const p = ProgressManager.get(STAGES[i].id);
-    if (!p) return '<span class="badge">NEW</span>';
-    return `<span class="badge rank-badge">${p.rank}</span><span class="badge clear">최고 ${p.best.toLocaleString()}</span>`;
+    if (!p) return `<span class="badge">${t('select.new')}</span>`;
+    return `<span class="badge rank-badge">${p.rank}</span><span class="badge clear">${t('select.best', { n: p.best.toLocaleString() })}</span>`;
   },
 
-  _qualityLabel() {
-    return { low: '낮음', medium: '보통', high: '높음' }[QualityManager.current] || QualityManager.current;
-  },
-
-  /** 조작법 팝업 — 항목마다 짧은 설명, 화면에 안 들어가면 페이지로 */
+  /** 조작법 팝업 — 항목마다 한두 문장(가로 폰에서도 4페이지 이하) */
   showHowTo(onClose) {
     const holds = STAGES.map(s => s.balance && s.balance.holdSec).filter(Boolean);
     const hold = Math.min(...holds) === Math.max(...holds) ? `${holds[0]}` : `${Math.min(...holds)}~${Math.max(...holds)}`; // 스테이지마다 다름(코드 값)
@@ -400,15 +396,14 @@ const UI = {
     const ctl = Popup.open({
       id: 'howtoOverlay', title: t('howto.title'),
       blocks: [
-        Popup.item(ICONS.arrowUp, t('howto.launch'), `${t('howto.launchText')} ${t('howto.launchKeys')}`),
-        Popup.item(ICONS.swipe, t('howto.balance'), `${t('howto.balanceText', { hold })} ${t('howto.balanceKeys')} ${t('howto.balancePerfect')}`),
-        Popup.item(ICONS.tap, t('howto.boost'), `${t('howto.boostText')} ${t('howto.boostKeys')}`),
+        Popup.item(ICONS.arrowUp, t('howto.launch'), t('howto.launchText')),
+        Popup.item(ICONS.swipe, t('howto.balance'), t('howto.balanceText', { hold })),
+        Popup.item(ICONS.tap, t('howto.boost'), t('howto.boostText')),
+        Popup.item(ICONS.sparkle, t('howto.judge'), t('howto.judgeText')),
+        Popup.item(ICONS.info, t('howto.derail'), t('howto.derailText', { hearts: DERAIL_HITS })),
         Popup.item(ICONS.retry, t('howto.rollback'), t('howto.rollbackText')),
-        Popup.item(ICONS.camera, t('howto.view'), t('howto.viewText')),
-        Popup.item(ICONS.sparkle, t('howto.derail'), t('howto.derailText', { hearts: DERAIL_HITS })),
-        Popup.raw(`<div class="popup-item"><span class="txt"><b>${t('howto.floor')}</b><span class="legend-row">${dot('#ffc61a')}${t('howto.floorBoost')} ${dot('#59ff8c')}${t('howto.floorCurve')} ${dot('#ff801a')}${t('howto.floorDrop')} ${dot('#ff4099')}${t('howto.floorBack', { lap: 2 })}</span></span></div>`),
-        Popup.item(ICONS.info, t('howto.judge'), t('howto.judgeText')),
-        Popup.p(t('howto.tutorialTip'), 'lead'),
+        Popup.item(ICONS.viewFirst, t('howto.view'), t('howto.viewText', { sec: MANUAL_VIEW_SEC })), // 시점 버튼이 바꿔 주는 시간(camera.js 상수)
+        Popup.raw(`<div class="popup-item"><span class="ico">${ICONS.list}</span><span class="txt"><b>${t('howto.floor')}</b><span class="legend-row">${dot('#ffc61a')}${t('howto.floorBoost')} ${dot('#59ff8c')}${t('howto.floorCurve')} ${dot('#ff801a')}${t('howto.floorDrop')} ${dot('#ff4099')}${t('howto.floorBack')}</span></span></div>`),
       ],
       actions: [{ id: 'howtoCloseBtn', label: t('common.ok'), primary: true, onClick: (e, c) => c.close() }],
       onClose: () => { localStorage.setItem('rc_howto_seen', '1'); if (onClose) onClose(); },
@@ -459,19 +454,19 @@ const UI = {
     </svg>`;
   },
 
-  /** 부스트 타이밍 팝업 그림 */
+  /** 부스트 타이밍 링 그림(연습 코스 카드·조작법 공용) — BOOST 버튼 바깥의 링이 점선에 닿는 순간 */
   popupDiagram() {
-    return `<svg class="diagram" viewBox="0 0 300 140" role="img" aria-label="부스트 타이밍 팝업">
+    return `<svg class="diagram" viewBox="0 0 300 140" role="img" aria-label="${t('tut.card.boost')}">
       <g transform="translate(70 70)">
-        <circle r="56" fill="rgba(20,26,51,.75)"/><circle r="30" fill="none" stroke="rgba(255,184,13,.8)" stroke-width="16"/>
-        <circle r="30" fill="none" stroke="#3ddc84" stroke-width="8"/><circle r="30" fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="3 3"/>
-        <circle r="48" fill="none" stroke="#fff" stroke-width="4"/>
-        <path d="M0 -48 L0 -36 M-5 -42 L0 -36 L5 -42" stroke="#ffb80d" stroke-width="2.5" fill="none"/>
+        <circle r="52" fill="none" stroke="#FFD84D" stroke-width="10" opacity=".85"/><circle r="52" fill="none" stroke="#168A4C" stroke-width="4"/>
+        <circle r="52" fill="none" stroke="#141a33" stroke-width="1.5" stroke-dasharray="3 3"/>
+        <circle r="62" fill="none" stroke="#141a33" stroke-width="8"/><circle r="62" fill="none" stroke="#fff" stroke-width="4"/>
+        <circle r="44" fill="#FFB80D" stroke="#141a33" stroke-width="2"/><text y="6" font-size="16" text-anchor="middle" font-weight="700" fill="#141a33">BOOST</text>
       </g>
-      <text x="140" y="44" font-size="13" fill="#141a33">① 바깥 흰 원이 줄어들어요</text>
-      <text x="140" y="74" font-size="13" fill="#141a33">② 안쪽 원과 겹칠 때</text>
-      <text x="140" y="96" font-size="15" fill="#d99700">BOOST! = PERFECT</text>
-      <text x="140" y="122" font-size="11" fill="#5b6488">노란 띠 안 = GOOD</text>
+      <text x="150" y="44" font-size="15" fill="#141a33" font-weight="700">${t('diagram.ring1')}</text>
+      <text x="150" y="74" font-size="15" fill="#141a33" font-weight="700">${t('diagram.ring2')}</text>
+      <text x="150" y="98" font-size="17" fill="#141a33" font-weight="700">${t('diagram.ring3')}</text>
+      <text x="150" y="124" font-size="14" fill="#454a66" font-weight="500">${t('diagram.ring4')}</text>
     </svg>`;
   },
 
@@ -514,13 +509,11 @@ const UI = {
     Popup.open({
       id: 'creditsOverlay', title: t('credits.title'),
       blocks: [
-        Popup.raw(`<p><b>${t('credits.game')}</b><br>${t('credits.studio')}</p>`, 'popup-credit'),
-        Popup.raw(`<div class="tester-card"><small>${t('credits.tester')}</small><b>Chaewon</b></div>`),
-        Popup.raw(`<p><b>${t('credits.model')}</b><br>Coaster Kit · Nature Kit — ${link('https://kenney.nl', 'Kenney.nl')} (CC0)</p>`, 'popup-credit'),
-        Popup.raw(`<p><b>${t('credits.sky')}</b><br>Kloofendal 43d Clear (Pure Sky) — Greg Zaal, ${link('https://polyhaven.com', 'Poly Haven')} (CC0)</p>`, 'popup-credit'),
-        Popup.raw(`<p><b>${t('credits.sfx')}</b><br>${t('credits.sfxText')}</p>`, 'popup-credit'),
-        Popup.raw(`<p><b>${t('credits.font')}</b><br>${t('credits.fontText')}</p>`, 'popup-credit'),
-        Popup.raw(`<p><b>${t('credits.engine')}</b><br>Babylon.js</p>`, 'popup-credit'),
+        Popup.raw(`<p><b>${t('credits.game')}</b><br>${t('credits.tester')}</p>`, 'popup-credit'),
+        Popup.raw(`<p><b>${t('credits.model')}</b> Coaster Kit · Nature Kit — ${link('https://kenney.nl', 'Kenney.nl')} (CC0)</p>`, 'popup-credit'),
+        Popup.raw(`<p><b>${t('credits.sky')}</b> Kloofendal 43d Clear — Greg Zaal, ${link('https://polyhaven.com', 'Poly Haven')} (CC0)</p>`, 'popup-credit'),
+        Popup.raw(`<p><b>${t('credits.sfx')}</b> ${t('credits.sfxText')}</p>`, 'popup-credit'),
+        Popup.raw(`<p><b>${t('credits.font')}</b> ${t('credits.fontText')}</p>`, 'popup-credit'),
       ],
       actions: [{ id: 'creditsCloseBtn', label: t('common.close'), primary: true, onClick: (e, c) => c.close() }],
     });
@@ -563,7 +556,7 @@ const UI = {
     const el = document.createElement('button');
     el.id = 'updateToast';
     el.className = 'update-toast';
-    el.textContent = '새 버전이 있어요 · 탭해서 새로고침';
+    el.textContent = t('update.toast');
     el.addEventListener('click', () => location.reload());
     document.body.appendChild(el);
   },
@@ -587,7 +580,7 @@ const UI = {
   },
 
   showPauseOverlay() {
-    const name = (Game.track && Game.track.stageData && Game.track.stageData.name) || '';
+    const sd = Game.track && Game.track.stageData, name = sd ? stageName(sd) : '';
     this._pause = Popup.open({
       id: 'pauseOverlay', title: t('pause.title'), cancelable: false,
       blocks: [Popup.p(t('pause.stage', { name }), 'lead')],
@@ -615,12 +608,12 @@ const UI = {
         <div class="hud-top">
           <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
           <div class="hud-row">
-            <span class="hud-chip lap-chip" id="lapChip"><b id="lapLabel">바퀴 1/1</b><small id="turnLabel">커브 1/1</small></span>
+            <span class="hud-chip lap-chip" id="lapChip"><b id="lapLabel">${t('hud.lap', { n: 1, total: 1 })}</b><small id="turnLabel">${t('hud.curve', { n: 1, total: 1 })}</small></span>
             <span class="hud-chip speed-chip" id="speedo"><i class="max-tag">MAX</i><span class="num" id="speedLabel">0</span><small>km/h</small></span>
-            <span class="hud-chip accent combo-chip" id="comboChip"${tutorial ? ' hidden' : ''}><small>콤보</small><b id="comboLabel">0</b><small class="mult" id="comboMult">×1.0</small></span>
-            ${tutorial ? '<button class="hud-chip tut-skip" id="tutSkipBtn">건너뛰기</button>' : ''}
+            <span class="hud-chip accent combo-chip" id="comboChip"${tutorial ? ' hidden' : ''}><small>${t('hud.combo')}</small><b id="comboLabel">0</b><small class="mult" id="comboMult">×1.0</small></span>
+            ${tutorial ? `<button class="hud-chip tut-skip" id="tutSkipBtn">${t('hud.skip')}</button>` : ''}
           </div>
-          ${derail ? `<div class="hud-chip hud-hearts" id="hearts" aria-label="남은 기회">${'<svg class="heart-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.5-9.6A5.2 5.2 0 0 1 12 7.7a5.2 5.2 0 0 1 9.5 3.7C19.5 16.4 12 21 12 21z" stroke-linejoin="round"/></svg>'.repeat(DERAIL_HITS)}</div>` : ''}
+          ${derail ? `<div class="hud-chip hud-hearts" id="hearts" aria-label="${t('hud.lives')}">${'<svg class="heart-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.5-9.6A5.2 5.2 0 0 1 12 7.7a5.2 5.2 0 0 1 9.5 3.7C19.5 16.4 12 21 12 21z" stroke-linejoin="round"/></svg>'.repeat(DERAIL_HITS)}</div>` : ''}
         </div>
         ${tutorial ? '<div class="tut-banner" id="tutBanner"></div>' : ''}
         <div class="judge" id="judgeToast"></div>
@@ -631,13 +624,13 @@ const UI = {
           <div class="tp-result" id="gatePopResult"></div>
         </div>
         <div class="start-bar" id="startBar">
-          <div class="start-bar-label" id="startBarLabel">아래로 당겼다가<br>위로 밀어 올려!</div>
+          <div class="start-bar-label" id="startBarLabel">${t('start.label')}</div>
           <div class="start-bar-track">
             <div class="start-bar-fill" id="startBarFill"></div>
             <div class="start-bar-handle" id="startBarHandle">${ICONS.arrowUp}</div>
           </div>
           <div class="start-power"><div class="start-power-fill" id="startPowerFill"></div></div>
-          <div class="key-hint">키보드: ↓ 누르고 있기 · ↑ 발사</div>
+          <div class="key-hint">${t('start.keys')}</div>
         </div>
         ${this._driveControlsHTML()}
         <div class="hud-controls">
@@ -815,8 +808,8 @@ const UI = {
       const ranges = track.segmentRanges;
       const idx = ranges.findIndex(s => cart.t >= s.tStart && cart.t < s.tEnd);
       const turnNum = idx === -1 ? ranges.length : idx + 1;
-      h.lap.textContent = `바퀴 ${cart.currentLap}/${cart.totalLaps}`;
-      h.turn.textContent = `커브 ${turnNum}/${ranges.length}`;
+      h.lap.textContent = t('hud.lap', { n: cart.currentLap, total: cart.totalLaps });
+      h.turn.textContent = t('hud.curve', { n: turnNum, total: ranges.length });
       const overall = ((cart.currentLap - 1) + Math.min(1, cart.t)) / cart.totalLaps;
       h.progress.style.width = `${(overall * 100).toFixed(1)}%`;
 
@@ -889,14 +882,14 @@ const UI = {
     h.rb.classList.toggle('on', !!rb);
     if (rb) {
       const mash = rb.phase === 'mash';
-      h.rbTitle.textContent = mash ? '연타!' : rb.phase === 'launch' ? '부스터 발사!' : '뒤로 떨어진다!!!';
+      h.rbTitle.textContent = t(mash ? 'rb.mash' : rb.phase === 'launch' ? 'rb.launch' : 'rb.slip');
       h.rb.classList.toggle('mash', mash);
       h.rbGauge.style.display = mash ? 'block' : 'none';
       if (mash) {
         h.rbFill.style.width = `${Math.round(rb.gauge * 100)}%`;
         const left = Math.max(0, 6 - rb.mashTime);
         h.rbSub.textContent = left.toFixed(1); // 일반 스테이지는 짧은 신호만(13번) — 연타 방법 설명은 튜토리얼에서
-      } else h.rbSub.textContent = rb.phase === 'launch' ? '' : '꽉 잡아!';
+      } else h.rbSub.textContent = rb.phase === 'launch' ? '' : t('rb.hold');
     }
     if (h.hearts && cart.derails !== h.lastDerails) { // 남은 기회(하트) — 잃는 순간 하나가 튀며 회색으로
       h.lastDerails = cart.derails;
@@ -934,7 +927,7 @@ const UI = {
     Popup.open({
       id: 'failScreen', title: t('fail.title'), cancelable: false,
       blocks: [
-        Popup.raw(`<div class="result-stage">${stageData.name}</div><div class="hearts-row">${heart.repeat(DERAIL_HITS)}</div>`, 'center'),
+        Popup.raw(`<div class="result-stage">${stageName(stageData)}</div><div class="hearts-row">${heart.repeat(DERAIL_HITS)}</div>`, 'center'),
         Popup.p(t('fail.text', { hearts: DERAIL_HITS }), 'lead'),
       ],
       actions: [
@@ -955,34 +948,34 @@ const UI = {
     this._setScreen(`
       <div class="screen result-screen" id="resultScreen">
         <div class="card result-card">
-          <div class="ribbon">완주!</div>
-          <div class="result-stage">${stageData.name}</div>
+          <div class="ribbon">${t('result.complete')}</div>
+          <div class="result-stage">${stageName(stageData)}</div>
           <div class="rank ${sum.rank}">${sum.rank}</div>
           <div class="result-score"><small>SCORE</small>${score.toLocaleString()}</div>
-          ${rec.firstClear ? '<div class="new-best">첫 클리어!</div>' : rec.newBest ? '<div class="new-best">NEW BEST!</div>' : `<div class="result-stage">최고 ${ProgressManager.get(stageData.id, cart.totalLaps, cart.derailEnabled).best.toLocaleString()}</div>`}
-          <div class="result-cond">${cart.totalLaps}랩${cart.derailEnabled ? '' : ' · <span class="off-tag">이탈 OFF</span>'}</div>
+          ${rec.firstClear ? `<div class="new-best">${t('result.firstClear')}</div>` : rec.newBest ? `<div class="new-best">${t('result.newBest')}</div>` : `<div class="result-stage">${t('result.best', { n: ProgressManager.get(stageData.id, cart.totalLaps, cart.derailEnabled).best.toLocaleString() })}</div>`}
+          <div class="result-cond">${t('result.cond', { laps: cart.totalLaps })}${cart.derailEnabled ? '' : ` · <span class="off-tag">${t('result.condOff')}</span>`}</div>
           <div class="breakdown">
             ${[
-              ['게이트', bd.gate],
-              [`밸런스 (커브 ${sum.curvesCleared}/${sum.curveCount})`, bd.balance],
-              [`밸런스 Perfect ×${cart.balancePerfects}`, bd.balancePerfect],
-              ['콤보 보너스', bd.comboBonus],
-              ...(bd.finishBonus > 0 ? [['피니쉬 보너스', bd.finishBonus]] : []),
-              ...(bd.mashBonus > 0 ? [['연타 보너스', bd.mashBonus]] : []),
+              [t('result.gate'), bd.gate],
+              [t('result.balance', { a: sum.curvesCleared, b: sum.curveCount }), bd.balance],
+              [t('result.balancePerfect', { n: cart.balancePerfects }), bd.balancePerfect],
+              [t('result.combo'), bd.comboBonus],
+              ...(bd.finishBonus > 0 ? [[t('result.finish'), bd.finishBonus]] : []),
+              ...(bd.mashBonus > 0 ? [[t('result.mash'), bd.mashBonus]] : []),
             ].map(([k, v]) => `<div class="bd-row"><span>${k}</span><b>+${Math.round(v).toLocaleString()}</b></div>`).join('')}
-            ${cart.derailEnabled ? `<div class="bd-row bd-derail"><span>레일 이탈 ×${cart.derails}</span><b>−${Math.round(bd.derailPenalty).toLocaleString()}</b></div>` : ''}
+            ${cart.derailEnabled ? `<div class="bd-row bd-derail"><span>${t('result.derail', { n: cart.derails })}</span><b>−${Math.round(bd.derailPenalty).toLocaleString()}</b></div>` : ''}
           </div>
           <div class="stats">
-            <div class="stat"><small>최고 콤보</small><b>${cart.maxCombo.toLocaleString()}</b></div>
-            <div class="stat"><small>밸런스 정확도</small><b>${Math.round(sum.balanceAcc * 100)}%</b></div>
-            <div class="stat full"><small>부스터 보조 추진</small><b>${cart.rideTime ? Math.round(cart.assistTime / cart.rideTime * 100) : 0}%</b><small> 주행 시간 중 속도가 떨어져 부스터 타이어가 밀어준 비율</small></div>
-            <div class="stat full"><small>게이트 판정${sum.gateMissed ? ` · 놓침 ${sum.gateMissed}` : ''}</small>
+            <div class="stat"><small>${t('result.maxCombo')}</small><b>${cart.maxCombo.toLocaleString()}</b></div>
+            <div class="stat"><small>${t('result.balanceAcc')}</small><b>${Math.round(sum.balanceAcc * 100)}%</b></div>
+            <div class="stat full"><small>${t('result.assist')}</small><b>${cart.rideTime ? Math.round(cart.assistTime / cart.rideTime * 100) : 0}%</b><small>${t('result.assistDesc')}</small></div>
+            <div class="stat full"><small>${t('result.gateJudge')}${sum.gateMissed ? ` · ${t('result.missed', { n: sum.gateMissed })}` : ''}</small>
               <div class="judge-row"><span class="p">PERFECT ${sum.gates.perfect}</span><span class="g">GOOD ${sum.gates.good}</span><span class="m">MISS ${sum.gates.miss}</span></div>
             </div>
           </div>
           <div class="actions">
-            <button id="retryBtn" class="btn primary wide">${ICONS.retry}다시 도전</button>
-            <button id="stageSelectBtn" class="btn wide">${ICONS.list}스테이지 선택</button>
+            <button id="retryBtn" class="btn primary wide">${ICONS.retry}${t('common.retry')}</button>
+            <button id="stageSelectBtn" class="btn wide">${ICONS.list}${t('common.stageSelect')}</button>
           </div>
         </div>
       </div>

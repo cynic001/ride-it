@@ -13,7 +13,7 @@ const section = (name, fn) => sections.push([name, fn]);
 
 // ── 1-4 랩 문구: 1·2·3랩 × 배너 문구 순서 (게임 루프 대신 cart.update + _updateRideSounds를 직접 돌림)
 section('lap', async () => {
-  const expect = { 1: ['FINISH!'], 2: ['FINAL LAP', 'FINISH!'], 3: ['LAP 2/3', 'FINAL LAP', 'FINISH!'] };
+  const expect = { 1: ['완주!'], 2: ['마지막 바퀴!', '완주!'], 3: ['2/3바퀴', '마지막 바퀴!', '완주!'] };
   for (const laps of [1, 2, 3]) {
     const { page, errors, close } = await start({ browser: BROWSER, init: { rc_laps: String(laps), rc_derail: 'off' } });
     await loadStage(page, 0);
@@ -26,7 +26,7 @@ section('lap', async () => {
     const got = out.map(x => x.t);
     check(`lap ${laps}랩 배너 순서 ${expect[laps].join(' → ')}`, JSON.stringify(got) === JSON.stringify(expect[laps]), JSON.stringify(out));
     // FINAL LAP은 실제 마지막 랩 안에서만
-    check(`lap ${laps}랩 FINAL LAP/FINISH는 마지막 랩에서만`, out.filter(x => x.t === 'FINAL LAP' || x.t === 'FINISH!').every(x => x.lap === laps), JSON.stringify(out));
+    check(`lap ${laps}랩 마지막 바퀴!/완주!는 마지막 랩에서만`, out.filter(x => x.t === '마지막 바퀴!' || x.t === '완주!').every(x => x.lap === laps), JSON.stringify(out));
     check(`lap ${laps}랩 page error 0`, errors.length === 0, errors.join('|'));
     await close();
   }
@@ -127,7 +127,7 @@ section('tutlayout', async () => {
       return out;
     });
     for (const c of cards) check(`tutorial ${name} 카드 ${c.key}: 화면 안, 글 16px 이상`, c.top >= 0 && c.bottom <= c.H && !c.scroll && c.fs >= 16, JSON.stringify(c));
-    const note = await page.evaluate(() => Tutorial._text('balanceCard').includes('탈선할 수 있어요 (설정에서 끌 수 있어요)'));
+    const note = await page.evaluate(() => Tutorial._text('balanceCard').includes('놓치면 탈선할 수 있어요. (설정에서 끌 수 있어요)'));
     check(`tutorial ${name} 밸런스 카드에 이탈 안내 한 줄`, note);
     check(`tutorial ${name} page error 0`, errors.length === 0, errors.join('|'));
     await close();
@@ -155,8 +155,8 @@ section('progress', async () => {
   await page.click('#derailTag'); const t3off = await txt();
   const tag = await page.evaluate(() => document.getElementById('derailTag').textContent);
   await page.click('#derailTag'); await page.click('#lapSeg [data-laps="1"]'); const t1b = await txt();
-  check('상세 화면: 1랩 ON → 1234', t1.includes('1,234') && t1.includes('1랩'), t1);
-  check('상세 화면: 3랩 ON → 2000, 3랩 이탈 OFF → 3000 + OFF 표시', t3.includes('2,000') && t3off.includes('3,000') && t3off.includes('이탈 OFF') && tag === '이탈 OFF', `${t3} | ${t3off} | ${tag}`);
+  check('상세 화면: 1랩 ON → 1234', t1.includes('1,234') && t1.includes('1바퀴'), t1);
+  check('상세 화면: 3랩 ON → 2000, 3랩 이탈 OFF → 3000 + OFF 표시', t3.includes('2,000') && t3off.includes('3,000') && t3off.includes('탈선 꺼짐') && tag === '탈선 꺼짐', `${t3} | ${t3off} | ${tag}`);
   check('상세 화면: 다시 1랩 ON → 1234 (설정 저장 유지)', t1b.includes('1,234') && await page.evaluate(() => localStorage.getItem('rc_derail')) === 'on', t1b);
   // 결과 화면: 이탈 OFF 3랩 완주 → 같은 조건(3랩·OFF) 기록과 비교, OFF 표시
   await page.evaluate(() => { DerailSettings.set(false); LapsManager.setLaps(2); Game.loadStage(0); }); await page.waitForSelector('#startBar');
@@ -165,7 +165,7 @@ section('progress', async () => {
     while (!c.isFinished && n++ < 200000) { c.leanInput = 0; c.update(1 / 60); }
     UI.showResult(c, 0); return { t: document.getElementById('resultScreen').innerText.replace(/\s+/g, ' '), laps: c.totalLaps, rec: ProgressManager.get(STAGES[0].id, 2, false) };
   });
-  check('결과 화면: 2랩 · 이탈 OFF 표시 + 그 조건 기록 저장(첫 클리어)', resTxt.t.includes('2랩') && resTxt.t.includes('이탈 OFF') && resTxt.t.includes('첫 클리어') && resTxt.rec && resTxt.rec.plays === 1, JSON.stringify(resTxt).slice(0, 300));
+  check('결과 화면: 2바퀴 · 탈선 꺼짐 표시 + 그 조건 기록 저장(처음 완주)', resTxt.t.includes('2바퀴') && resTxt.t.includes('탈선 꺼짐') && resTxt.t.includes('처음 완주!') && resTxt.rec && resTxt.rec.plays === 1, JSON.stringify(resTxt).slice(0, 300));
   check('progress page error 0', errors.length === 0, errors.join('|'));
   await close();
 });
@@ -461,6 +461,16 @@ section('hud', async () => {
     check(`hud ${name} page error 0`, errors.length === 0, errors.join('|'));
     await close();
   }
+});
+
+// ── 1-B 문구: 금지어·strings.js 밖의 한글·설정값 숫자 직접 표기·긴 문장이 없음 (check-wording.mjs), 모든 모달 가로 4페이지 이하
+section('wording', async () => {
+  const { execSync } = await import('node:child_process'); const { ROOT } = await import('./polish-lib.mjs'); const pth = await import('node:path');
+  let out = '', ok = true;
+  try { out = execSync('node check-wording.mjs', { cwd: pth.join(ROOT, '.claude/skills/run-ride-it') }).toString(); } catch (e) { ok = false; out = String(e.stdout || e.message); }
+  check('문구: 금지어·strings.js 밖의 한글·설정값 숫자 직접 표기·긴 문장 없음(check-wording.mjs)', ok, out.split('\n').filter(l => /^FAIL/.test(l)).slice(0, 4).join(' | '));
+  const fsx = await import('node:fs'); const file = '/tmp/ride-it-popups/pages_' + BROWSER + '.json';
+  if (fsx.existsSync(file)) { const t = JSON.parse(fsx.readFileSync(file, 'utf8')); const over = Object.entries(t).filter(([, v]) => v['가로'] > 4).map(([k, v]) => `${k}:${v['가로']}`); check('문구: 모든 모달이 가로 폰에서 4페이지 이하', over.length === 0, over.join(',')); }
 });
 
 for (const [name, fn] of sections) {

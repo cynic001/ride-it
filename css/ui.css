@@ -263,17 +263,6 @@ a:focus-visible,
 .tester-card { align-self: center; padding: var(--s-1) var(--s-3); border-radius: var(--r-md); background: var(--accent); box-shadow: var(--sh-accent); color: var(--on-accent); text-align: center; }
 .tester-card small { display: block; font-size: 16px; font-weight: 700; letter-spacing: 3px; } .tester-card b { font-size: 22px; font-weight: 700; }
 
-/* 설정 그래픽 옵션 */
-.gfx-opt { display: flex; align-items: center; gap: var(--s-1); width: 100%; min-height: 56px; padding: var(--s-1); border-radius: var(--r-md); text-align: left; color: var(--ink); font-family: inherit;
-  background: var(--nm-bg); box-shadow: var(--sh-raised-sm); border: 0; cursor: pointer; position: relative; transition: transform var(--t-press) var(--ease); }
-.gfx-opt:active { transform: scale(var(--press-scale)); }
-.gfx-opt.on { background: var(--nm-bg-deep); box-shadow: var(--sh-inset-sm); }
-.gfx-opt.on::after { content: '선택됨 ✓'; margin-left: auto; font-size: 14px; font-weight: 700; color: var(--ok); white-space: nowrap; }
-.gfx-opt b { display: block; font-weight: 700; font-size: 16px; } .gfx-opt small { display: block; font-size: 14px; color: var(--ink-2); line-height: 1.4; }
-.gfx-preview { position: relative; flex: none; width: 54px; height: 38px; border-radius: var(--r-sm); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(20, 26, 51, .2); }
-.gfx-preview > span { position: absolute; left: 0; right: 0; bottom: 0; height: 40%; }
-.gfx-preview > i { position: absolute; left: 22px; bottom: 9px; width: 10px; height: 16px; border-radius: 2px; background: #d9432f; box-shadow: 0 0 0 2px #1a1030; }
-
 /* 새 버전 안내(토스트) */
 .update-toast { position: fixed; z-index: 50; left: 50%; top: calc(64px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); min-height: 44px; padding: 0 var(--s-3); border: 0;
   border-radius: var(--r-pill); background: var(--accent); color: var(--on-accent); font-family: inherit; font-size: 16px; font-weight: 700; box-shadow: var(--sh-accent); cursor: pointer; animation: screenIn var(--t-screen) var(--ease) both; }

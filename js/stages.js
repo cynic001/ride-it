@@ -39,8 +39,8 @@ const STAGES = [
   // ── 1단계: 우방타워랜드 (이월드 과거명) — 튜토리얼 ──────────────
   {
     id: 1,
-    name: '우방타워랜드',
-    motif: '이월드 (구 우방타워랜드) — 입문용 완만한 트랙',
+    nameKey: 'stage.1.name', // 이름·소개 문구는 strings.js
+    motifKey: 'stage.1.motif',
     railType: 'mouse',
     baseSpeedKmh: 45,
     gateTiming: { perfect: 0.10, good: 0.20 }, // 게이트 판정창(초, ±)
@@ -88,8 +88,8 @@ const STAGES = [
   // ── 2단계: 도투락월드 — 급류의 계곡 (파에톤 모티브, 인버티드 루프) ──
   {
     id: 2,
-    name: '도투락월드: 급류의 계곡',
-    motif: '경주월드 파에톤 — 인버티드, 최고속도 72km/h, 길이 1148m, 360도 루프',
+    nameKey: 'stage.2.name', // 이름·소개 문구는 strings.js
+    motifKey: 'stage.2.motif',
     railType: 'hanging',
     baseSpeedKmh: 72,
     gateTiming: { perfect: 0.095, good: 0.19 }, // 게이트 판정창(초, ±)
@@ -148,8 +148,8 @@ const STAGES = [
   // ── 3단계: 도투락월드 — 외줄 타기 (스콜&하티 모티브, 싱글레일) ──────
   {
     id: 3,
-    name: '도투락월드: 외줄 타기',
-    motif: '경주월드 스콜&하티 — 아시아 최초 싱글레일, 좌우 밸런스가 핵심',
+    nameKey: 'stage.3.name', // 이름·소개 문구는 strings.js
+    motifKey: 'stage.3.motif',
     railType: 'monorail',
     baseSpeedKmh: 80,
     gateTiming: { perfect: 0.09, good: 0.18 }, // 게이트 판정창(초, ±)
@@ -213,8 +213,8 @@ const STAGES = [
   // ── 4단계: 도투락월드 — 수직 강하 (드라켄 모티브, 90도 다이브) ─────
   {
     id: 4,
-    name: '도투락월드: 수직 강하',
-    motif: '경주월드 드라켄 — 90도 수직 다이브, 최고높이 70m, 최고속도 104km/h',
+    nameKey: 'stage.4.name', // 이름·소개 문구는 strings.js
+    motifKey: 'stage.4.motif',
     railType: 'steel',
     baseSpeedKmh: 104,
     gateTiming: { perfect: 0.08, good: 0.17 }, // 게이트 판정창(초, ±)
@@ -283,8 +283,8 @@ const STAGES = [
   // ── 5단계(최종): 자연농원 (T익스프레스 모티브) ─────────────────────
   {
     id: 5,
-    name: '자연농원',
-    motif: '에버랜드 (구 자연농원) T익스프레스 — 77도 낙하, 4.5G, 12회 무중력, 1.6km, 하이브리드 목재+스틸',
+    nameKey: 'stage.5.name', // 이름·소개 문구는 strings.js
+    motifKey: 'stage.5.motif',
     railType: 'wood',
     baseSpeedKmh: 104,
     gateTiming: { perfect: 0.07, good: 0.16 }, // 게이트 판정창(초, ±)
@@ -385,8 +385,8 @@ window.STAGES = STAGES;
 const TUTORIAL_STAGE = {
   id: 'tutorial',
   tutorial: true,
-  name: '꼬마 열차 연습장',
-  motif: '옛 놀이공원 꼬마 열차처럼 천천히 — 조작을 하나씩 직접 해봐요',
+  nameKey: 'stage.tutorial.name',
+  motifKey: 'stage.tutorial.motif',
   railType: 'mouse',
   baseSpeedKmh: 40,
   gateTiming: { perfect: 0.12, good: 0.25 }, // 연습용으로 넉넉하게

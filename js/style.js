@@ -8,10 +8,9 @@
  */
 
 const STYLES = {
-  standard: { label: '기본' },
+  standard: {},
   // 밝은 낮(기본값): 선명한 하늘색 그라데이션 + 옅은 하늘색 안개(멀리가 어두워지지 않게) + 푸른빛 그림자. 지면·안개·하늘 지평선은 스테이지 palette로 살짝 달라짐
   day: {
-    label: '카툰 낮',
     outline: true,
     sky: ['#0f74ff', '#2a8dff', '#4ea9ff', '#86c9ff', '#bfe6ff'],
     fog: [0.72, 0.88, 1.0], fogDensity: 0.0008,
@@ -25,7 +24,6 @@ const STYLES = {
     clouds: true,
   },
   toon: {
-    label: '카툰 노을',
     outline: true,
     sky: ['#27306f', '#6b4a9a', '#d8628a', '#ff9a5c', '#ffcf7a'], // 위 → 지평선
     fog: [1.0, 0.78, 0.6], fogDensity: 0.0014,
@@ -37,7 +35,6 @@ const STYLES = {
     image: { exposure: 1.12, contrast: 1.12, saturation: 8 },
   },
   pastel: {
-    label: '파스텔',
     outline: false,
     sky: ['#5f9dff', '#8fb2ff', '#c8b4f5', '#ffc6d4', '#ffe9cc'],
     fog: [0.98, 0.9, 0.9], fogDensity: 0.0012,
